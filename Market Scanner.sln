@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36518.9
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketScanner.UI.WPF", "MarketScanner.UI.WPF\MarketScanner.UI.WPF.csproj", "{17FE75BB-EF22-434B-92D4-AC5A95B0C703}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketScanner.Core", "MarketScanner.Core\MarketScanner.Core.csproj", "{9E2C26C2-95DB-433E-9B96-7F22E3F1DB13}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{17FE75BB-EF22-434B-92D4-AC5A95B0C703}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17FE75BB-EF22-434B-92D4-AC5A95B0C703}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17FE75BB-EF22-434B-92D4-AC5A95B0C703}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17FE75BB-EF22-434B-92D4-AC5A95B0C703}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9E2C26C2-95DB-433E-9B96-7F22E3F1DB13}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9E2C26C2-95DB-433E-9B96-7F22E3F1DB13}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9E2C26C2-95DB-433E-9B96-7F22E3F1DB13}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9E2C26C2-95DB-433E-9B96-7F22E3F1DB13}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A6A1A4A1-28DB-44D8-9D4E-4BC01CD9C724}
+	EndGlobalSection
+EndGlobal
