@@ -8,6 +8,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using MarketScanner.Core;
+
 
 namespace MarketScanner.UI.WPF
 {
@@ -16,9 +18,20 @@ namespace MarketScanner.UI.WPF
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly Engine _engine = new();
         public MainWindow()
         {
             InitializeComponent();
+            _engine.TriggerHit += OnTriggerHit;
+            _engine.start();
+        }
+
+        private void OnTriggerHit(object? sender, string message)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                AlertsList.Items.Add(message);
+            });
         }
     }
 }

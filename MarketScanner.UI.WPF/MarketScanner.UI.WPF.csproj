@@ -8,4 +8,9 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Views\" />
+	<ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
+  </ItemGroup>
+
 </Project>
