@@ -1,0 +1,14 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net7.0-windows</TargetFramework>
+		<UseWPF>true</UseWPF>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- OxyPlot WPF package -->
+		<PackageReference Include="OxyPlot.Wpf" Version="2.1.0" />
+	</ItemGroup>
+
+</Project>
