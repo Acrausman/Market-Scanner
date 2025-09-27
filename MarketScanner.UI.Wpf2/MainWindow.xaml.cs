@@ -69,10 +69,10 @@ namespace MarketScanner.UI
                 MyPlotModel.Series.Add(upperSeries);
                 MyPlotModel.Series.Add(lowerSeries);
 
-                // Volume (optional: separate chart)
+                // Volume
                 var vSeries = new LineSeries { Title = s + " Volume", YAxisKey = volAxis.Key };
                 volumeSeriesMap[s] = vSeries;
-                // MyPlotModel.Series.Add(vSeries); // Uncomment if showing volume
+                //MyPlotModel.Series.Add(vSeries);
             }
 
             // RSI Bands
