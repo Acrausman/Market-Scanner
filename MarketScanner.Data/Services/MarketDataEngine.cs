@@ -3,24 +3,27 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Timers;
 
-namespace MarketScanner.UI
+namespace MarketScanner.Data.Services
 {
     public class TriggerHit
     {
-        public string Symbol { get; set; }
-        public string TriggerName { get; set; }
-        public double Price { get; set; }
+        public required string Symbol { get; set; }
+        public required string TriggerName { get; set; } 
+        public double Price { get; set; } 
     }
+}
 
+namespace MarketScanner.Data.Models
+{
     public class MarketDataEngine
     {
-        public event Action<string, double> OnNewPrice;
-        public event Action<string, double> OnNewRSI;
-        public event Action<string, double, double, double> OnNewSMA; // SMA14, Upper, Lower
-        public event Action<string, double> OnNewVolume;
-        public event Action<TriggerHit> OnTrigger;
+        public event Action<string, double>? OnNewPrice;
+        public event Action<string, double>? OnNewRSI;
+        public event Action<string, double, double, double>? OnNewSMA; // SMA14, Upper, Lower
+        public event Action<string, double>? OnNewVolume;
+        public event Action<MarketScanner.Data.Services.TriggerHit>? OnTrigger;
 
-        private Timer timer;
+        private System.Timers.Timer timer;
         private Random random;
         private Dictionary<string, double> lastPrices;
         private Dictionary<string, List<double>> priceHistory;
@@ -46,14 +49,14 @@ namespace MarketScanner.UI
                 volumeHistory[s] = new List<double>();
             }
 
-            timer = new Timer(1000); // update every second
+            timer = new System.Timers.Timer(1000); // update every second
             timer.Elapsed += Timer_Elapsed;
         }
 
         public void Start() => timer.Start();
         public void Stop() => timer.Stop();
 
-        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        private void Timer_Elapsed(object? sender, ElapsedEventArgs e)
         {
             foreach (var s in Symbols)
             {
@@ -91,7 +94,7 @@ namespace MarketScanner.UI
                 // Dummy trigger
                 if (price % 20 < 1)
                 {
-                    OnTrigger?.Invoke(new TriggerHit
+                    OnTrigger?.Invoke(new MarketScanner.Data.Services.TriggerHit
                     {
                         Symbol = s,
                         TriggerName = price % 40 < 20 ? "TrendLong" : "MeanRevertLong",
@@ -113,7 +116,7 @@ namespace MarketScanner.UI
                 else loss -= delta;
             }
             double rs = loss == 0 ? 100 : gain / loss;
-            return 100 - (100 / (1 + rs));
+            return 100 - 100 / (1 + rs);
         }
 
         private double StdDev(List<double> values)
@@ -123,4 +126,5 @@ namespace MarketScanner.UI
             return Math.Sqrt(sum / (values.Count - 1));
         }
     }
+
 }

@@ -9,10 +9,15 @@
 	<ItemGroup>
 	  <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
 	  <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+	  <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Folder Include="Models\" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
 	</ItemGroup>
 
 </Project>
