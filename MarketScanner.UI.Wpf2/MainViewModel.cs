@@ -1,4 +1,5 @@
 ﻿using MarketScanner.UI;
+using MarketScanner.Data;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Services;
 using OxyPlot;

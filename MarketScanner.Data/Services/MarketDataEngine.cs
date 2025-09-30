@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MarketScanner.Data.Providers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Timers;
@@ -17,6 +18,9 @@ namespace MarketScanner.Data.Models
 {
     public class MarketDataEngine
     {
+
+        private readonly IMarketDataProvider? provider;
+
         public event Action<string, double>? OnNewPrice;
         public event Action<string, double>? OnNewRSI;
         public event Action<string, double, double, double>? OnNewSMA; // SMA14, Upper, Lower
