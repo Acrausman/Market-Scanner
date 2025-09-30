@@ -1,14 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Timers;
 using System.Linq;
+using System.Timers;
 
 namespace MarketScanner.UI
 {
     public class TriggerHit
     {
         public string Symbol { get; set; }
-        public string TriggerName { get; set; } // "TrendLong" or "MeanRevertLong"
+        public string TriggerName { get; set; }
         public double Price { get; set; }
     }
 
@@ -28,10 +28,9 @@ namespace MarketScanner.UI
 
         private int rsiPeriod = 14;
         private int smaPeriod = 14;
-        private int smaBandPeriod = 14;
-        private int volPeriod = 50;
 
         public List<string> Symbols { get; private set; }
+
         public MarketDataEngine(List<string> symbols)
         {
             Symbols = symbols;
@@ -47,9 +46,8 @@ namespace MarketScanner.UI
                 volumeHistory[s] = new List<double>();
             }
 
-            timer = new Timer(1000);// 1 second
+            timer = new Timer(1000); // update every second
             timer.Elapsed += Timer_Elapsed;
-
         }
 
         public void Start() => timer.Start();
@@ -70,26 +68,28 @@ namespace MarketScanner.UI
                 OnNewPrice?.Invoke(s, price);
                 OnNewVolume?.Invoke(s, volume);
 
-                //RSI
+                // RSI
                 if (priceHistory[s].Count > rsiPeriod)
                 {
                     double rsi = CalculateRSI(priceHistory[s]);
                     OnNewRSI?.Invoke(s, rsi);
                 }
 
-                //SMA14 + Bands
+                // SMA + Bands
                 if (priceHistory[s].Count >= smaPeriod)
                 {
-                    double sma = priceHistory[s].Skip(priceHistory[s].Count - smaPeriod).Average();
-                    double sd = StdDev(priceHistory[s].Skip(priceHistory[s].Count - smaPeriod).ToList());
+                    double sma = priceHistory[s]
+                        .Skip(priceHistory[s].Count - smaPeriod).Average();
+                    double sd = StdDev(priceHistory[s]
+                        .Skip(priceHistory[s].Count - smaPeriod).ToList());
                     double upper = sma + 2 * sd;
                     double lower = sma - 2 * sd;
 
                     OnNewSMA?.Invoke(s, sma, upper, lower);
                 }
 
-                // Dummy triggers
-                if (price % 20 < 1) // arbitrary trigger condition
+                // Dummy trigger
+                if (price % 20 < 1)
                 {
                     OnTrigger?.Invoke(new TriggerHit
                     {
@@ -106,7 +106,7 @@ namespace MarketScanner.UI
             if (closes.Count <= rsiPeriod) return double.NaN;
 
             double gain = 0, loss = 0;
-            for(int i = closes.Count - rsiPeriod; i < closes.Count; i++)
+            for (int i = closes.Count - rsiPeriod + 1; i < closes.Count; i++)
             {
                 double delta = closes[i] - closes[i - 1];
                 if (delta > 0) gain += delta;
@@ -115,7 +115,7 @@ namespace MarketScanner.UI
             double rs = loss == 0 ? 100 : gain / loss;
             return 100 - (100 / (1 + rs));
         }
-    
+
         private double StdDev(List<double> values)
         {
             double avg = values.Average();
@@ -123,5 +123,4 @@ namespace MarketScanner.UI
             return Math.Sqrt(sum / (values.Count - 1));
         }
     }
-
 }
