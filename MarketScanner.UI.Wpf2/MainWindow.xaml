@@ -1,9 +1,23 @@
-﻿<Window x:Class="MarketScanner.MainWindow"
+﻿<Window x:Class="MarketScanner.UI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:oxy="http://oxyplot.org/wpf"
-        Title="Market Scanner" Height="600" Width="1000">
+        Title="Market Scanner" Height="900" Width="1200">
+
     <Grid>
-        <oxy:PlotView Model="{Binding MyPlotModel}" />
+        <Grid.RowDefinitions>
+            <RowDefinition Height="2*" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Price Chart -->
+        <oxy:PlotView Model="{Binding PriceView}" Grid.Row="0" />
+
+        <!-- RSI Chart -->
+        <oxy:PlotView Model="{Binding RsiView}" Grid.Row="1" />
+
+        <!-- Volume Chart -->
+        <oxy:PlotView Model="{Binding VolumeView}" Grid.Row="2" />
     </Grid>
 </Window>
