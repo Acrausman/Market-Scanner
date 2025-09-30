@@ -19,5 +19,14 @@
 
         <!-- Volume Chart -->
         <oxy:PlotView Model="{Binding VolumeView}" Grid.Row="2" />
+
+        <StackPanel>
+            <TextBlock Text="{Binding PriceText}" FontSize="16"/>
+            <TextBlock Text="{Binding RsiText}" FontSize="16"/>
+            <TextBlock Text="{Binding VolumeText}" FontSize="16"/>
+            <TextBlock Text="{Binding SmaText}" FontSize="16"/>
+        </StackPanel>
     </Grid>
+    
+    
 </Window>

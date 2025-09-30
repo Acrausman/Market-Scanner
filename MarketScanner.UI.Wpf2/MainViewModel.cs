@@ -1,14 +1,17 @@
-﻿using OxyPlot;
+﻿using MarketScanner.UI;
+using OxyPlot;
+using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Legends;
 using OxyPlot.Series;
-using System.Collections.Generic;
-using MarketScanner.UI;
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 
 namespace MarketScanner.UI.ViewModels
 {
-    public class MainViewModel
+    public class MainViewModel : INotifyPropertyChanged
     {
         public PlotModel PriceView { get; }
         public PlotModel RsiView { get; }
@@ -19,6 +22,39 @@ namespace MarketScanner.UI.ViewModels
         private AreaSeries bollingerBands;
         private LineSeries rsiSeries;
         private RectangleBarSeries volumeSeries;
+
+        private string priceText;
+        public string PriceText
+        {
+            get => priceText;
+            set { priceText = value; OnPropertyChanged(nameof(priceText)); }
+        }
+
+        private string rsiText;
+        public string RsiText
+        {
+            get => rsiText;
+            set { rsiText = value; OnPropertyChanged(nameof (rsiText)); } 
+        }
+
+        private string volumeText;
+        public string VolumeText
+        {
+            get => volumeText;
+            set { volumeText = value; OnPropertyChanged(nameof(volumeText)); }
+        }
+
+        private string SmaText;
+        public string smaText
+        {
+            get => smaText;
+            set { smaText = value; OnPropertyChanged(nameof(smaText)); }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropertyChanged(string propertyName)      
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        
 
         private MarketDataEngine engine;
         private Dictionary<string, DateTime> lastTimestamps;
@@ -86,7 +122,29 @@ namespace MarketScanner.UI.ViewModels
             });
 
             rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.Orange };
+            //Horizontal guide lines
+            var overboughtLine = new LineAnnotation
+            {
+                Type = LineAnnotationType.Horizontal,
+                Y = 70,
+                Color = OxyColors.Red,
+                LineStyle = LineStyle.Dash,
+                Text = "Overbought"
+            };
+
+            var oversoldLine = new LineAnnotation
+            {
+                Type = LineAnnotationType.Horizontal,
+                Y = 30,
+                Color = OxyColors.Green,
+                LineStyle = LineStyle.Dash, 
+                Text = "Oversold"
+            };
+
+            RsiView.Annotations.Add(overboughtLine);
+            RsiView.Annotations.Add(oversoldLine);
             RsiView.Series.Add(rsiSeries);
+
 
             // ---------------------------
             // Volume
@@ -131,6 +189,7 @@ namespace MarketScanner.UI.ViewModels
             App.Current.Dispatcher.Invoke(() =>
             {
                 priceSeries.Points.Add(new DataPoint(time, price));
+                PriceText = $"Price: {price:F2}";
                 PriceView.InvalidatePlot(true);
             });
         }
@@ -156,6 +215,7 @@ namespace MarketScanner.UI.ViewModels
                     bollingerBands.Points2.Add(new DataPoint(time, lower));
                 }
 
+                
                 PriceView.InvalidatePlot(true);
             });
         }
@@ -168,7 +228,32 @@ namespace MarketScanner.UI.ViewModels
             App.Current.Dispatcher.Invoke(() =>
             {
                 rsiSeries.Points.Add(new DataPoint(time, rsi));
+                
+                if(rsi >= 70)
+                {
+                    var marker = new ScatterSeries
+                    {
+                        MarkerType = MarkerType.Triangle,
+                        MarkerFill = OxyColors.Red,
+                        MarkerSize = 5
+                    };
+                    marker.Points.Add(new ScatterPoint(time,rsi));
+                    RsiView.Series.Add(marker);
+                }
+                else if(rsi <= 30)
+                {
+                    var marker = new ScatterSeries
+                    {
+                        MarkerType = MarkerType.Triangle,
+                        MarkerFill = OxyColors.Green,
+                        MarkerSize = 5
+
+                    };
+                    marker.Points.Add(new ScatterPoint(time,rsi));
+                    RsiView.Series.Add(marker);
+                }
                 RsiView.InvalidatePlot(true);
+                RsiText = $"RSI: {rsi:F2}";
             });
         }
 
@@ -181,6 +266,7 @@ namespace MarketScanner.UI.ViewModels
             {
                 double barWidth = 1.0 / 24 / 60; //about 1 minute wide
                 volumeSeries.Items.Add(new RectangleBarItem(time - barWidth / 2, 0, time + barWidth / 2, volume));
+                VolumeText = $"Volume: {volume:F2}";
                 VolumeView.InvalidatePlot(true);
             });
         }
