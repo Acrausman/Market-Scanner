@@ -1,7 +1,6 @@
-﻿using MarketScanner.UI;
-using MarketScanner.Data;
-using MarketScanner.Data.Models;
+﻿using MarketScanner.Data;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Providers;
 using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
@@ -9,10 +8,13 @@ using OxyPlot.Legends;
 using OxyPlot.Series;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using MarketScanner.Data.Models;
+using System.Linq;
 
-namespace MarketScanner.UI.ViewModels
+namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
@@ -26,6 +28,8 @@ namespace MarketScanner.UI.ViewModels
         private LineSeries rsiSeries;
         private RectangleBarSeries volumeSeries;
 
+        public ObservableCollection<SymbolViewModel> Symbols { get; }
+            = new ObservableCollection<SymbolViewModel>();
         private string priceText;
         public string PriceText
         {
@@ -40,6 +44,18 @@ namespace MarketScanner.UI.ViewModels
             set { rsiText = value; OnPropertyChanged(nameof (rsiText)); } 
         }
 
+        private double rsiValue;
+        public double RsiValue
+        {
+            get => rsiValue;
+            set
+            {
+                rsiValue = value;
+                OnPropertyChanged(nameof(RsiValue));
+                RsiText = $"RSI: {RsiValue:F2}";
+            }
+        }
+
         private string volumeText;
         public string VolumeText
         {
@@ -47,11 +63,11 @@ namespace MarketScanner.UI.ViewModels
             set { volumeText = value; OnPropertyChanged(nameof(volumeText)); }
         }
 
-        private string SmaText;
-        public string smaText
+        private string smaText = string.Empty;
+        public string SmaText
         {
             get => smaText;
-            set { smaText = value; OnPropertyChanged(nameof(smaText)); }
+            set { smaText = value; OnPropertyChanged(nameof(SmaText)); }
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -63,10 +79,12 @@ namespace MarketScanner.UI.ViewModels
         private Dictionary<string, DateTime> lastTimestamps;
         private DateTime startTime;
 
+
         public MainViewModel()
         {
             startTime = DateTime.Now;
             lastTimestamps = new Dictionary<string, DateTime>();
+
             // ---------------------------
             // Price + SMA + Bollinger
             // ---------------------------
@@ -125,7 +143,7 @@ namespace MarketScanner.UI.ViewModels
             });
 
             rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.Orange };
-            //Horizontal guide lines
+
             var overboughtLine = new LineAnnotation
             {
                 Type = LineAnnotationType.Horizontal,
@@ -140,14 +158,13 @@ namespace MarketScanner.UI.ViewModels
                 Type = LineAnnotationType.Horizontal,
                 Y = 30,
                 Color = OxyColors.Green,
-                LineStyle = LineStyle.Dash, 
+                LineStyle = LineStyle.Dash,
                 Text = "Oversold"
             };
 
             RsiView.Annotations.Add(overboughtLine);
             RsiView.Annotations.Add(oversoldLine);
             RsiView.Series.Add(rsiSeries);
-
 
             // ---------------------------
             // Volume
@@ -174,13 +191,15 @@ namespace MarketScanner.UI.ViewModels
             // ---------------------------
             // Hook up MarketDataEngine
             // ---------------------------
-            engine = new MarketDataEngine(new List<string> { "AAPL" }); // one symbol for now
+            var symbols = new List<string> { "AAPL", "MSFT", "TSLA" };
+            var provider = new YahooMarketDataProvider();
+            engine = new MarketDataEngine(symbols, provider);   // ✅ no shadowing
             engine.OnNewPrice += Engine_OnNewPrice;
             engine.OnNewRSI += Engine_OnNewRSI;
             engine.OnNewSMA += Engine_OnNewSMA;
             engine.OnNewVolume += Engine_OnNewVolume;
             engine.OnTrigger += Engine_OnTrigger;
-
+            engine.OnEquityScanned += Engine_OnEquityScanned;
             engine.Start();
         }
 
@@ -189,7 +208,7 @@ namespace MarketScanner.UI.ViewModels
             DateTime now = DateTime.Now;
             double time = DateTimeAxis.ToDouble(now);
 
-            App.Current.Dispatcher.Invoke(() =>
+            SafeUI(() =>
             {
                 priceSeries.Points.Add(new DataPoint(time, price));
                 PriceText = $"Price: {price:F2}";
@@ -199,26 +218,17 @@ namespace MarketScanner.UI.ViewModels
 
         private void Engine_OnNewSMA(string symbol, double sma, double upper, double lower)
         {
+            SmaText = $"SMA: {sma:F2}";
             DateTime now = DateTime.Now;
             double time = DateTimeAxis.ToDouble(now);
 
-            App.Current.Dispatcher.Invoke(() =>
+            SafeUI(() =>
             {
                 smaSeries.Points.Add(new DataPoint(time, sma));
 
-                //Bollinger Bands
-                if(bollingerBands.Points.Count == bollingerBands.Points2.Count)
-                {
-                    bollingerBands.Points.Add(new DataPoint(time,lower));
-                    bollingerBands.Points2.Insert(0, new DataPoint(time, lower));
-                }
-                else
-                {
-                    bollingerBands.Points.Add(new DataPoint(time, upper));
-                    bollingerBands.Points2.Add(new DataPoint(time, lower));
-                }
+                bollingerBands.Points.Add(new DataPoint(time, upper));
+                bollingerBands.Points2.Insert(0, new DataPoint(time, lower));
 
-                
                 PriceView.InvalidatePlot(true);
             });
         }
@@ -228,35 +238,25 @@ namespace MarketScanner.UI.ViewModels
             DateTime now = DateTime.Now;
             double time = DateTimeAxis.ToDouble(now);
 
-            App.Current.Dispatcher.Invoke(() =>
+            SafeUI(() =>
             {
                 rsiSeries.Points.Add(new DataPoint(time, rsi));
-                
-                if(rsi >= 70)
-                {
-                    var marker = new ScatterSeries
-                    {
-                        MarkerType = MarkerType.Triangle,
-                        MarkerFill = OxyColors.Red,
-                        MarkerSize = 5
-                    };
-                    marker.Points.Add(new ScatterPoint(time,rsi));
-                    RsiView.Series.Add(marker);
-                }
-                else if(rsi <= 30)
-                {
-                    var marker = new ScatterSeries
-                    {
-                        MarkerType = MarkerType.Triangle,
-                        MarkerFill = OxyColors.Green,
-                        MarkerSize = 5
 
+                // markers for oversold/overbought
+                if (rsi >= 70 || rsi <= 30)
+                {
+                    var marker = new ScatterSeries
+                    {
+                        MarkerType = MarkerType.Triangle,
+                        MarkerFill = rsi >= 70 ? OxyColors.Red : OxyColors.Green,
+                        MarkerSize = 5
                     };
-                    marker.Points.Add(new ScatterPoint(time,rsi));
+                    marker.Points.Add(new ScatterPoint(time, rsi));
                     RsiView.Series.Add(marker);
                 }
+
+                RsiValue = rsi;
                 RsiView.InvalidatePlot(true);
-                RsiText = $"RSI: {rsi:F2}";
             });
         }
 
@@ -265,9 +265,9 @@ namespace MarketScanner.UI.ViewModels
             DateTime now = DateTime.Now;
             double time = DateTimeAxis.ToDouble(now);
 
-            App.Current.Dispatcher.Invoke(() =>
+            SafeUI(() =>
             {
-                double barWidth = 1.0 / 24 / 60; //about 1 minute wide
+                double barWidth = 1.0 / 24 / 60; // about 1 minute wide
                 volumeSeries.Items.Add(new RectangleBarItem(time - barWidth / 2, 0, time + barWidth / 2, volume));
                 VolumeText = $"Volume: {volume:F2}";
                 VolumeView.InvalidatePlot(true);
@@ -279,8 +279,41 @@ namespace MarketScanner.UI.ViewModels
             Console.WriteLine($"Trigger: {trigger.Symbol} {trigger.TriggerName} at {trigger.Price}");
         }
 
-    }
+        private void Engine_OnEquityScanned(EquityScanResult result)
+        {
+            Console.WriteLine($"Equity scanned: {result.Symbol}: {result.Price}");
+            SafeUI(() =>
+            {
+                // ✅ Search existing VM
+                var symbolVm = Symbols.FirstOrDefault(s => s.Symbol == result.Symbol);
 
+                if (symbolVm == null)
+                {
+                    // ✅ Create + Add to collection so ListBox updates
+                    symbolVm = new SymbolViewModel { Symbol = result.Symbol };
+                    Symbols.Add(symbolVm);
+                }
+
+                // ✅ These property sets now update UI automatically
+                symbolVm.Price = result.Price;
+                symbolVm.RSI = result.RSI;
+                symbolVm.SMA = result.SMA;
+                symbolVm.Volume = result.Volume;
+            });
+        }
+
+
+
+        private void SafeUI(Action action)
+        {
+            if (System.Windows.Application.Current.Dispatcher.CheckAccess())
+                action();
+            else
+                System.Windows.Application.Current.Dispatcher.Invoke(action);
+        }
+
+
+    }
 
 
 }

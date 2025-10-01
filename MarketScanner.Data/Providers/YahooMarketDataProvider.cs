@@ -1,9 +1,8 @@
-﻿using System;
+﻿using YahooFinanceApi;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using YahooFinanceApi;
 
 namespace MarketScanner.Data.Providers
 {
@@ -14,17 +13,21 @@ namespace MarketScanner.Data.Providers
             var securities = await Yahoo.Symbols(symbol)
                 .Fields(Field.RegularMarketPrice, Field.RegularMarketVolume)
                 .QueryAsync();
+
+            if (!securities.ContainsKey(symbol))
+                throw new Exception($"Symbol {symbol} not found.");
+
             double price = (double)securities[symbol][Field.RegularMarketPrice];
             double volume = (double)securities[symbol][Field.RegularMarketVolume];
-            return (price,volume);
+            return (price, volume);
         }
 
         public async Task<IReadOnlyList<double>> GetHistoricalClosesAsync(string symbol, int days)
         {
             var history = await Yahoo.GetHistoricalAsync(
                 symbol,
-                DateTime.Now.AddDays(-days),
-                DateTime.Now,
+                DateTime.UtcNow.AddDays(-days),
+                DateTime.UtcNow,
                 Period.Daily);
 
             return history.Select(h => (double)h.Close).ToList();

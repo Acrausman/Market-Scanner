@@ -13,11 +13,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <Folder Include="Models\" />
+	  <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
+	  <Page Update="Views\MainWindow.xaml">
+	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+	  </Page>
 	</ItemGroup>
 
 </Project>

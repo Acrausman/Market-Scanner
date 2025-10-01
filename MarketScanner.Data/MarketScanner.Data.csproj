@@ -7,11 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Models\" />
-    <Folder Include="Indicators\" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
   </ItemGroup>
 

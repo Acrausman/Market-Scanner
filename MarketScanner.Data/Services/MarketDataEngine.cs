@@ -1,8 +1,14 @@
-﻿using MarketScanner.Data.Providers;
+﻿using MarketScanner.Data.Models;
+using MarketScanner.Data.Providers;
+using MarketScanner.Data.Services;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
 using System.Timers;
+
 
 namespace MarketScanner.Data.Services
 {
@@ -14,101 +20,154 @@ namespace MarketScanner.Data.Services
     }
 }
 
-namespace MarketScanner.Data.Models
+namespace MarketScanner.Data
 {
     public class MarketDataEngine
     {
 
-        private readonly IMarketDataProvider? provider;
+        private readonly IMarketDataProvider _provider;
+        private System.Timers.Timer _timer;
+
+        public List<string> Symbols { get; }
 
         public event Action<string, double>? OnNewPrice;
         public event Action<string, double>? OnNewRSI;
         public event Action<string, double, double, double>? OnNewSMA; // SMA14, Upper, Lower
         public event Action<string, double>? OnNewVolume;
         public event Action<MarketScanner.Data.Services.TriggerHit>? OnTrigger;
+        public event Action<EquityScanResult>? OnEquityScanned;
 
-        private System.Timers.Timer timer;
-        private Random random;
-        private Dictionary<string, double> lastPrices;
-        private Dictionary<string, List<double>> priceHistory;
-        private Dictionary<string, List<double>> volumeHistory;
+
+        //private Random random;
+        private Dictionary<string, double> lastPrices = new();
+        private Dictionary<string, List<double>> priceHistory = new();
+        private Dictionary<string, List<double>> volumeHistory = new();
+
+        private readonly Dictionary<string, double> _lastPrices = new();
+        private readonly Dictionary<string, double> _lastVolumes = new();
+        private readonly Dictionary<string, double> _lastRSI = new();
+        private readonly Dictionary<string, (double Sma, double Upper, double Lower)> _LastSMA = new();
+
 
         private int rsiPeriod = 14;
         private int smaPeriod = 14;
 
-        public List<string> Symbols { get; private set; }
 
-        public MarketDataEngine(List<string> symbols)
+
+        public MarketDataEngine(List<string> symbols, IMarketDataProvider provider)
         {
             Symbols = symbols;
-            lastPrices = new Dictionary<string, double>();
-            priceHistory = new Dictionary<string, List<double>>();
-            volumeHistory = new Dictionary<string, List<double>>();
-            random = new Random();
+            _provider = provider;
 
-            foreach (var s in Symbols)
-            {
-                lastPrices[s] = 100.0 + random.NextDouble() * 50;
-                priceHistory[s] = new List<double>();
-                volumeHistory[s] = new List<double>();
-            }
-
-            timer = new System.Timers.Timer(1000); // update every second
-            timer.Elapsed += Timer_Elapsed;
+            _timer = new System.Timers.Timer(5000);
+            _timer.Elapsed += async (s, e) => await TimerElapsed();
+            
         }
 
-        public void Start() => timer.Start();
-        public void Stop() => timer.Stop();
+        public void Start() => _timer.Start();
+        public void Stop() => _timer.Stop();
 
-        private void Timer_Elapsed(object? sender, ElapsedEventArgs e)
+        private async Task TimerElapsed()
         {
-            foreach (var s in Symbols)
+            int maxConcurrency = 5;
+            var semaphore = new SemaphoreSlim(maxConcurrency);
+
+            var tasks = Symbols.Select(async s =>
             {
-                double change = (random.NextDouble() - 0.5) * 2; // -1 to +1
-                lastPrices[s] += change;
-                double price = lastPrices[s];
-                double volume = 100000 + random.Next(0, 5000);
-
-                priceHistory[s].Add(price);
-                volumeHistory[s].Add(volume);
-
-                OnNewPrice?.Invoke(s, price);
-                OnNewVolume?.Invoke(s, volume);
-
-                // RSI
-                if (priceHistory[s].Count > rsiPeriod)
+                await semaphore.WaitAsync();
+                try
                 {
-                    double rsi = CalculateRSI(priceHistory[s]);
+                    var (price, volume) = await _provider.GetQuoteAsync(s);
+                    var closes = (await _provider.GetHistoricalClosesAsync(s, 50));
+
+
+                    // RSI
+                    if (closes == null || closes.Count < rsiPeriod)
+                    {
+                        Console.WriteLine($"Ticker {s} skipped: insufficient historical data.");
+                        return;
+                    }
+
+                    _lastPrices[s] = price;
+                    OnNewPrice?.Invoke(s, price);
+                    _lastVolumes[s] = volume;
+                    OnNewVolume?.Invoke(s, volume);
+                    
+                    double rsi = CalculateRSI(closes);
+                    _lastRSI[s] = rsi;
                     OnNewRSI?.Invoke(s, rsi);
-                }
 
-                // SMA + Bands
-                if (priceHistory[s].Count >= smaPeriod)
-                {
-                    double sma = priceHistory[s]
-                        .Skip(priceHistory[s].Count - smaPeriod).Average();
-                    double sd = StdDev(priceHistory[s]
-                        .Skip(priceHistory[s].Count - smaPeriod).ToList());
+                    double sma = closes.TakeLast(rsiPeriod).Average();
+                    double sd = StdDev(closes.TakeLast(rsiPeriod).ToList());
                     double upper = sma + 2 * sd;
                     double lower = sma - 2 * sd;
 
-                    OnNewSMA?.Invoke(s, sma, upper, lower);
+                    _LastSMA[s] = (sma,upper,lower);
+                    OnNewSMA?.Invoke(s, sma, upper,lower);
+
+                    if (rsi >= 70 || rsi <= 30)
+                    {
+                        if(rsi >= 70)
+                        {
+                            OnTrigger?.Invoke(new TriggerHit
+                            { 
+                                Symbol = s,
+                                TriggerName = "Overbought",
+                                Price = price
+                            
+                            });
+                        }
+                        else if(rsi <= 30)
+                        {
+                            OnTrigger?.Invoke(new TriggerHit
+                            { 
+                                Symbol = s,
+                                TriggerName = "Oversold",
+                                Price = price
+                            });
+                        }
+
+                        OnEquityScanned?.Invoke(new EquityScanResult {
+                            Symbol = s,
+                            RSI = rsi,
+                            Price = price,
+                            SMA = sma,
+                            Upper = upper,
+                            Lower = lower
+                        });                           
+                    }
+
+                    await Task.Delay(100);
+
+                }
+                catch (Exception ex) 
+                {
+                    //Ignore errors for ticker
+                    Console.WriteLine($"Ticker {s} failed: {ex.Message}");
+                }
+                finally
+                {
+                    semaphore.Release();
                 }
 
-                // Dummy trigger
-                if (price % 20 < 1)
-                {
-                    OnTrigger?.Invoke(new MarketScanner.Data.Services.TriggerHit
-                    {
-                        Symbol = s,
-                        TriggerName = price % 40 < 20 ? "TrendLong" : "MeanRevertLong",
-                        Price = price
-                    });
-                }
-            }
+            });
+
+            await Task.WhenAll(tasks);
+           
         }
 
-        private double CalculateRSI(List<double> closes)
+        public double? GetLastPrice(string symbol) =>
+            _lastPrices.TryGetValue(symbol, out var p) ? p : null;
+
+        public double? GetLastVolume(string symbol) =>
+            _lastVolumes.TryGetValue(symbol, out var v) ? v : null;
+
+        public double? GetLastRSI(string symbol) =>
+            _lastRSI.TryGetValue(symbol, out var r) ? r : null;
+
+        public (double Sma, double Upper, double Lower)? GetLastSma(string symbol) =>
+            _LastSMA.TryGetValue(symbol, out var s) ? s : null;
+        private double CalculateRSI(IReadOnlyList<double> closes)
         {
             if (closes.Count <= rsiPeriod) return double.NaN;
 
