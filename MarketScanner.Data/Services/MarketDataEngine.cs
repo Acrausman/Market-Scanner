@@ -82,14 +82,15 @@ namespace MarketScanner.Data
 
 
                     // RSI
-                    if (closes == null || closes.Count < rsiPeriod)
+                    if (double.IsNaN(price) || double.IsNaN(volume) || closes == null || closes.Count < rsiPeriod)
                     {
-                        Console.WriteLine($"Ticker {s} skipped: insufficient historical data.");
+                        Console.WriteLine($"Ticker {s} skipped: invalid or insufficient historical data.");
                         return;
                     }
 
                     _lastPrices[s] = price;
                     OnNewPrice?.Invoke(s, price);
+
                     _lastVolumes[s] = volume;
                     OnNewVolume?.Invoke(s, volume);
                     
@@ -107,35 +108,25 @@ namespace MarketScanner.Data
 
                     if (rsi >= 70 || rsi <= 30)
                     {
-                        if(rsi >= 70)
+                        OnTrigger?.Invoke(new TriggerHit
                         {
-                            OnTrigger?.Invoke(new TriggerHit
-                            { 
-                                Symbol = s,
-                                TriggerName = "Overbought",
-                                Price = price
-                            
-                            });
-                        }
-                        else if(rsi <= 30)
-                        {
-                            OnTrigger?.Invoke(new TriggerHit
-                            { 
-                                Symbol = s,
-                                TriggerName = "Oversold",
-                                Price = price
-                            });
-                        }
+                            Symbol = s,
+                            TriggerName = rsi >= 70 ? "Overbought" : "Oversold",
+                            Price = price
 
-                        OnEquityScanned?.Invoke(new EquityScanResult {
+                        });
+
+                        OnEquityScanned?.Invoke(new EquityScanResult
+                        {
                             Symbol = s,
                             RSI = rsi,
                             Price = price,
                             SMA = sma,
                             Upper = upper,
-                            Lower = lower
-                        });                           
-                    }
+                            Lower = lower,
+                            Volume = volume
+                        });
+                    }                   
 
                     await Task.Delay(100);
 

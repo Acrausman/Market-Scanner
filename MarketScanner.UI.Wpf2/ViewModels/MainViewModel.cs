@@ -13,11 +13,15 @@ using System.ComponentModel;
 using System.Diagnostics;
 using MarketScanner.Data.Models;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        private static extern bool AllocConsole();
+
         public PlotModel PriceView { get; }
         public PlotModel RsiView { get; }
         public PlotModel VolumeView { get; }
@@ -79,12 +83,17 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private Dictionary<string, DateTime> lastTimestamps;
         private DateTime startTime;
 
+        private Dictionary<string, int> _cooldownCounters = new Dictionary<string, int>();
+        private const int CooldownThreshold = 3;
 
         public MainViewModel()
         {
+            AllocConsole(); // attach a debug console
+
             startTime = DateTime.Now;
             lastTimestamps = new Dictionary<string, DateTime>();
 
+            //_ = TestYahooProvider();
             // ---------------------------
             // Price + SMA + Bollinger
             // ---------------------------
@@ -286,23 +295,80 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 // ✅ Search existing VM
                 var symbolVm = Symbols.FirstOrDefault(s => s.Symbol == result.Symbol);
+                bool isTriggered = result.RSI >= 70 || result.RSI <= 30;
 
-                if (symbolVm == null)
+                if (isTriggered)
                 {
-                    // ✅ Create + Add to collection so ListBox updates
-                    symbolVm = new SymbolViewModel { Symbol = result.Symbol };
-                    Symbols.Add(symbolVm);
-                }
+                    //Reset cooldown
+                    _cooldownCounters[result.Symbol] = 0;
 
+                    if (symbolVm == null)
+                    {
+                        //Add new
+                        symbolVm = new SymbolViewModel
+                        {
+                            Symbol = result.Symbol,
+                            Price = result.Price,
+                            RSI = result.RSI,
+                            SMA = result.SMA,
+                            Volume = result.Volume
+                        };
+
+                        Symbols.Add(symbolVm);
+                    }
+                    else
+                    {
+                        //Update existing
+                        symbolVm.Price = result.Price;
+                        symbolVm.RSI = result.RSI;
+                        symbolVm.SMA = result.SMA;
+                        symbolVm.Volume = result.Volume;
+                    }
+                }
+                else
+                {
+                    if (symbolVm != null)
+                    {
+                        //Increment cooldown
+                        if (!_cooldownCounters.ContainsKey(result.Symbol))
+                            _cooldownCounters[result.Symbol] = 0;
+
+                        _cooldownCounters[result.Symbol]++;
+
+                        //Remove only if cooldown exceeded
+                        if (_cooldownCounters[result.Symbol] >= CooldownThreshold)
+                        {
+                            Symbols.Remove(symbolVm);
+                            _cooldownCounters.Remove(result.Symbol);
+                        }
+                    }
+                }
                 // ✅ These property sets now update UI automatically
-                symbolVm.Price = result.Price;
-                symbolVm.RSI = result.RSI;
-                symbolVm.SMA = result.SMA;
-                symbolVm.Volume = result.Volume;
+
             });
         }
 
 
+        public async Task TestYahooProvider()
+        {
+            var provider = new YahooMarketDataProvider();
+            try
+            {
+                var quote = await provider.GetQuoteAsync("AAPL");
+                Console.WriteLine($"Price: {quote.price}, Volume: {quote.volume}");
+            }
+            catch (Flurl.Http.FlurlHttpException fex)
+            {
+                int statusCode = fex.Call.Response?.StatusCode ?? 0;
+                string body = fex.Call.Response != null ? await fex.GetResponseStringAsync() : "<no body>";
+                Console.WriteLine($"[FlurlHttpException] Status code: {statusCode}");
+                Console.WriteLine($"Response body: {body}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Unexpected Exception] {ex.Message}");
+            }
+        }
 
         private void SafeUI(Action action)
         {

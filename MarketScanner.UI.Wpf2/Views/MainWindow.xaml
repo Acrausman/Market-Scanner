@@ -28,12 +28,13 @@
         <oxy:PlotView Grid.Row="2" Model="{Binding VolumeView}" />
 
         <!-- Text values -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,10,0,0">
-            <TextBlock Text="{Binding PriceText}" FontSize="16" FontWeight="Bold" Margin="0,0,20,0"/>
-            <TextBlock Text="{Binding RsiText}" FontSize="16" FontWeight="Bold" Margin="0,0,20,0"/>
-            <TextBlock Text="{Binding VolumeText}" FontSize="16" FontWeight="Bold" Margin="0,0,20,0"/>
-            <TextBlock Text="{Binding SmaText}" FontSize="16" FontWeight="Bold"/>
+        <StackPanel Orientation="Vertical" Margin="10">
+            <TextBlock Text="{Binding PriceText}" FontWeight="Bold"/>
+            <TextBlock Text="{Binding VolumeText}"/>
+            <TextBlock Text="{Binding RsiText}"/>
+            <TextBlock Text="{Binding SmaText}"/>
         </StackPanel>
+
 
         <!-- RSI color coding -->
         <TextBlock Grid.Row="3" Text="{Binding RsiText}" FontSize="16" FontWeight="Bold" Margin="0,40,20,0">
