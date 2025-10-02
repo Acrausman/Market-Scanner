@@ -78,74 +78,84 @@ namespace MarketScanner.Data
                 try
                 {
                     var (price, volume) = await _provider.GetQuoteAsync(s);
-                    var closes = (await _provider.GetHistoricalClosesAsync(s, 50));
+                    var closes = await _provider.GetHistoricalClosesAsync(s, 50);
 
-
-                    // RSI
-                    if (double.IsNaN(price) || double.IsNaN(volume) || closes == null || closes.Count < rsiPeriod)
+                    // --- sanity checks ---
+                    if (double.IsNaN(price) || closes == null || closes.Count < rsiPeriod)
                     {
-                        Console.WriteLine($"Ticker {s} skipped: invalid or insufficient historical data.");
+                        Console.WriteLine($"Ticker {s} skipped: invalid or insufficient data.");
                         return;
                     }
 
+                    // --- Price ---
                     _lastPrices[s] = price;
                     OnNewPrice?.Invoke(s, price);
 
-                    _lastVolumes[s] = volume;
-                    OnNewVolume?.Invoke(s, volume);
-                    
+                    // --- Volume (only if valid) ---
+                    if (!double.IsNaN(volume))
+                    {
+                        _lastVolumes[s] = volume;
+                        OnNewVolume?.Invoke(s, volume);
+                    }
+
+                    // --- RSI ---
                     double rsi = CalculateRSI(closes);
-                    _lastRSI[s] = rsi;
-                    OnNewRSI?.Invoke(s, rsi);
+                    if (!double.IsNaN(rsi))
+                    {
+                        _lastRSI[s] = rsi;
+                        OnNewRSI?.Invoke(s, rsi);
+                    }
 
-                    double sma = closes.TakeLast(rsiPeriod).Average();
-                    double sd = StdDev(closes.TakeLast(rsiPeriod).ToList());
-                    double upper = sma + 2 * sd;
-                    double lower = sma - 2 * sd;
+                    // --- SMA + Bollinger ---
+                    var recent = closes.TakeLast(smaPeriod).ToList();
+                    if (recent.Count == smaPeriod)
+                    {
+                        double sma = recent.Average();
+                        double sd = StdDev(recent);
+                        double upper = sma + 2 * sd;
+                        double lower = sma - 2 * sd;
 
-                    _LastSMA[s] = (sma,upper,lower);
-                    OnNewSMA?.Invoke(s, sma, upper,lower);
+                        _LastSMA[s] = (sma, upper, lower);
+                        OnNewSMA?.Invoke(s, sma, upper, lower);
+                    }
 
-                    if (rsi >= 70 || rsi <= 30)
+                    // --- Trigger logic ---
+                    if (_lastRSI.ContainsKey(s) && (_lastRSI[s] >= 70 || _lastRSI[s] <= 30))
                     {
                         OnTrigger?.Invoke(new TriggerHit
                         {
                             Symbol = s,
-                            TriggerName = rsi >= 70 ? "Overbought" : "Oversold",
+                            TriggerName = _lastRSI[s] >= 70 ? "Overbought" : "Oversold",
                             Price = price
-
                         });
 
                         OnEquityScanned?.Invoke(new EquityScanResult
                         {
                             Symbol = s,
-                            RSI = rsi,
+                            RSI = _lastRSI[s],
                             Price = price,
-                            SMA = sma,
-                            Upper = upper,
-                            Lower = lower,
-                            Volume = volume
+                            SMA = _LastSMA[s].Sma,
+                            Upper = _LastSMA[s].Upper,
+                            Lower = _LastSMA[s].Lower,
+                            Volume = _lastVolumes.ContainsKey(s) ? _lastVolumes[s] : double.NaN
                         });
-                    }                   
+                    }
 
                     await Task.Delay(100);
-
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
-                    //Ignore errors for ticker
                     Console.WriteLine($"Ticker {s} failed: {ex.Message}");
                 }
                 finally
                 {
                     semaphore.Release();
                 }
-
             });
 
             await Task.WhenAll(tasks);
-           
         }
+
 
         public double? GetLastPrice(string symbol) =>
             _lastPrices.TryGetValue(symbol, out var p) ? p : null;

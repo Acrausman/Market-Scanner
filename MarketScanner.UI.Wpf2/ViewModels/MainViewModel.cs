@@ -201,7 +201,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             // Hook up MarketDataEngine
             // ---------------------------
             var symbols = new List<string> { "AAPL", "MSFT", "TSLA" };
-            var provider = new YahooMarketDataProvider();
+            var provider = new PolygonMarketDataProvider("YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\t");
             engine = new MarketDataEngine(symbols, provider);   // ✅ no shadowing
             engine.OnNewPrice += Engine_OnNewPrice;
             engine.OnNewRSI += Engine_OnNewRSI;
@@ -349,9 +349,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         }
 
 
-        public async Task TestYahooProvider()
+        public async Task TestPolygonProvider()
         {
-            var provider = new YahooMarketDataProvider();
+            var provider = new PolygonMarketDataProvider("YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI");
             try
             {
                 var quote = await provider.GetQuoteAsync("AAPL");
