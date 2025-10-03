@@ -200,7 +200,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             // ---------------------------
             // Hook up MarketDataEngine
             // ---------------------------
-            var symbols = new List<string> { "AAPL", "MSFT", "TSLA" };
+            var symbols = new List<string> {"MSFT"};
             var provider = new PolygonMarketDataProvider("YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI");
             engine = new MarketDataEngine(symbols, provider);   // ✅ no shadowing
             engine.OnNewPrice += Engine_OnNewPrice;

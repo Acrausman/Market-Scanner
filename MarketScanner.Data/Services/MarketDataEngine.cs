@@ -61,7 +61,7 @@ namespace MarketScanner.Data
 
             _timer = new System.Timers.Timer(5000);
             _timer.Elapsed += async (s, e) => await TimerElapsed();
-            
+
         }
 
         public void Start() => _timer.Start();
@@ -77,6 +77,8 @@ namespace MarketScanner.Data
                 await semaphore.WaitAsync();
                 try
                 {
+                    Console.WriteLine($"Starting scan for {s}...");
+
                     var (price, volume) = await _provider.GetQuoteAsync(s);
                     var closes = await _provider.GetHistoricalClosesAsync(s, 50);
 
@@ -90,8 +92,9 @@ namespace MarketScanner.Data
                     // --- Price ---
                     _lastPrices[s] = price;
                     OnNewPrice?.Invoke(s, price);
+                    Console.WriteLine($"Quote for {s}: Price={price}, Volume={volume}");
 
-                    // --- Volume (only if valid) ---
+                    // --- Volume ---
                     if (!double.IsNaN(volume))
                     {
                         _lastVolumes[s] = volume;
@@ -104,22 +107,38 @@ namespace MarketScanner.Data
                     {
                         _lastRSI[s] = rsi;
                         OnNewRSI?.Invoke(s, rsi);
+                        Console.WriteLine($"RSI for {s}: {rsi:F2}");
                     }
 
                     // --- SMA + Bollinger ---
+                    double sma = double.NaN, upper = double.NaN, lower = double.NaN;
                     var recent = closes.TakeLast(smaPeriod).ToList();
                     if (recent.Count == smaPeriod)
                     {
-                        double sma = recent.Average();
+                        sma = recent.Average();
                         double sd = StdDev(recent);
-                        double upper = sma + 2 * sd;
-                        double lower = sma - 2 * sd;
+                        upper = sma + 2 * sd;
+                        lower = sma - 2 * sd;
 
                         _LastSMA[s] = (sma, upper, lower);
                         OnNewSMA?.Invoke(s, sma, upper, lower);
+
+                        Console.WriteLine($"SMA for {s}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
                     }
 
-                    // --- Trigger logic ---
+                    // --- Always send scan result (for chart/UI) ---
+                    OnEquityScanned?.Invoke(new EquityScanResult
+                    {
+                        Symbol = s,
+                        RSI = _lastRSI.ContainsKey(s) ? _lastRSI[s] : double.NaN,
+                        Price = price,
+                        SMA = sma,
+                        Upper = upper,
+                        Lower = lower,
+                        Volume = _lastVolumes.ContainsKey(s) ? _lastVolumes[s] : double.NaN
+                    });
+
+                    // --- Only send trigger when OB/OS ---
                     if (_lastRSI.ContainsKey(s) && (_lastRSI[s] >= 70 || _lastRSI[s] <= 30))
                     {
                         OnTrigger?.Invoke(new TriggerHit
@@ -127,17 +146,6 @@ namespace MarketScanner.Data
                             Symbol = s,
                             TriggerName = _lastRSI[s] >= 70 ? "Overbought" : "Oversold",
                             Price = price
-                        });
-
-                        OnEquityScanned?.Invoke(new EquityScanResult
-                        {
-                            Symbol = s,
-                            RSI = _lastRSI[s],
-                            Price = price,
-                            SMA = _LastSMA[s].Sma,
-                            Upper = _LastSMA[s].Upper,
-                            Lower = _LastSMA[s].Lower,
-                            Volume = _lastVolumes.ContainsKey(s) ? _lastVolumes[s] : double.NaN
                         });
                     }
 
@@ -155,6 +163,10 @@ namespace MarketScanner.Data
 
             await Task.WhenAll(tasks);
         }
+
+        
+
+        
 
 
         public double? GetLastPrice(string symbol) =>
