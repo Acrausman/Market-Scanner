@@ -26,6 +26,7 @@ namespace MarketScanner.Data
     {
 
         private readonly IMarketDataProvider _provider;
+        public IMarketDataProvider Provider => _provider;
         private System.Timers.Timer _timer;
 
         public List<string> Symbols { get; }
@@ -48,6 +49,16 @@ namespace MarketScanner.Data
         private readonly Dictionary<string, double> _lastRSI = new();
         private readonly Dictionary<string, (double Sma, double Upper, double Lower)> _LastSMA = new();
 
+        private bool _isPaused = false;
+
+        public void Pause() => _isPaused = true;
+        public void Resume() => _isPaused = false;
+
+        public bool EnableDebugLogging { get; set; } = false;
+        private void Log(string message)
+        {
+            if(EnableDebugLogging) Console.WriteLine(message);
+        }
 
         private int rsiPeriod = 14;
         private int smaPeriod = 14;
@@ -69,6 +80,8 @@ namespace MarketScanner.Data
 
         private async Task TimerElapsed()
         {
+            if (_isPaused) return;
+
             int maxConcurrency = 5;
             var semaphore = new SemaphoreSlim(maxConcurrency);
 
@@ -77,22 +90,41 @@ namespace MarketScanner.Data
                 await semaphore.WaitAsync();
                 try
                 {
-                    Console.WriteLine($"Starting scan for {s}...");
+                   Log($"Starting scan for {s}...");
 
                     var (price, volume) = await _provider.GetQuoteAsync(s);
                     var closes = await _provider.GetHistoricalClosesAsync(s, 50);
 
                     // --- sanity checks ---
-                    if (double.IsNaN(price) || closes == null || closes.Count < rsiPeriod)
+                    if (double.IsNaN(price))
                     {
-                        Console.WriteLine($"Ticker {s} skipped: invalid or insufficient data.");
+                        Log($"Ticker {s} skipped: price is NaN (no valid snapshot or last trade).");
                         return;
                     }
+
+                    if (closes == null || closes.Count == 0)
+                    {
+                        Log($"Ticker {s} skipped: no historical data returned.");
+                        return;
+                    }
+
+                    if (closes.Count < rsiPeriod)
+                    {
+                        Log($"Ticker {s} skipped: only {closes.Count} candles (< {rsiPeriod} required).");
+                        return;
+                    }
+
+                    if (closes.All(c => double.IsNaN(c) || c <= 0))
+                    {
+                        Log($"Ticker {s} skipped: all close values are invalid or zero.");
+                        return;
+                    }
+
 
                     // --- Price ---
                     _lastPrices[s] = price;
                     OnNewPrice?.Invoke(s, price);
-                    Console.WriteLine($"Quote for {s}: Price={price}, Volume={volume}");
+                    Log($"Quote for {s}: Price={price}, Volume={volume}");
 
                     // --- Volume ---
                     if (!double.IsNaN(volume))
@@ -107,7 +139,7 @@ namespace MarketScanner.Data
                     {
                         _lastRSI[s] = rsi;
                         OnNewRSI?.Invoke(s, rsi);
-                        Console.WriteLine($"RSI for {s}: {rsi:F2}");
+                        Log($"RSI for {s}: {rsi:F2}");
                     }
 
                     // --- SMA + Bollinger ---
@@ -123,7 +155,7 @@ namespace MarketScanner.Data
                         _LastSMA[s] = (sma, upper, lower);
                         OnNewSMA?.Invoke(s, sma, upper, lower);
 
-                        Console.WriteLine($"SMA for {s}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
+                        Log($"SMA for {s}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
                     }
 
                     // --- Always send scan result (for chart/UI) ---
@@ -153,7 +185,7 @@ namespace MarketScanner.Data
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Ticker {s} failed: {ex.Message}");
+                    Log($"Ticker {s} failed: {ex.Message}");
                 }
                 finally
                 {
@@ -180,7 +212,7 @@ namespace MarketScanner.Data
 
         public (double Sma, double Upper, double Lower)? GetLastSma(string symbol) =>
             _LastSMA.TryGetValue(symbol, out var s) ? s : null;
-        private double CalculateRSI(IReadOnlyList<double> closes)
+        public double CalculateRSI(IReadOnlyList<double> closes)
         {
             if (closes.Count <= rsiPeriod) return double.NaN;
 
@@ -195,7 +227,7 @@ namespace MarketScanner.Data
             return 100 - 100 / (1 + rs);
         }
 
-        private double StdDev(List<double> values)
+        public double StdDev(List<double> values)
         {
             double avg = values.Average();
             double sum = values.Sum(v => (v - avg) * (v - avg));

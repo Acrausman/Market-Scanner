@@ -7,15 +7,10 @@
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="2*" />
-            <!-- Price chart -->
             <RowDefinition Height="*" />
-            <!-- RSI chart -->
             <RowDefinition Height="*" />
-            <!-- Volume chart -->
             <RowDefinition Height="Auto"/>
-            <!-- Text values -->
             <RowDefinition Height="2*"/>
-            <!-- ListBox -->
         </Grid.RowDefinitions>
 
         <!-- Price chart -->
@@ -28,35 +23,15 @@
         <oxy:PlotView Grid.Row="2" Model="{Binding VolumeView}" />
 
         <!-- Text values -->
-        <StackPanel Orientation="Vertical" Margin="10">
-            <TextBlock Text="{Binding PriceText}" FontWeight="Bold"/>
-            <TextBlock Text="{Binding VolumeText}"/>
-            <TextBlock Text="{Binding RsiText}"/>
-            <TextBlock Text="{Binding SmaText}"/>
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="10">
+            <TextBlock Text="{Binding PriceText}" FontWeight="Bold" Margin="5,0"/>
+            <TextBlock Text="{Binding VolumeText}" Margin="5,0"/>
+            <TextBlock Text="{Binding RsiText}" Margin="5,0"/>
+            <TextBlock Text="{Binding SmaText}" Margin="5,0"/>
         </StackPanel>
 
-
-        <!-- RSI color coding -->
-        <TextBlock Grid.Row="3" Text="{Binding RsiText}" FontSize="16" FontWeight="Bold" Margin="0,40,20,0">
-            <TextBlock.Style>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Foreground" Value="Black"/>
-                    <Style.Triggers>
-                        <!-- RSI >= 70 = Overbought (Red) -->
-                        <DataTrigger Binding="{Binding RsiValue}" Value="70">
-                            <Setter Property="Foreground" Value="Red"/>
-                        </DataTrigger>
-                        <!-- RSI <= 30 = Oversold (Green) -->
-                        <DataTrigger Binding="{Binding RsiValue}" Value="30">
-                            <Setter Property="Foreground" Value="Green"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </TextBlock.Style>
-        </TextBlock>
-
         <!-- List of scanned symbols -->
-        <ListBox Grid.Row="4" ItemsSource="{Binding Symbols}" Margin="10">
+        <ListBox Grid.Row="4" ItemsSource="{Binding Symbols}" SelectedItem="{Binding SelectedSymbol}" Margin="10">
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal" Margin="2">

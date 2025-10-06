@@ -1,71 +1,122 @@
 ﻿using Flurl.Http;
+using MarketScanner.Data.Providers;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace MarketScanner.Data.Providers
+public class PolygonMarketDataProvider: IMarketDataProvider
 {
-    public class PolygonMarketDataProvider : IMarketDataProvider
+    private readonly string _apiKey;
+
+    public PolygonMarketDataProvider(string apiKey)
     {
-        private readonly string _apiKey;
+        _apiKey = apiKey;
+    }
 
-        public PolygonMarketDataProvider(string apiKey)
+    // --- Current quote via /v2/snapshot (works on Starter Plan)
+    public async Task<(double price, double volume)> GetQuoteAsync(string symbol)
+    {
+        var url = $"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{symbol}?apiKey={_apiKey}";
+
+        try
         {
-            _apiKey = apiKey;
-        }
-
-        /// <summary>
-        /// Returns the most recent *previous close* price and volume (works on Starter plan).
-        /// </summary>
-        public async Task<(double price, double volume)> GetQuoteAsync(string symbol)
-        {
-            // Use today's date for intraday 1-minute bars
-            var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
-
-            var url =
-                $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/minute/{today}/{today}?limit=1&sort=desc&apiKey={_apiKey}";
-
             var response = await url.GetJsonAsync<JObject>();
+            var ticker = response["ticker"] ?? response;
 
-            var result = response["results"]?.FirstOrDefault();
-            if (result == null)
-                return (double.NaN, double.NaN);
+            double price = ticker["lastTrade"]?.Value<double?>("p") ?? double.NaN;
+            double volume = ticker["day"]?.Value<double?>("v") ?? double.NaN;
 
-            double price = result.Value<double?>("c") ?? double.NaN; // close price of last bar
-            double volume = result.Value<double?>("v") ?? double.NaN; // volume of last bar
+            // fallback if snapshot missing last trade
+            if (double.IsNaN(price))
+            {
+                var closes = await GetHistoricalClosesAsync(symbol, 1);
+                if (closes.Count > 0)
+                    price = closes.Last();
+            }
 
+            //Console.WriteLine($"[Polygon] Snapshot {symbol} → Price={price}, Volume={volume}");
             return (price, volume);
         }
-
-
-        /// <summary>
-        /// Returns a list of recent daily close prices (Starter-compatible).
-        /// </summary>
-        public async Task<IReadOnlyList<double>> GetHistoricalClosesAsync(string symbol, int days)
+        catch (FlurlHttpException ex)
         {
-            // Polygon’s "range" endpoint
-            var to = DateTime.UtcNow.Date;
-            var from = to.AddDays(-days * 3); // ask for a wider window (accounts for weekends/holidays)
-
-            string url =
-                $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{from:yyyy-MM-dd}/{to:yyyy-MM-dd}?adjusted=true&sort=asc&limit=5000&apiKey={_apiKey}";
-
-            var response = await url.GetJsonAsync<JObject>();
-
-            var results = response["results"]?.ToList();
-            if (results == null || results.Count == 0)
-                return Array.Empty<double>();
-
-            // Ensure we take exactly the last `days` closes
-            return results
-                .Select(r => r.Value<double?>("c"))
-                .Where(c => c.HasValue)
-                .Select(c => c!.Value)
-                .TakeLast(days)
-                .ToList();
+            //Console.WriteLine($"[Polygon] Snapshot failed for {symbol}: {ex.Message}");
+            return (double.NaN, double.NaN);
         }
-
     }
+
+
+    // --- Historical closes via /v2/aggs (15-min delayed but OK for Starter)
+    public async Task<List<double>> GetHistoricalClosesAsync(string symbol, int limit = 50)
+    {
+        var to = DateTime.UtcNow;
+        var from = to.AddDays(-limit * 2); // fetch a slightly wider range to ensure enough candles
+
+        var fromStr = from.ToString("yyyy-MM-dd");
+        var toStr = to.ToString("yyyy-MM-dd");
+
+        var url =
+            $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}?sort=asc&limit={limit}&apiKey={_apiKey}";
+
+        try
+        {
+            var response = await url.GetJsonAsync<JObject>();
+            var results = response["results"]?.ToList();
+
+            if (results == null || results.Count == 0)
+            {
+                //Console.WriteLine($"[Polygon] No historical data for {symbol}");
+                return new List<double>();
+            }
+
+            var closes = results
+                .Select(r => r.Value<double?>("c"))
+                .Where(v => v.HasValue)
+                .Select(v => v.Value)
+                .ToList();
+
+            //Console.WriteLine($"[Polygon] History for {symbol}: Count={closes.Count}");
+            return closes;
+        }
+        catch (FlurlHttpException ex)
+        {
+            //Console.WriteLine($"[Polygon] Historical data failed for {symbol}: {ex.Message}");
+            return new List<double>();
+        }
+    }
+
+    public async Task<List<DateTime>> GetHistoricalTimestampsAsync(string symbol, int limit = 50)
+    {
+        var to = DateTime.UtcNow;
+        var from = to.AddDays(-limit * 2);
+
+        var fromStr = from.ToString("yyyy-MM-dd");
+        var toStr = to.ToString("yyyy-MM-dd");
+
+        var url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}?sort=asc&limit={limit}&apiKey={_apiKey}";
+
+        try
+        {
+            var response = await url.GetJsonAsync<JObject>();
+            var results = response["results"]?.ToList();
+            if (results == null || results.Count == 0) return new List<DateTime>();
+
+            var timestamps = results
+                .Select(r =>
+                {
+                    long ms = r.Value<long>("t");
+                    return DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime;
+                })
+                .ToList();
+
+            return timestamps;
+        }
+        catch (FlurlHttpException ex)
+        {
+            //Console.WriteLine($"[Polygon] Historical timestamps failed for {symbol}: {ex.Message}");
+            return new List<DateTime>();
+        }
+    }
+
 }
