@@ -8,5 +8,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     internal class AlertManager
     {
+
     }
 }

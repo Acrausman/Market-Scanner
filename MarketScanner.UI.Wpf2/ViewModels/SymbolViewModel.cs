@@ -4,6 +4,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class SymbolViewModel : INotifyPropertyChanged
     {
+        public SymbolViewModel(string symbol)
+        {
+            Symbol = symbol;
+        }
+
+        public SymbolViewModel() { } // keep default constructor if needed
+
         private string symbol;
         public string Symbol
         {
@@ -43,4 +50,5 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private void OnPropertyChanged(string propertyName) =>
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
+
 }
