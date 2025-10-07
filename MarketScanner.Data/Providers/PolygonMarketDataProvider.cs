@@ -59,14 +59,27 @@ public class PolygonMarketDataProvider: IMarketDataProvider
         var url =
             $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}?sort=asc&limit={limit}&apiKey={_apiKey}";
 
+        //Console.Write($"[Polygon] Requesting {symbol} closes -> {url}");
+
         try
         {
             var response = await url.GetJsonAsync<JObject>();
-            var results = response["results"]?.ToList();
 
-            if (results == null || results.Count == 0)
+            if (response == null || response.Count == 0)
             {
-                //Console.WriteLine($"[Polygon] No historical data for {symbol}");
+                //Console.WriteLine($"[Polygon] NULL JSON response for {symbol}");
+                return new List<double>();
+            }
+            if(response.ContainsKey("error"))
+            {
+                Console.WriteLine($"[Polygon] API error for {symbol} {response["error"]}");
+                return new List<double>();
+            }
+            var results = response["results"]?.ToList();
+            if(results == null || results.Count == 0)
+            {
+                Console.WriteLine($"[Polygon] No historical data for {symbol}");
+                Console.WriteLine($"[Polygon] Full JSON: {response.ToString()}");
                 return new List<double>();
             }
 
@@ -81,7 +94,17 @@ public class PolygonMarketDataProvider: IMarketDataProvider
         }
         catch (FlurlHttpException ex)
         {
-            //Console.WriteLine($"[Polygon] Historical data failed for {symbol}: {ex.Message}");
+            Console.WriteLine($"[Polygon] Historical data failed for {symbol}: {ex.Message}");
+            try
+            {
+                var body = await ex.GetResponseStringAsync();
+                //Console.WriteLine($"[Polygon] Error body: {body}");
+            }
+            catch(Exception exa)
+            {
+                //Console.WriteLine($"[Polygon] Unexpected error for {symbol}: {exa}");
+                return new List<double>();
+            }
             return new List<double>();
         }
     }
@@ -96,11 +119,17 @@ public class PolygonMarketDataProvider: IMarketDataProvider
 
         var url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}?sort=asc&limit={limit}&apiKey={_apiKey}";
 
+        //Console.WriteLine($"[Polygon] Requesting {symbol} timestamps -> {url}");
+
         try
         {
             var response = await url.GetJsonAsync<JObject>();
             var results = response["results"]?.ToList();
-            if (results == null || results.Count == 0) return new List<DateTime>();
+            if (results == null)
+            {
+                //Console.WriteLine($"[Polygon] No timestamps for symbol");
+                return new List<DateTime>();
+            }
 
             var timestamps = results
                 .Select(r =>
@@ -110,6 +139,7 @@ public class PolygonMarketDataProvider: IMarketDataProvider
                 })
                 .ToList();
 
+            //Console.WriteLine($"[Polygon] Timestamps for {symbol}: Count={timestamps.Count}");
             return timestamps;
         }
         catch (FlurlHttpException ex)

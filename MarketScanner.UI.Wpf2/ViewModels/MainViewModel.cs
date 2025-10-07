@@ -108,6 +108,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             // ---------------------------
             // Price + SMA + Bollinger
             // ---------------------------
+
             PriceView = new PlotModel { Title = "Price" };
             PriceView.Legends.Add(new Legend
             {
@@ -120,8 +121,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 Position = AxisPosition.Left,
                 Title = "Price",
-                Minimum = 400,
-                Maximum = 600,
                 IsPanEnabled = false,
                 IsZoomEnabled = false
             });
@@ -133,25 +132,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 StringFormat = "HH:mm:ss"
             });
 
-            // ✅ Bollinger Bands first (background)
-            bollingerBands = new AreaSeries
-            {
-                Title = "Bollinger Bands",
-                Color = OxyColors.Transparent, // No line stroke
-                Fill = OxyColor.FromAColor(40, OxyColors.Green), // translucent green fill
-                StrokeThickness = 0
-            };
-
-            // ✅ Price Line (middle)
+            // Price line
             priceSeries = new LineSeries
             {
                 Title = "Price",
                 Color = OxyColors.SteelBlue,
                 StrokeThickness = 2,
-                LineStyle = LineStyle.Solid
+                LineStyle = LineStyle.Solid,
+                // temporary test markers (remove after verifying)
+                MarkerType = MarkerType.Circle,
+                MarkerSize = 2,
+                MarkerFill = OxyColors.SteelBlue
             };
 
-            // ✅ SMA Line (foreground)
+            // SMA line
             smaSeries = new LineSeries
             {
                 Title = "SMA14",
@@ -160,15 +154,26 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 LineStyle = LineStyle.Solid
             };
 
-            // Add in correct drawing order
+            // Bollinger area (drawn first so lines come on top)
+            bollingerBands = new AreaSeries
+            {
+                Title = "Bollinger Bands",
+                // keep outline transparent to avoid covering lines
+                Color = OxyColors.Transparent,
+                // light translucent fill so lines are visible
+                Fill = OxyColor.FromAColor(30, OxyColors.ForestGreen),
+                StrokeThickness = 0
+            };
+
+            // Add in BACK → FRONT order (area first, then lines)
             PriceView.Series.Clear();
             PriceView.Series.Add(bollingerBands);
             PriceView.Series.Add(priceSeries);
             PriceView.Series.Add(smaSeries);
 
-            Console.WriteLine($"[CHK] priceSeries={priceSeries.Points.Count} smaSeries={smaSeries.Points.Count} bollinger={bollingerBands.Points.Count}");
-
             PriceView.InvalidatePlot(true);
+
+
             // ---------------------------
             // RSI
             // ---------------------------
@@ -480,32 +485,36 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             if (symbolVm == null) return;
 
+            // mark active immediately
             _currentChartSymbol = symbolVm.Symbol;
             Console.WriteLine($"Loading charts for {_currentChartSymbol}...");
 
+            // clear existing points but keep same series objects
             SafeUI(() =>
             {
-                // ✅ Clear all data but keep existing series (don’t recreate them)
                 priceSeries.Points.Clear();
                 smaSeries.Points.Clear();
                 bollingerBands.Points.Clear();
                 bollingerBands.Points2.Clear();
-                volumeSeries.Items.Clear();
                 rsiSeries.Points.Clear();
+                volumeSeries.Items.Clear();
 
-                // ✅ Ensure correct draw order (area first, lines above)
+                // ensure series order: area first, then lines
                 if (PriceView.Series.Contains(bollingerBands)) PriceView.Series.Remove(bollingerBands);
                 if (PriceView.Series.Contains(priceSeries)) PriceView.Series.Remove(priceSeries);
                 if (PriceView.Series.Contains(smaSeries)) PriceView.Series.Remove(smaSeries);
-
                 PriceView.Series.Add(bollingerBands);
                 PriceView.Series.Add(priceSeries);
                 PriceView.Series.Add(smaSeries);
 
-                // ✅ Make the Bollinger band fill more transparent
-                bollingerBands.Fill = OxyColor.FromAColor(40, OxyColors.Green);
+                // make area very light so lines remain visible
+                bollingerBands.Fill = OxyColor.FromAColor(30, OxyColors.ForestGreen);
+                bollingerBands.Color = OxyColors.Transparent;
 
-                PriceView.InvalidatePlot(true);
+                // ensure price uses lines (no markers)
+                priceSeries.MarkerType = MarkerType.None;
+
+                PriceView.InvalidatePlot(false);
             });
 
             try
@@ -514,33 +523,60 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 var timestamps = await engine.Provider.GetHistoricalTimestampsAsync(symbolVm.Symbol, 50);
                 (double latestPrice, double latestVolume) = await engine.Provider.GetQuoteAsync(symbolVm.Symbol);
 
-                if (closes == null || closes.Count == 0) return;
+                if (closes == null || closes.Count == 0)
+                {
+                    Console.WriteLine($"No historical closes for {symbolVm.Symbol}");
+                    return;
+                }
 
-                // Ensure timestamps exist and are ascending
+                // --- Build a time array that lines up with live ticks ---
+                // If provider timestamps look like DAILY (midnight times spanning many days),
+                // map them to a recent minute-spaced range so historical + live are continuous.
+                DateTime now = DateTime.Now;
+                List<DateTime> times;
+                bool useSynthetic = false;
+
                 if (timestamps == null || timestamps.Count != closes.Count)
                 {
-                    DateTime now = DateTime.Now;
-                    timestamps = Enumerable.Range(0, closes.Count)
-                                           .Select(i => now.AddMinutes(i - closes.Count))
-                                           .ToList();
+                    useSynthetic = true;
                 }
                 else
                 {
-                    timestamps = timestamps.OrderBy(t => t).ToList();
+                    // if span is larger than reasonable intraday span -> treat as daily
+                    var span = timestamps.Last() - timestamps.First();
+                    if (span.TotalDays >= Math.Max(1, closes.Count / 2.0)) // heuristic: many days -> daily
+                        useSynthetic = true;
                 }
 
-                // Calculate SMA/Bollinger
+                if (useSynthetic)
+                {
+                    // evenly spaced 1-minute points that end at "now"
+                    times = Enumerable.Range(0, closes.Count)
+                                      .Select(i => now.AddMinutes(i - closes.Count + 1))
+                                      .ToList();
+                }
+                else
+                {
+                    // use provider timestamps (ascending)
+                    times = timestamps.OrderBy(t => t).ToList();
+                }
+
+                // --- Compute SMA and Bollinger locally to be deterministic ---
                 int period = 14;
-                var smaList = new List<double>();
-                var upperBand = new List<double>();
-                var lowerBand = new List<double>();
+                var smaList = new List<double>(closes.Count);
+                var upperBand = new List<double>(closes.Count);
+                var lowerBand = new List<double>(closes.Count);
+
                 for (int i = 0; i < closes.Count; i++)
                 {
                     if (i + 1 >= period)
                     {
                         var window = closes.Skip(i + 1 - period).Take(period).ToList();
                         double sma = window.Average();
-                        double sd = engine.StdDev(window);
+                        double mean = sma;
+                        double variance = window.Sum(x => (x - mean) * (x - mean)) / period; // population variance
+                        double sd = Math.Sqrt(variance);
+
                         smaList.Add(sma);
                         upperBand.Add(sma + 2 * sd);
                         lowerBand.Add(sma - 2 * sd);
@@ -553,20 +589,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     }
                 }
 
-                double rsi = engine.CalculateRSI(closes);
-
+                // --- Add points to the series on the UI thread ---
                 SafeUI(() =>
                 {
                     double barWidth = TimeSpan.FromMinutes(1).TotalDays;
 
                     for (int i = 0; i < closes.Count; i++)
                     {
-                        double time = DateTimeAxis.ToDouble(timestamps[i]);
+                        double time = DateTimeAxis.ToDouble(times[i]);
 
-                        // ✅ Only add valid (non-NaN) points
+                        // price
                         if (!double.IsNaN(closes[i]))
                             priceSeries.Points.Add(new DataPoint(time, closes[i]));
 
+                        // sma & bands (only when available)
                         if (!double.IsNaN(smaList[i]))
                         {
                             smaSeries.Points.Add(new DataPoint(time, smaList[i]));
@@ -574,53 +610,41 @@ namespace MarketScanner.UI.Wpf.ViewModels
                             bollingerBands.Points2.Add(new DataPoint(time, lowerBand[i]));
                         }
 
-                        // Volume placeholder bars
-                        volumeSeries.Items.Add(new RectangleBarItem(
-                            time - barWidth / 2,
-                            0,
-                            time + barWidth / 2,
-                            0
-                        ));
+                        // placeholder volume bar (height 0 for now)
+                        volumeSeries.Items.Add(new RectangleBarItem(time - barWidth / 2, 0, time + barWidth / 2, 0));
                     }
 
-                    // Fill last bar volume
+                    // set latest volume into last bar
                     if (volumeSeries.Items.Count > 0)
                     {
                         var lastBar = volumeSeries.Items.Last();
                         lastBar.Y1 = latestVolume;
                     }
 
-                    // ✅ Axis adjustments
-                    var leftAxis = PriceView.Axes.FirstOrDefault(a => a.Position == AxisPosition.Left) as LinearAxis;
-                    if (leftAxis != null)
-                    {
-                        double minPrice = closes.Min();
-                        double maxPrice = closes.Max();
-                        double priceRange = Math.Max(1e-6, maxPrice - minPrice);
-                        double margin = priceRange * 0.1;
-                        leftAxis.Minimum = Math.Max(0, minPrice - margin);
-                        leftAxis.Maximum = maxPrice + margin;
-                    }
+                    // add last RSI point at 'now'
+                    rsiSeries.Points.Add(new DataPoint(DateTimeAxis.ToDouble(DateTime.Now), engine.CalculateRSI(closes)));
 
+                    // autoscale axes to data
+                    PriceView.ResetAllAxes();
+
+                    // set a time window that ends at 'now' so live ticks and historical points share view
                     var bottomAxis = PriceView.Axes.FirstOrDefault(a => a.Position == AxisPosition.Bottom) as DateTimeAxis;
                     if (bottomAxis != null)
                     {
-                        double lastTime = DateTimeAxis.ToDouble(timestamps.Last());
-                        double window = TimeSpan.FromMinutes(15).TotalDays;
-                        bottomAxis.Maximum = lastTime + TimeSpan.FromSeconds(1).TotalDays;
+                        double maxTime = DateTimeAxis.ToDouble(times.Last());
+                        // If synthetic used, times.Last() is near 'now'; if provider daily used, times.Last() was retained
+                        bottomAxis.Maximum = DateTimeAxis.ToDouble(DateTime.Now) + TimeSpan.FromSeconds(1).TotalDays;
+                        double window = TimeSpan.FromMinutes(60).TotalDays; // show 60 minutes by default
                         bottomAxis.Minimum = bottomAxis.Maximum - window;
                     }
 
-                    // RSI
-                    double rsiTime = DateTimeAxis.ToDouble(DateTime.Now);
-                    rsiSeries.Points.Add(new DataPoint(rsiTime, rsi));
+                    // final draw
+                    PriceView.InvalidatePlot(true);
+                    RsiView.InvalidatePlot(true);
+                    VolumeView.InvalidatePlot(true);
 
-                    // ✅ Debug info
-                    Console.WriteLine($"[CHK] priceSeries={priceSeries.Points.Count} smaSeries={smaSeries.Points.Count} bollinger={bollingerBands.Points.Count}");
-
-                    PriceView.InvalidatePlot(false);
-                    RsiView.InvalidatePlot(false);
-                    VolumeView.InvalidatePlot(false);
+                    // debug
+                    Console.WriteLine($"[CHK] priceSeries={priceSeries.Points.Count} smaSeries={smaSeries.Points.Count} bollinger={bollingerBands.Points.Count} lower={bollingerBands.Points2.Count}");
                 });
             }
             catch (Exception ex)
@@ -628,6 +652,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 Console.WriteLine($"[Chart Load Error] {ex.Message}");
             }
         }
+
 
 
 
