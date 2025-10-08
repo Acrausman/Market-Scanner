@@ -1,4 +1,5 @@
 ﻿using MarketScanner.Data.Models;
+using MarketScanner.Data.Models.MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
 using System;
@@ -43,6 +44,7 @@ namespace MarketScanner.Data
         private Dictionary<string, double> lastPrices = new();
         private Dictionary<string, List<double>> priceHistory = new();
         private Dictionary<string, List<double>> volumeHistory = new();
+        private readonly Dictionary<string, List<EquityDataPoint>> _historicalData = new();
 
         private readonly Dictionary<string, double> _lastPrices = new();
         private readonly Dictionary<string, double> _lastVolumes = new();
@@ -158,16 +160,18 @@ namespace MarketScanner.Data
                         Log($"SMA for {s}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
                     }
 
+                    AddEquityDataPoint(s, price, sma, upper, lower, rsi, volume);
+
                     // --- Always send scan result (for chart/UI) ---
                     OnEquityScanned?.Invoke(new EquityScanResult
                     {
                         Symbol = s,
-                        RSI = _lastRSI.ContainsKey(s) ? _lastRSI[s] : double.NaN,
+                        RSI = rsi,
                         Price = price,
                         SMA = sma,
                         Upper = upper,
                         Lower = lower,
-                        Volume = _lastVolumes.ContainsKey(s) ? _lastVolumes[s] : double.NaN
+                        Volume = volume
                     });
 
                     // --- Only send trigger when OB/OS ---
@@ -198,7 +202,12 @@ namespace MarketScanner.Data
 
         
 
-        
+        public List<EquityDataPoint> GetHistoricalData(string symbol)
+        {
+            if (_historicalData.TryGetValue(symbol, out var list))
+                return list;
+            return new List<EquityDataPoint>();
+        }
 
 
         public double? GetLastPrice(string symbol) =>
@@ -232,6 +241,28 @@ namespace MarketScanner.Data
             double avg = values.Average();
             double sum = values.Sum(v => (v - avg) * (v - avg));
             return Math.Sqrt(sum / (values.Count - 1));
+        }
+
+        private void AddEquityDataPoint(string symbol, double price, double sma, 
+                                        double upper, double lower, double rsi, double volume)
+        {
+            if (!_historicalData.ContainsKey(symbol))
+                _historicalData[symbol] = new List<EquityDataPoint>();
+
+            _historicalData[symbol].Add(new EquityDataPoint
+            {
+                Timestamp = DateTime.Now,
+                Price = price,
+                SMA = sma,
+                UpperBand = upper,
+                LowerBand = lower,
+                RSI = rsi,
+                Volume = volume
+            });
+
+            //Keep only last 500 entrie to limit memory
+            if (_historicalData[symbol].Count > 500)
+                _historicalData[symbol].RemoveAt(0);
         }
     }
 

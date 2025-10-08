@@ -35,7 +35,6 @@ public class PolygonMarketDataProvider: IMarketDataProvider
                 if (closes.Count > 0)
                     price = closes.Last();
             }
-
             //Console.WriteLine($"[Polygon] Snapshot {symbol} → Price={price}, Volume={volume}");
             return (price, volume);
         }

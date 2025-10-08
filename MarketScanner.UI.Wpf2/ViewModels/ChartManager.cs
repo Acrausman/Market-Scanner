@@ -1,7 +1,10 @@
 ﻿using OxyPlot;
-using OxyPlot.Series;
+using OxyPlot.Annotations;
 using OxyPlot.Axes;
+using OxyPlot.Series;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace MarketScanner.UI.Wpf.Services
 {
@@ -11,98 +14,79 @@ namespace MarketScanner.UI.Wpf.Services
         public PlotModel RsiView { get; private set; }
         public PlotModel VolumeView { get; private set; }
 
-        private LineSeries priceSeries;
-        private LineSeries smaSeries;
-        private AreaSeries bollingerBands;
-        private LineSeries rsiSeries;
-        private RectangleBarSeries volumeSeries;
+        private LineSeries _priceSeries;
+        private LineSeries _smaSeries;
+        private AreaSeries _bollingerSeries;
+        private LineSeries _rsiSeries;
+        private LineSeries _volumeSeries;
 
         public ChartManager()
         {
-            //Initialize all 3 charts
-            PriceView = CreateBaseChart("Price");
-            RsiView = CreateBaseChart("RSI");
-            VolumeView = CreateBaseChart("Volume");
-
-            //Add series
-            priceSeries = CreatePriceSeries();
-            smaSeries = CreateSmaSeries();
-            bollingerBands = CreateBollingerBandSeries();
-            rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.Goldenrod };
-            volumeSeries = new RectangleBarSeries { Title = "Volume", FillColor = OxyColors.SteelBlue };
-
-            PriceView.Series.Add(bollingerBands);
-            PriceView.Series.Add(priceSeries);
-            PriceView.Series.Add(smaSeries);
-            RsiView.Series.Add(rsiSeries);
-            VolumeView.Series.Add(volumeSeries);
-
+            InitializePriceView();
+            InitializeRsiView();
+            InitializeVolumeView();
         }
 
-        public PlotModel CreateBaseChart(string title)
+        // --- PRICE + SMA + BOLLINGER ---
+        private void InitializePriceView()
         {
-            var model = new PlotModel { Title = title };
+            PriceView = new PlotModel { Title = "Price & SMA", PlotAreaBorderThickness = new OxyThickness(1) };
+            PriceView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            PriceView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Price" });
 
-            model.Axes.Add(new DateTimeAxis
+            _priceSeries = new LineSeries { Title = "Price", Color = OxyColors.SteelBlue, StrokeThickness = 2 };
+            _smaSeries = new LineSeries { Title = "SMA14", Color = OxyColors.OrangeRed, StrokeThickness = 2 };
+            _bollingerSeries = new AreaSeries
             {
-                Position = AxisPosition.Bottom,
-                StringFormat = "MM/dd",
-                Title = "Date",
-                MajorGridlineStyle = LineStyle.Dot
-            });
+                Title = "Bollinger Bands",
+                Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
+                Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
+            };
 
-            model.Axes.Add(new LinearAxis
-            {
-                Position = AxisPosition.Left,
-                Title = title.Contains("RSI") ? "RSI" :
-                        title.Contains("Volume") ? "Volume" : "Price",
-                MajorGridlineStyle = LineStyle.Solid,
-                MinorGridlineStyle = LineStyle.Dot
-            });
-
-            return model;
+            PriceView.Series.Add(_bollingerSeries);
+            PriceView.Series.Add(_smaSeries);
+            PriceView.Series.Add(_priceSeries);
         }
 
-
-        public LineSeries CreatePriceSeries() => new()
+        // --- RSI ---
+        private void InitializeRsiView()
         {
-            Title = "Price",
-            Color = OxyColors.SteelBlue,
-            StrokeThickness = 2
-        };
+            RsiView = new PlotModel { Title = "RSI (14)", PlotAreaBorderThickness = new OxyThickness(1) };
+            RsiView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            RsiView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "RSI", Minimum = 0, Maximum = 100 });
 
-        public LineSeries CreateSmaSeries() => new()
+            _rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.MediumPurple, StrokeThickness = 2 };
+            RsiView.Series.Add(_rsiSeries);
+
+            // Add reference lines for Overbought (70) and Oversold (30)
+            RsiView.Annotations.Add(new LineAnnotation { Y = 70, Color = OxyColors.Red, LineStyle = LineStyle.Dash });
+            RsiView.Annotations.Add(new LineAnnotation { Y = 30, Color = OxyColors.Green, LineStyle = LineStyle.Dash });
+        }
+
+        // --- VOLUME ---
+        private void InitializeVolumeView()
         {
-            Title = "SMA",
-            Color = OxyColors.Red,
-            StrokeThickness = 2
-        };
+            VolumeView = new PlotModel { Title = "Volume", PlotAreaBorderThickness = new OxyThickness(1) };
+            VolumeView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            VolumeView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Volume" });
 
-        public AreaSeries CreateBollingerBandSeries() => new()
-        {
-            Title = "Bollinger Bands",
-            Color = OxyColor.FromAColor(80, OxyColors.LightGreen),
-            Fill = OxyColor.FromAColor(40, OxyColors.LightGreen)
-        };
+            _volumeSeries = new LineSeries { Title = "Volume", Color = OxyColors.Gray, StrokeThickness = 1.5 };
+            VolumeView.Series.Add(_volumeSeries);
+        }
 
+        // --- Update Methods ---
         public void UpdatePriceData(
             List<DataPoint> pricePoints,
             List<DataPoint> smaPoints,
-            List<(DataPoint upper, DataPoint lower)> bands)
+            List<(DataPoint upper, DataPoint lower)> bollingerPoints)
         {
-            priceSeries.Points.Clear();
-            smaSeries.Points.Clear();
-            bollingerBands.Points.Clear();
-            bollingerBands.Points2.Clear();
+            _priceSeries.Points.AddRange(pricePoints);
+            _smaSeries.Points.AddRange(smaPoints);
 
-            foreach(var pt in pricePoints)
-                priceSeries.Points.Add(pt);
-            foreach (var pt in smaPoints)
-                smaSeries.Points.Add(pt);
-            foreach (var(upper, lower) in bands)
+            foreach (var (upper, lower) in bollingerPoints)
             {
-                bollingerBands.Points.Add(upper);
-                bollingerBands.Points2.Add(lower);
+                _bollingerSeries.Points.Add(upper);
+                _bollingerSeries.Points2.Add(lower);
             }
 
             PriceView.InvalidatePlot(true);
@@ -110,30 +94,24 @@ namespace MarketScanner.UI.Wpf.Services
 
         public void UpdateRsiData(List<DataPoint> rsiPoints)
         {
-            rsiSeries.Points.Clear();
-            rsiSeries.Points.AddRange(rsiPoints);
+            _rsiSeries.Points.AddRange(rsiPoints);
             RsiView.InvalidatePlot(true);
         }
 
         public void UpdateVolumeData(List<DataPoint> volumePoints)
         {
-            volumeSeries.Items.Clear();
-            foreach (var pt in volumePoints)
-            {
-                double barWidth = 0.5;
-                volumeSeries.Items.Add(new RectangleBarItem(pt.X - barWidth / 2, 0, pt.X + barWidth / 2, pt.Y));
-            }
+            _volumeSeries.Points.AddRange(volumePoints);
             VolumeView.InvalidatePlot(true);
         }
 
         public void ClearAllSeries()
         {
-            priceSeries.Points.Clear();
-            smaSeries.Points.Clear();
-            bollingerBands.Points.Clear();
-            bollingerBands.Points2.Clear();
-            rsiSeries.Points.Clear();
-            volumeSeries.Items.Clear();
+            _priceSeries.Points.Clear();
+            _smaSeries.Points.Clear();
+            _bollingerSeries.Points.Clear();
+            _bollingerSeries.Points2.Clear();
+            _rsiSeries.Points.Clear();
+            _volumeSeries.Points.Clear();
 
             PriceView.InvalidatePlot(true);
             RsiView.InvalidatePlot(true);

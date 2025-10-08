@@ -8,7 +8,11 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Threading;
 
 public class MainViewModel : INotifyPropertyChanged
 {
@@ -22,12 +26,15 @@ public class MainViewModel : INotifyPropertyChanged
     private List<(DataPoint upper, DataPoint lower)> _bollingerPoints = new();
     private List<DataPoint> _rsiPoints = new();
     private List<DataPoint> _volumePoints = new();
-   
+
     private SymbolViewModel _selectedSymbol;
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern bool AllocConsole();
     #endregion
 
     #region Observable Collections
-    public ObservableCollection<SymbolViewModel> Symbols { get; } = new();
+    public ObservableCollection<SymbolViewModel> Symbols { get; } = new ObservableCollection<SymbolViewModel>();
     #endregion
 
     #region Chart Properties
@@ -80,23 +87,22 @@ public class MainViewModel : INotifyPropertyChanged
     #endregion
 
     #region Selection
-    public SymbolViewModel selectedSymbol
+    public SymbolViewModel SelectedSymbol
     {
         get => _selectedSymbol;
         set
         {
-            if(_selectedSymbol != value)
-            {
-                _selectedSymbol = value;
-                OnPropertyChanged();
-                LoadSymbolData(_selectedSymbol);
-            }
+            _selectedSymbol = value;
+            OnPropertyChanged(nameof(SelectedSymbol));
+            if (_selectedSymbol != null)
+                Console.WriteLine($"[Selection] Selected {_selectedSymbol.Symbol}");
         }
     }
     #endregion
 
     public MainViewModel()
     {
+        AllocConsole();
         _chartManager = new ChartManager();
 
         var symbolList = new List<string> { "AAPL", "MSFT", "TSLA" };
@@ -109,16 +115,51 @@ public class MainViewModel : INotifyPropertyChanged
 
         //Subscribe to events
         _engine.OnEquityScanned += Engine_OnEquityScanned;
-
+        _engine.EnableDebugLogging = true;
         _engine.Start();
     }
 
     #region Engine Event Handling
     private void Engine_OnEquityScanned(EquityScanResult result)
     {
-        if (_selectedSymbol == null || result.Symbol != _selectedSymbol.Symbol) return;
+        Console.WriteLine($"[Chart Update] Recieved scan for {result.Symbol}");
 
-        UpdateCharts(result);
+        var symbolVm = Symbols.FirstOrDefault(s => s.Symbol == result.Symbol);
+        if (symbolVm != null)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                symbolVm.Price = result.Price;
+                symbolVm.RSI = result.RSI;
+                symbolVm.SMA = result.SMA;
+                symbolVm.Volume = result.Volume;
+            });
+        }
+
+        if (_selectedSymbol == null || result.Symbol != _selectedSymbol.Symbol)
+        {
+            Console.WriteLine($"[Chart Update] Skipped {result.Symbol} (not selected)");
+            return;
+        }
+
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            double timestamp = DateTimeAxis.ToDouble(DateTime.Now);
+            _chartManager.UpdatePriceData(
+            new List<DataPoint> { new DataPoint(timestamp, result.Price) },
+            new List<DataPoint> { new DataPoint(timestamp, result.SMA) },
+            new List<(DataPoint upper, DataPoint lower)>
+            {
+                (new DataPoint(timestamp, result.Upper), new DataPoint(timestamp, result.Lower))
+            }
+         );
+
+            _chartManager.UpdateRsiData(new List<DataPoint> { new DataPoint(timestamp, result.RSI) });
+            _chartManager.UpdateVolumeData(new List<DataPoint> { new DataPoint(timestamp, result.Volume) });
+
+        });
+
+        
         /*double timestamp = DateTimeAxis.ToDouble(DateTime.Now);
         
         _pricePoints.Add(new DataPoint(timestamp, result.Price));
@@ -188,21 +229,41 @@ public class MainViewModel : INotifyPropertyChanged
         RsiText = $"RSI: {result.RSI:F2}";
         VolumeText = $"Volume: {result.Volume:F2}";
     }
-    private void LoadSymbolData(SymbolViewModel symbol)
+    private async Task LoadSymbolData(SymbolViewModel symbol)
     {
         if (symbol == null) return;
 
         // Clear previous chart data
         _chartManager.ClearAllSeries();
-        _pricePoints.Clear();
-        _smaPoints.Clear();
-        _bollingerPoints.Clear();
-        _rsiPoints.Clear();
-        _volumePoints.Clear();
 
-        // Unsubscribe previous to avoid duplicate updates
-        _engine.OnEquityScanned -= Engine_OnEquityScanned;
-        _engine.OnEquityScanned += Engine_OnEquityScanned;
+        await LoadHistoricalDataAsync(symbol.Symbol);
+
+        _engine.OnEquityScanned += result =>
+        {
+            if(result.Symbol != symbol.Symbol) return;
+            
+            double timestamp = DateTimeAxis.ToDouble(DateTime.Now);
+
+            _chartManager.UpdatePriceData(
+                new List<DataPoint> { new DataPoint(timestamp, result.Price) },
+                new List<DataPoint> { new DataPoint(timestamp, result.SMA) },
+                new List<(DataPoint upper, DataPoint lower)>
+                {
+                    (new DataPoint(timestamp, result.Upper), new DataPoint(timestamp, result.Lower))
+                }
+             );
+
+            _chartManager.UpdateRsiData(new List<DataPoint> { new DataPoint(timestamp, result.RSI) });
+            _chartManager.UpdateVolumeData(new List<DataPoint> { new DataPoint(timestamp, result.Volume) });
+
+            PriceText = $"Price: {result.Price:F2}";
+            RsiText = $"RSI: {result.RSI:F2}";
+            SmaText = $"SMA: {result.SMA:F2}";
+            VolumeText = $"Volume: {result.Volume:F2}";
+        };
+
+        
+
 
         // Immediately push the latest known data for this symbol
         var lastPrice = _engine.GetLastPrice(symbol.Symbol);
@@ -226,6 +287,32 @@ public class MainViewModel : INotifyPropertyChanged
             _chartManager.UpdateRsiData(new List<DataPoint> { new DataPoint(timestamp, lastRsi.Value) });
             _chartManager.UpdateVolumeData(new List<DataPoint> { new DataPoint(timestamp, lastVolume.Value) });
         }
+    }
+
+    private async Task LoadHistoricalDataAsync(string symbol)
+    {
+        var data = _engine.GetHistoricalData(symbol);
+        if (data == null || data.Count == 0) return;
+
+        var pricePoints = new List<DataPoint>();
+        var smaPoints = new List<DataPoint>();
+        var bollingerbands = new List<(DataPoint upper, DataPoint lower)>();
+        var rsiPoints = new List<DataPoint>();
+        var volumePoints = new List<DataPoint>();
+
+        foreach ( var d in data)
+        {
+            double x = DateTimeAxis.ToDouble(d.Timestamp);
+            pricePoints.Add(new DataPoint(x, d.Price));
+            smaPoints.Add(new DataPoint(x, d.SMA));
+            bollingerbands.Add((new DataPoint(x, d.UpperBand), new DataPoint(x, d.LowerBand)));
+            rsiPoints.Add(new DataPoint(x, d.RSI));
+            volumePoints.Add(new DataPoint(x, d.Volume));
+        }
+
+        _chartManager.UpdatePriceData(pricePoints, smaPoints, bollingerbands);
+        _chartManager.UpdateRsiData(rsiPoints);
+        _chartManager.UpdateVolumeData(volumePoints);
     }
 
     public void RefreshCharts(SymbolData data)
