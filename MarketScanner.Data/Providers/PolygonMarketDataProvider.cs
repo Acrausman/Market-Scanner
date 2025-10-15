@@ -62,7 +62,7 @@ public class PolygonMarketDataProvider : IMarketDataProvider
     public async Task<List<Bar>> GetHistoricalBarsAsync(string symbol, int limit = 50)
     {
         var to = DateTime.UtcNow;
-        var from = to.AddDays(-limit * 2); // slightly wider range to ensure enough bars
+        var from = to.AddDays(-limit * 10); // slightly wider range to ensure enough bars
 
         string fromStr = from.ToString("yyyy-MM-dd");
         string toStr = to.ToString("yyyy-MM-dd");
@@ -83,7 +83,7 @@ public class PolygonMarketDataProvider : IMarketDataProvider
             var bars = results.Select(r =>
             {
                 long ms = r.Value<long>("t"); // timestamp in milliseconds
-                DateTime timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ms).LocalDateTime;
+                DateTime timestamp = DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
                 double close = r.Value<double>("c");
                 double volume = r.Value<double>("v");
 
@@ -102,6 +102,44 @@ public class PolygonMarketDataProvider : IMarketDataProvider
             Console.WriteLine($"[Polygon] Historical bars failed for {symbol}: {ex.Message}");
             return new List<Bar>();
         }
+    }
+
+    public async Task<List<string>> GetAllTickersAsync()
+    {
+        var tickers = new List<string>();
+        string? nextUrl = "https://api.polygon.io/v3/reference/tickers?market=stocks&active=true&limit=1000&apiKey=" +_apiKey;
+
+        try
+        {
+            while (!string.IsNullOrEmpty(nextUrl))
+            {
+                var response = await nextUrl.GetJsonAsync<JObject>();
+                var results = response["results"]?.ToList();
+
+                if (results != null)
+                {
+                    tickers.AddRange(
+                        results
+                            .Where(r => r.Value<string>("type") == "CS") // only common stock
+                            .Select(r => r.Value<string>("ticker"))
+                            .Where(t => !string.IsNullOrEmpty(t))
+                            .Select(t => t!)
+                    );
+
+
+                }
+
+                nextUrl = response["next_url"]?.ToString();
+                if (!string.IsNullOrEmpty(nextUrl))
+                    nextUrl += $"&apiKey={_apiKey}";
+            }
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine($"[Polygon] Failed to fetch tickers: {ex.Message}");
+        }
+
+        return tickers;
     }
 
 

@@ -9,6 +9,7 @@ namespace MarketScanner.Data.Providers
         Task<List<double>> GetHistoricalClosesAsync(string symbol, int days);
         Task<List<DateTime>> GetHistoricalTimestampsAsync(string symbol, int limit = 50);
         Task<List<Bar>> GetHistoricalBarsAsync(string symbol, int limit = 50);
+        Task<List<string>> GetAllTickersAsync();
 
     }
 

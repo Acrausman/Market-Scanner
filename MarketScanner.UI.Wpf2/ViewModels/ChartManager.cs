@@ -31,7 +31,16 @@ namespace MarketScanner.UI.Wpf.Services
         private void InitializePriceView()
         {
             PriceView = new PlotModel { Title = "Price & SMA", PlotAreaBorderThickness = new OxyThickness(1) };
-            PriceView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
+            PriceView.Axes.Add(new DateTimeAxis
+            {
+                Position = AxisPosition.Bottom,
+                Title = "Date",
+                StringFormat = "MM-dd",
+                IntervalType = DateTimeIntervalType.Days,
+                MinorIntervalType = DateTimeIntervalType.Days,
+                IsZoomEnabled = true,
+                IsPanEnabled = true
+            });
             PriceView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Price" });
 
             _priceSeries = new LineSeries { Title = "Price", Color = OxyColors.SteelBlue, StrokeThickness = 2 };
@@ -103,6 +112,56 @@ namespace MarketScanner.UI.Wpf.Services
             _volumeSeries.Points.AddRange(volumePoints);
             VolumeView.InvalidatePlot(true);
         }
+
+        public void AddPricePoint(double price)
+        {
+            if (_priceSeries == null) return;
+            var now = DateTimeAxis.ToDouble(DateTime.Now);
+            _priceSeries.Points.Add(new DataPoint(now, price));
+            if (_priceSeries.Points.Count > 300)
+                _priceSeries.Points.RemoveAt(0);
+            PriceView.InvalidatePlot(true);
+        }
+
+        public void AddVolumePoint(double volume)
+        {
+            if (_volumeSeries == null) return;
+            var now = DateTimeAxis.ToDouble(DateTime.Now);
+            _volumeSeries.Points.Add(new DataPoint(now, volume));
+            if (_volumeSeries.Points.Count > 300)
+                _volumeSeries.Points.RemoveAt(0);
+            VolumeView.InvalidatePlot(true);
+        }
+
+        public void AddRsiPoint(double rsi)
+        {
+            if (_rsiSeries == null) return;
+            var now = DateTimeAxis.ToDouble(DateTime.Now);
+            _rsiSeries.Points.Add(new DataPoint(now, rsi));
+            if (_rsiSeries.Points.Count > 300)
+                _rsiSeries.Points.RemoveAt(0);
+            RsiView.InvalidatePlot(true);
+        }
+
+        public void UpdateSmaBands(double sma, double upper, double lower)
+        {
+            if (_smaSeries == null || _bollingerSeries == null) return;
+            var now = DateTimeAxis.ToDouble(DateTime.Now);
+
+            _smaSeries.Points.Add(new DataPoint(now, sma));
+            _bollingerSeries.Points.Add(new DataPoint(now, upper));
+            _bollingerSeries.Points2.Add(new DataPoint(now, lower));
+
+            if (_smaSeries.Points.Count > 300)
+            {
+                _smaSeries.Points.RemoveAt(0);
+                _bollingerSeries.Points.RemoveAt(0);
+                _bollingerSeries.Points2.RemoveAt(0);
+            }
+
+            PriceView.InvalidatePlot(true);
+        }
+
 
         public void ClearAllSeries()
         {
