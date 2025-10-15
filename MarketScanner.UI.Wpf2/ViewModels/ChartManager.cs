@@ -31,7 +31,7 @@ namespace MarketScanner.UI.Wpf.Services
         private void InitializePriceView()
         {
             PriceView = new PlotModel { Title = "Price & SMA", PlotAreaBorderThickness = new OxyThickness(1) };
-            PriceView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            PriceView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
             PriceView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Price" });
 
             _priceSeries = new LineSeries { Title = "Price", Color = OxyColors.SteelBlue, StrokeThickness = 2 };
@@ -52,7 +52,7 @@ namespace MarketScanner.UI.Wpf.Services
         private void InitializeRsiView()
         {
             RsiView = new PlotModel { Title = "RSI (14)", PlotAreaBorderThickness = new OxyThickness(1) };
-            RsiView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            RsiView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
             RsiView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "RSI", Minimum = 0, Maximum = 100 });
 
             _rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.MediumPurple, StrokeThickness = 2 };
@@ -67,7 +67,7 @@ namespace MarketScanner.UI.Wpf.Services
         private void InitializeVolumeView()
         {
             VolumeView = new PlotModel { Title = "Volume", PlotAreaBorderThickness = new OxyThickness(1) };
-            VolumeView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm", Title = "Time" });
+            VolumeView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
             VolumeView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Volume" });
 
             _volumeSeries = new LineSeries { Title = "Volume", Color = OxyColors.Gray, StrokeThickness = 1.5 };

@@ -9,6 +9,7 @@
         public double Upper { get; set; }
         public double Lower { get; set; }
         public double Volume { get; set; }
+        public DateTime TimeStamp { get; set; }
 
         // New helper property for UI
         public string VolumeDisplay => double.IsNaN(Volume) ? "N/A" : Volume.ToString("F2");

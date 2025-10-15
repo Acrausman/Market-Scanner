@@ -2,13 +2,18 @@
 using MarketScanner.Data.Models.MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
+using OxyPlot;
+using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
+using System.Windows.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
+using System.Windows;
 
 
 namespace MarketScanner.Data.Services
@@ -38,6 +43,7 @@ namespace MarketScanner.Data
         public event Action<string, double>? OnNewVolume;
         public event Action<MarketScanner.Data.Services.TriggerHit>? OnTrigger;
         public event Action<EquityScanResult>? OnEquityScanned;
+        public event Action<List<DataPoint>, List<DataPoint>, List<(DataPoint upper, DataPoint lower)>>? OnPriceDataUpdated;
 
 
         //private Random random;
@@ -87,61 +93,44 @@ namespace MarketScanner.Data
             int maxConcurrency = 5;
             var semaphore = new SemaphoreSlim(maxConcurrency);
 
-            var tasks = Symbols.Select(async s =>
+            var tasks = Symbols.Select(async symbol =>
             {
                 await semaphore.WaitAsync();
                 try
                 {
-                   Log($"Starting scan for {s}...");
+                    Log($"Starting scan for {symbol}...");
 
-                    var (price, volume) = await _provider.GetQuoteAsync(s);
-                    var closes = await _provider.GetHistoricalClosesAsync(s, 50);
-
-                    // --- sanity checks ---
-                    if (double.IsNaN(price))
+                    var (price, volume) = await _provider.GetQuoteAsync(symbol);
+                    var timestamps = await _provider.GetHistoricalTimestampsAsync(symbol, 50);
+                    var closes = await _provider.GetHistoricalClosesAsync(symbol, 50);
+                    if(closes.Count != timestamps.Count)
                     {
-                        Log($"Ticker {s} skipped: price is NaN (no valid snapshot or last trade).");
+                        Log($"Ticker {symbol} skipped: closes ({closes.Count}) and timestamps ({timestamps.Count}) count mismatch.");
                         return;
                     }
 
-                    if (closes == null || closes.Count == 0)
-                    {
-                        Log($"Ticker {s} skipped: no historical data returned.");
-                        return;
-                    }
+                    var pricePoints = closes
+                    .Zip(timestamps, (close,time) => new DataPoint(DateTimeAxis.ToDouble(time), close))
+                    .ToList();
 
-                    if (closes.Count < rsiPeriod)
-                    {
-                        Log($"Ticker {s} skipped: only {closes.Count} candles (< {rsiPeriod} required).");
-                        return;
-                    }
-
-                    if (closes.All(c => double.IsNaN(c) || c <= 0))
-                    {
-                        Log($"Ticker {s} skipped: all close values are invalid or zero.");
-                        return;
-                    }
-
-
-                    // --- Price ---
-                    _lastPrices[s] = price;
-                    OnNewPrice?.Invoke(s, price);
-                    Log($"Quote for {s}: Price={price}, Volume={volume}");
+                    _lastPrices[symbol] = price;
+                    OnNewPrice?.Invoke(symbol, price);
+                    Log($"Quote for {symbol}: Price={price}, Volume={volume}");
 
                     // --- Volume ---
                     if (!double.IsNaN(volume))
                     {
-                        _lastVolumes[s] = volume;
-                        OnNewVolume?.Invoke(s, volume);
+                        _lastVolumes[symbol] = volume;
+                        OnNewVolume?.Invoke(symbol, volume);
                     }
 
                     // --- RSI ---
                     double rsi = CalculateRSI(closes);
                     if (!double.IsNaN(rsi))
                     {
-                        _lastRSI[s] = rsi;
-                        OnNewRSI?.Invoke(s, rsi);
-                        Log($"RSI for {s}: {rsi:F2}");
+                        _lastRSI[symbol] = rsi;
+                        OnNewRSI?.Invoke(symbol, rsi);
+                        Log($"RSI for {symbol}: {rsi:F2}");
                     }
 
                     // --- SMA + Bollinger ---
@@ -154,42 +143,82 @@ namespace MarketScanner.Data
                         upper = sma + 2 * sd;
                         lower = sma - 2 * sd;
 
-                        _LastSMA[s] = (sma, upper, lower);
-                        OnNewSMA?.Invoke(s, sma, upper, lower);
-
-                        Log($"SMA for {s}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
+                        _LastSMA[symbol] = (sma, upper, lower);
+                        OnNewSMA?.Invoke(symbol, sma, upper, lower);
+                        Log($"SMA for {symbol}: {sma:F2}, Upper={upper:F2}, Lower={lower:F2}");
                     }
 
-                    AddEquityDataPoint(s, price, sma, upper, lower, rsi, volume);
+                    for (int i = 0; i < closes.Count; i++)
+                    {
+                        double close = closes[i];
+                        DateTime ts = i < timestamps.Count ? timestamps[i] : DateTime.Now;
 
-                    // --- Always send scan result (for chart/UI) ---
+                        AddEquityDataPoint(
+                            symbol,
+                            close,
+                            sma,
+                            upper,
+                            lower,
+                            rsi,
+                            volume,
+                            ts
+                        );
+                    }
+
+
+                    // --- sanity checks ---
+                    if (double.IsNaN(price))
+                    {
+                        Log($"Ticker {symbol} skipped: price is NaN.");
+                        return;
+                    }
+
+                    if (closes == null || closes.Count == 0 || closes.Count < rsiPeriod || closes.All(c => double.IsNaN(c) || c <= 0))
+                    {
+                        Log($"Ticker {symbol} skipped: insufficient historical data.");
+                        return;
+                    }
+
+                    // --- Price ---
+
+
+                    // --- Fire full scan result for UI ---
+                    var latestTs = timestamps.LastOrDefault();
+                    DateTime finalTs = (latestTs == default ? DateTime.Now : latestTs);
+
+                    // If timestamps are date-only (00:00), use the current time portion
+                    if (finalTs.Hour == 0 && finalTs.Minute == 0 && finalTs.Second == 0)
+                        finalTs = DateTime.Now;
+
                     OnEquityScanned?.Invoke(new EquityScanResult
                     {
-                        Symbol = s,
-                        RSI = rsi,
+                        Symbol = symbol,
                         Price = price,
+                        RSI = rsi,
                         SMA = sma,
                         Upper = upper,
                         Lower = lower,
-                        Volume = volume
+                        Volume = volume,
+                        TimeStamp = finalTs
                     });
 
-                    // --- Only send trigger when OB/OS ---
-                    if (_lastRSI.ContainsKey(s) && (_lastRSI[s] >= 70 || _lastRSI[s] <= 30))
+
+                    // --- Trigger check (e.g., OB/OS) ---
+                    if (_lastRSI.ContainsKey(symbol) && (_lastRSI[symbol] >= 70 || _lastRSI[symbol] <= 30))
                     {
                         OnTrigger?.Invoke(new TriggerHit
                         {
-                            Symbol = s,
-                            TriggerName = _lastRSI[s] >= 70 ? "Overbought" : "Oversold",
+                            Symbol = symbol,
+                            TriggerName = _lastRSI[symbol] >= 70 ? "Overbought" : "Oversold",
                             Price = price
                         });
                     }
 
-                    await Task.Delay(100);
+                    await Task.Delay(100); // throttle API requests
                 }
                 catch (Exception ex)
                 {
-                    Log($"Ticker {s} failed: {ex.Message}");
+                    Log($"Ticker {symbol} failed: {ex.Message}");
                 }
                 finally
                 {
@@ -200,13 +229,15 @@ namespace MarketScanner.Data
             await Task.WhenAll(tasks);
         }
 
-        
 
         public List<EquityDataPoint> GetHistoricalData(string symbol)
         {
-            if (_historicalData.TryGetValue(symbol, out var list))
-                return list;
-            return new List<EquityDataPoint>();
+            lock (_historicalDataLock)
+            {
+                if (_historicalData.TryGetValue(symbol, out var list))
+                    return list;
+                return new List<EquityDataPoint>();
+            }
         }
 
 
@@ -243,26 +274,32 @@ namespace MarketScanner.Data
             return Math.Sqrt(sum / (values.Count - 1));
         }
 
-        private void AddEquityDataPoint(string symbol, double price, double sma, 
-                                        double upper, double lower, double rsi, double volume)
+        private readonly object _historicalDataLock = new();
+
+        public void AddEquityDataPoint(string symbol, double price, double sma, 
+                                        double upper, double lower, double rsi, double volume, 
+                                        DateTime timestamp)
         {
-            if (!_historicalData.ContainsKey(symbol))
-                _historicalData[symbol] = new List<EquityDataPoint>();
-
-            _historicalData[symbol].Add(new EquityDataPoint
+            lock (_historicalDataLock)
             {
-                Timestamp = DateTime.Now,
-                Price = price,
-                SMA = sma,
-                UpperBand = upper,
-                LowerBand = lower,
-                RSI = rsi,
-                Volume = volume
-            });
+                if (!_historicalData.ContainsKey(symbol))
+                    _historicalData[symbol] = new List<EquityDataPoint>();
 
-            //Keep only last 500 entrie to limit memory
-            if (_historicalData[symbol].Count > 500)
-                _historicalData[symbol].RemoveAt(0);
+                _historicalData[symbol].Add(new EquityDataPoint
+                {
+                    Timestamp = timestamp,
+                    Price = price,
+                    SMA = sma,
+                    UpperBand = upper,
+                    LowerBand = lower,
+                    RSI = rsi,
+                    Volume = volume
+                });
+
+                //Keep only last 500 entrie to limit memory
+                if (_historicalData[symbol].Count > 500)
+                    _historicalData[symbol].RemoveAt(0);
+            }
         }
     }
 
