@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
-namespace MarketScanner.UI.Wpf.Managers
+namespace MarketScanner.UI.Wpf.Services
 {
     public class AlertManager
     {

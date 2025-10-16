@@ -2,85 +2,78 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:oxy="http://oxyplot.org/wpf"
-        Title="Market Scanner" Height="900" Width="1600" Background="#1E1E1E">
+        Title="Market Scanner"
+        Height="900" Width="1600"
+        Background="#1E1E1E">
 
     <Grid Margin="10">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="300"/>
-            <!-- Sidebar -->
+            <!-- Console -->
             <ColumnDefinition Width="*"/>
             <!-- Charts -->
-            <ColumnDefinition Width="350"/>
+            <ColumnDefinition Width="400"/>
             <!-- Controls -->
         </Grid.ColumnDefinitions>
 
-        <!-- 🔹 Sidebar: List of scanned symbols -->
-        <!--
-        <Border Grid.Column="0" Background="#252526" Padding="8" CornerRadius="6">
+        <!-- 🔹 Console Output -->
+        <Border Grid.Column="0" Background="#111111" Padding="8" CornerRadius="6">
             <DockPanel>
-                <TextBlock Text="Scanned Symbols" 
-                           Foreground="White" FontWeight="Bold" Margin="0,0,0,8"/>
-                <TextBlock Text="{Binding ProgressValue, StringFormat='Progress: {0}%'}"
-           Foreground="White" Margin="0,5,0,0"/>
-
-                <ListBox ItemsSource="{Binding OverboughtSymbols}" 
-                         SelectedItem="{Binding SelectedSymbol}" 
-                         Background="#2D2D30" Foreground="White" 
-                         BorderThickness="0"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="2">
-                                <TextBlock Text="{Binding Symbol}" Width="60"/>
-                                <TextBlock Text="{Binding Price, StringFormat=C}" Width="80"/>
-                                <TextBlock Text="{Binding RSI, StringFormat=F2}" Width="50"/>
-                                <TextBlock Text="{Binding SMA, StringFormat=F2}" Width="50"/>
-                                <TextBlock Text="{Binding Volume, StringFormat=N0}" Width="80"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <TextBlock Text="Console Output" Foreground="LightGray"
+                           FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,6"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <TextBox Text="{Binding ConsoleText, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+                             FontFamily="Consolas"
+                             FontSize="12"
+                             Foreground="LightGreen"
+                             Background="#111111"
+                             IsReadOnly="True"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             VerticalScrollBarVisibility="Auto"/>
+                </ScrollViewer>
             </DockPanel>
         </Border>
-        -->
 
-        <!-- 🔸 Main Chart Area -->
+        <!-- 🔹 Chart Section -->
         <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
-            <!-- Price -->
-            <oxy:PlotView Model="{Binding PriceView}" Height="300" Margin="0,0,0,10"/>
-            <!-- RSI -->
-            <oxy:PlotView Model="{Binding RsiView}" Height="200" Margin="0,0,0,10"/>
-            <!-- Volume -->
-            <oxy:PlotView Model="{Binding VolumeView}" Height="200"/>
-            <!-- Stats -->
+            <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
+            <oxy:PlotView Model="{Binding Chart.RsiView}" Height="200"/>
+            <oxy:PlotView Model="{Binding Chart.VolumeView}" Height="200"/>
+
             <StackPanel Orientation="Horizontal" Margin="10,10,0,0">
-                <TextBlock Text="{Binding PriceText}" FontWeight="Bold" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding VolumeText}" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding RsiText}" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding SmaText}" Margin="5,0" Foreground="White"/>
+                <TextBlock Text="{Binding Chart.PriceText}" FontWeight="Bold" Margin="5,0" Foreground="White"/>
+                <TextBlock Text="{Binding Chart.SmaText}" Margin="5,0" Foreground="White"/>
+                <TextBlock Text="{Binding Chart.RsiText}" Margin="5,0" Foreground="White"/>
+                <TextBlock Text="{Binding Chart.VolumeText}" Margin="5,0" Foreground="White"/>
             </StackPanel>
         </StackPanel>
 
-        <!-- 🔸 Right Panel: Controls -->
+        <!-- 🔹 Controls -->
         <Border Grid.Column="2" Background="#252526" Padding="12" CornerRadius="6">
             <StackPanel>
-                <TextBlock Text="Controls" Foreground="White" FontWeight="Bold" Margin="0,0,0,8"/>
+                <TextBlock Text="Market Scanner" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
 
-                <Button Content="Start Scan" Command="{Binding StartScanCommand}" Margin="0,4,0,0" Width="120"/>
-                <Button Content="Cancel Scan" Command="{Binding CancelScanCommand}" Margin="0,4,0,0" Width="120"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                    <Button Content="Start Scan" Command="{Binding StartScanCommand}"
+                            Width="100" Margin="0,0,6,0"/>
+                    <Button Content="Stop Scan" Command="{Binding StopScanCommand}"
+                            Width="100"/>
+                </StackPanel>
 
-                <ProgressBar Minimum="0" Maximum="100" 
-                     Value="{Binding ProgressValue}" 
-                     Height="20" Margin="0,10,0,0"/>
-                <TextBlock Text="{Binding ProgressValue, StringFormat='Progress: {0}%'}"
-                   Foreground="White" Margin="0,4,0,10"/>
+                <ProgressBar Minimum="0" Maximum="100"
+                             Value="{Binding Scanner.ProgressValue}"
+                             Height="18" Margin="0,4,0,0"/>
+                <TextBlock Text="{Binding StatusText}" Foreground="White" Margin="0,4,0,10"/>
 
-                <Separator Margin="0,12,0,12"/>
+                <Separator Margin="0,10,0,10"/>
 
-                <TextBlock Text="Overbought" Foreground="White" FontWeight="Bold" Margin="0,4,0,4"/>
-                <ListBox ItemsSource="{Binding OverboughtSymbols}"
-                         SelectedItem="{Binding SelectedSymbolName, Mode=TwoWay}"
-                         Background="#2D2D30" Foreground="White" Height="150" BorderThickness="0">
+                <TextBlock Text="Overbought (RSI &gt; 70)"
+                           Foreground="#FFAAAA" FontWeight="Bold" Margin="0,4,0,4"/>
+                <ListBox ItemsSource="{Binding Scanner.OverboughtSymbols}"
+                         SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
+                         Background="#2D2D30" Foreground="White"
+                         Height="150" BorderThickness="0" FontSize="13">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Foreground" Value="White"/>
@@ -94,10 +87,12 @@
                     </ListBox.ItemContainerStyle>
                 </ListBox>
 
-                <TextBlock Text="Oversold" Foreground="White" FontWeight="Bold" Margin="0,10,0,4"/>
-                <ListBox ItemsSource="{Binding OversoldSymbols}"
-         SelectedItem="{Binding SelectedSymbolName, Mode=TwoWay}"
-         Background="#2D2D30" Foreground="White" Height="150" BorderThickness="0">
+                <TextBlock Text="Oversold (RSI &lt; 30)"
+                           Foreground="#A0FFA0" FontWeight="Bold" Margin="10,10,0,4"/>
+                <ListBox ItemsSource="{Binding Scanner.OversoldSymbols}"
+                         SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
+                         Background="#2D2D30" Foreground="White"
+                         Height="150" BorderThickness="0" FontSize="13">
                     <ListBox.ItemContainerStyle>
                         <Style TargetType="ListBoxItem">
                             <Setter Property="Foreground" Value="White"/>
@@ -110,16 +105,14 @@
                         </Style>
                     </ListBox.ItemContainerStyle>
                 </ListBox>
-                <Ellipse Width="12" Height="12"
-             Fill="{Binding LiveStatusColor}"
-             Stroke="White" StrokeThickness="1"
-             Margin="0,0,6,0"/>
-                <TextBlock Text="{Binding LiveStatusText}"
-               Foreground="White"
-               VerticalAlignment="Center"
-               FontWeight="Bold"/>
+
+                <Separator Margin="0,10,0,10"/>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
             </StackPanel>
         </Border>
-
     </Grid>
 </Window>

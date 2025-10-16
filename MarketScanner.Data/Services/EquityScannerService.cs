@@ -6,90 +6,131 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 
 namespace MarketScanner.Data.Services
 {
     public class EquityScannerService
     {
         private readonly IMarketDataProvider _provider;
-        private readonly SemaphoreSlim _semaphore;
+        private readonly SemaphoreSlim _semaphore = new(8); // limit API concurrency
         private readonly Dictionary<string, List<double>> _cache = new();
-
-        public EquityScannerService(IMarketDataProvider dataProvider)
-        {
-            _provider = dataProvider;
-            _semaphore = new SemaphoreSlim(5); // up to 5 concurrent requests
-        }
+        private readonly Dispatcher _uiDispatcher; // ✅ safe dispatcher reference
+        private readonly object _syncLock = new();
 
         public ObservableCollection<string> OverboughtSymbols { get; } = new();
         public ObservableCollection<string> OversoldSymbols { get; } = new();
 
-        // --- MAIN SCAN METHOD ---
+        public EquityScannerService(IMarketDataProvider provider)
+        {
+            _provider = provider;
+
+            // If Application.Current is null (unit test / startup), fall back to a static dispatcher
+            if (Application.Current != null)
+                _uiDispatcher = Application.Current.Dispatcher;
+            else
+                _uiDispatcher = Dispatcher.FromThread(Thread.CurrentThread) ?? Dispatcher.CurrentDispatcher;
+        }
+
+
+        public IMarketDataProvider Provider => _provider;
+
         public async Task ScanAllAsync(IProgress<int> progress, CancellationToken token)
         {
-            Console.WriteLine("Fetching all tickers...");
+            Console.WriteLine("[Scanner] Fetching all tickers...");
             var tickers = await _provider.GetAllTickersAsync();
-            Console.WriteLine($"Found {tickers.Count} active symbols.");
+            Console.WriteLine($"[Scanner] Found {tickers.Count} active tickers.");
 
-            const int batchSize = 100;
             int total = tickers.Count;
             int processed = 0;
 
-            foreach (var batch in tickers.Chunk(batchSize))
-            {
-                await ProcessBatchAsync(batch, progress, token);
-                processed += batch.Length;
-                progress?.Report(processed * 100 / total);
+            var tasks = new List<Task>();
 
-                Console.WriteLine($"Processed {processed}/{total} symbols...");
+            foreach (var symbol in tickers)
+            {
+                if (token.IsCancellationRequested) break;
+
+                await _semaphore.WaitAsync(token);
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ScanSingleSymbol(symbol);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Scanner] Error {symbol}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref processed);
+                        progress?.Report((int)((processed / (double)total) * 100));
+                        _semaphore.Release();
+                    }
+                }, token));
             }
 
-            Console.WriteLine("Scan complete!");
-        }
-
-        // --- BATCH PROCESSING WITH THROTTLING ---
-        private async Task ProcessBatchAsync(IEnumerable<string> symbols,
-                                             IProgress<int>? progress,
-                                             CancellationToken token)
-        {
-            var tasks = symbols.Select(async s =>
-            {
-                await _semaphore.WaitAsync(token);
-                try
-                {
-                    var closes = await GetCachedClosesAsync(s, 30, token);
-                    await Task.Delay(200, token); // rate-limit
-
-                    if (closes.Count >= 15)
-                    {
-                        var rsi = CalculateRsi(closes);
-                        if (rsi > 70)
-                            Application.Current.Dispatcher.BeginInvoke(() => OverboughtSymbols.Add(s));
-                        else if (rsi < 30)
-                            Application.Current.Dispatcher.BeginInvoke(() => OversoldSymbols.Add(s));
-
-                        Console.WriteLine($"Processed {s}: RSI={rsi:F2}");
-                    }
-                    else
-                    {
-                        Console.WriteLine($"{s}: insufficient bars ({closes.Count})");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"[{s}] {ex.Message}");
-                }
-                finally
-                {
-                    _semaphore.Release();
-                }
-            });
-
             await Task.WhenAll(tasks);
+            Console.WriteLine("[Scanner] ✅ Full scan complete!");
         }
 
-        // --- CACHING LAYER ---
-        private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit, CancellationToken ct)
+        private readonly HashSet<string> _symbolsInProgress = new();
+        public async Task ScanSingleSymbol(string symbol)
+        {
+            lock (_symbolsInProgress)
+            {
+                if (_symbolsInProgress.Contains(symbol))
+                    return; // skip duplicate
+                _symbolsInProgress.Add(symbol);
+            }
+
+            try
+            {
+                var closes = await GetCachedClosesAsync(symbol, 30);
+                if (closes == null || closes.Count < 14) return;
+
+                double rsi = CalculateRsi(closes);
+                if (double.IsNaN(rsi)) return;
+
+                _uiDispatcher.InvokeAsync(() =>
+                {
+                    lock (_syncLock)
+                    {
+                        if (rsi > 70)
+                        {
+                            if (!OverboughtSymbols.Contains(symbol))
+                            {
+                                OverboughtSymbols.Add(symbol);
+                                OversoldSymbols.Remove(symbol);
+                            }
+                        }
+                        else if (rsi < 30)
+                        {
+                            if (!OversoldSymbols.Contains(symbol))
+                            {
+                                OversoldSymbols.Add(symbol);
+                                OverboughtSymbols.Remove(symbol);
+                            }
+                        }
+                        else
+                        {
+                            OverboughtSymbols.Remove(symbol);
+                            OversoldSymbols.Remove(symbol);
+                        }
+                    }
+                }, DispatcherPriority.ContextIdle);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error] {symbol}: {ex.Message}");
+            }
+            finally
+            {
+                lock (_symbolsInProgress)
+                    _symbolsInProgress.Remove(symbol);
+            }
+        }
+        private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit)
         {
             if (_cache.TryGetValue(symbol, out var cached))
                 return cached;
@@ -99,12 +140,10 @@ namespace MarketScanner.Data.Services
             return closes;
         }
 
-        // --- RSI CALCULATION ---
-        private double CalculateRsi(List<double> closes, int period = 14)
+        private static double CalculateRsi(List<double> closes, int period = 14)
         {
             closes = closes.Where(c => !double.IsNaN(c) && c > 0).ToList();
-            if (closes.Count < period + 1)
-                return double.NaN;
+            if (closes.Count <= period) return double.NaN;
 
             double gain = 0, loss = 0;
             for (int i = 1; i <= period; i++)
@@ -121,9 +160,20 @@ namespace MarketScanner.Data.Services
             if (avgLoss == 0) return 100;
 
             double rs = avgGain / avgLoss;
-            double rsi = 100 - (100 / (1 + rs));
+            return 100 - (100 / (1 + rs));
+        }
 
-            return Math.Clamp(rsi, 0, 100);
+        public async Task<double> RescanSingleSymbol(string symbol)
+        {
+            var closes = await GetCachedClosesAsync(symbol, 30);
+            if (closes == null || closes.Count < 14) return double.NaN;
+
+            closes = closes.Where(c => c > 0 && !double.IsNaN(c)).ToList();
+            if (closes.Count < 14) return double.NaN;
+
+            double rsi = CalculateRsi(closes);
+            Console.WriteLine($"[Rescan] {symbol} => RSI={rsi:F2}");
+            return rsi;
         }
     }
 }

@@ -39,9 +39,19 @@ namespace MarketScanner.UI.Wpf.Services
                 IntervalType = DateTimeIntervalType.Days,
                 MinorIntervalType = DateTimeIntervalType.Days,
                 IsZoomEnabled = true,
+                IsPanEnabled = true,
+                MinimumPadding = 0.05,
+                MaximumPadding = 0.05
+            });
+            PriceView.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = "Price",
+                MinimumPadding = 0.2,
+                MaximumPadding = 0.2,
+                IsZoomEnabled = true,
                 IsPanEnabled = true
             });
-            PriceView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Price" });
 
             _priceSeries = new LineSeries { Title = "Price", Color = OxyColors.SteelBlue, StrokeThickness = 2 };
             _smaSeries = new LineSeries { Title = "SMA14", Color = OxyColors.OrangeRed, StrokeThickness = 2 };
@@ -51,7 +61,6 @@ namespace MarketScanner.UI.Wpf.Services
                 Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
                 Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
             };
-
             PriceView.Series.Add(_bollingerSeries);
             PriceView.Series.Add(_smaSeries);
             PriceView.Series.Add(_priceSeries);
@@ -85,21 +94,55 @@ namespace MarketScanner.UI.Wpf.Services
 
         // --- Update Methods ---
         public void UpdatePriceData(
-            List<DataPoint> pricePoints,
-            List<DataPoint> smaPoints,
-            List<(DataPoint upper, DataPoint lower)> bollingerPoints)
+    List<DataPoint> pricePoints,
+    List<DataPoint> smaPoints,
+    List<(DataPoint upper, DataPoint lower)> bollingerPoints,
+    bool isLive = false)
         {
-            _priceSeries.Points.AddRange(pricePoints);
-            _smaSeries.Points.AddRange(smaPoints);
-
-            foreach (var (upper, lower) in bollingerPoints)
+            if (!isLive)
             {
-                _bollingerSeries.Points.Add(upper);
-                _bollingerSeries.Points2.Add(lower);
+                // Historical load — full refresh
+
+                _priceSeries.Points.AddRange(pricePoints);
+                _smaSeries.Points.AddRange(smaPoints);
+                foreach (var (upper, lower) in bollingerPoints)
+                {
+                    _bollingerSeries.Points.Add(upper);
+                    _bollingerSeries.Points2.Add(lower);
+                }
+            }
+            else
+            {
+                // Live incremental update
+                if (pricePoints.Count > 0)
+                    _priceSeries.Points.AddRange(pricePoints);
+                if (smaPoints.Count > 0)
+                    _smaSeries.Points.AddRange(smaPoints);
+                foreach (var (upper, lower) in bollingerPoints)
+                {
+                    _bollingerSeries.Points.Add(upper);
+                    _bollingerSeries.Points2.Add(lower);
+                }
+
+                // Keep memory limited
+                if (_priceSeries.Points.Count > 300)
+                {
+                    _priceSeries.Points.RemoveRange(0, _priceSeries.Points.Count - 300);
+                    _smaSeries.Points.RemoveRange(0, _smaSeries.Points.Count - 300);
+                    _bollingerSeries.Points.RemoveRange(0, _bollingerSeries.Points.Count - 300);
+                    _bollingerSeries.Points2.RemoveRange(0, _bollingerSeries.Points2.Count - 300);
+                }
             }
 
             PriceView.InvalidatePlot(true);
+            PriceView.Axes.OfType<LinearAxis>().First().MinimumPadding = 0.05;
+            PriceView.Axes.OfType<LinearAxis>().First().MaximumPadding = 0.05;
+            PriceView.Axes.OfType<LinearAxis>().First().Zoom(
+                _priceSeries.Points.Min(p => p.Y) * 0.95,
+                _priceSeries.Points.Max(p => p.Y) * 1.05);
+
         }
+
 
         public void UpdateRsiData(List<DataPoint> rsiPoints)
         {
