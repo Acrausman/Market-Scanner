@@ -75,6 +75,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             AllocConsole();
             Log("=== Market Scanner Console Initialized ===");
 
+
             string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
 
             _provider = new PolygonMarketDataProvider(apiKey);

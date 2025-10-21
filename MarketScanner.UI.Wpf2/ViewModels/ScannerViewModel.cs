@@ -13,8 +13,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EquityScannerService _scanner;
         private CancellationTokenSource _cts;
 
-        public ObservableCollection<string> Overbought => _scanner.OverboughtSymbols;
-        public ObservableCollection<string> Oversold => _scanner.OversoldSymbols;
+        public ObservableCollection<string> OverboughtSymbols => _scanner.OverboughtSymbols;
+        public ObservableCollection<string> OversoldSymbols => _scanner.OversoldSymbols;
+
 
         private int _progressValue;
         public int ProgressValue

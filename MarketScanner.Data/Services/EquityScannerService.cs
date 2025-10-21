@@ -92,12 +92,13 @@ namespace MarketScanner.Data.Services
                 double rsi = CalculateRsi(closes);
                 if (double.IsNaN(rsi)) return;
 
-                _uiDispatcher.InvokeAsync(() =>
+                await _uiDispatcher.InvokeAsync(() =>
                 {
                     lock (_syncLock)
                     {
                         if (rsi > 70)
                         {
+                            Console.WriteLine($"{symbol} is over 70 with an RSI of {rsi}");
                             if (!OverboughtSymbols.Contains(symbol))
                             {
                                 OverboughtSymbols.Add(symbol);
@@ -106,6 +107,7 @@ namespace MarketScanner.Data.Services
                         }
                         else if (rsi < 30)
                         {
+                            Console.WriteLine($"{symbol} is under 30 with an RSI of {rsi}");
                             if (!OversoldSymbols.Contains(symbol))
                             {
                                 OversoldSymbols.Add(symbol);
@@ -114,6 +116,7 @@ namespace MarketScanner.Data.Services
                         }
                         else
                         {
+                            Console.WriteLine($"{symbol} is not overbought or oversold with an RSI of {rsi}");
                             OverboughtSymbols.Remove(symbol);
                             OversoldSymbols.Remove(symbol);
                         }
