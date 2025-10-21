@@ -1,6 +1,7 @@
 ﻿using MarketScanner.Data.Models;
 using MarketScanner.Data.Models.MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
+using MarketScanner.Data.Services.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -76,12 +77,12 @@ namespace MarketScanner.Data
                 try
                 {
                     var (price, volume) = await _provider.GetQuoteAsync(symbol);
-                    var closes = await _provider.GetHistoricalClosesAsync(symbol, 50);
+                    var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
                     var timestamps = await _provider.GetHistoricalTimestampsAsync(symbol, 50);
 
                     if (closes.Count < 14) return;
 
-                    double rsi = CalculateRSI(closes);
+                    double rsi = RsiCalculator.Calculate(closes);
                     double sma = closes.TakeLast(smaPeriod).Average();
                     double sd = StdDev(closes.TakeLast(smaPeriod).ToList());
                     double upper = sma + 2 * sd;
@@ -147,10 +148,10 @@ namespace MarketScanner.Data
                         if (!double.IsNaN(volume))
                             OnNewVolume?.Invoke(symbol, volume);
 
-                        var closes = await _provider.GetHistoricalClosesAsync(symbol, 50);
+                        var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
                         if (closes.Count >= 14)
                         {
-                            double rsi = CalculateRSI(closes);
+                            double rsi = RsiCalculator.Calculate(closes);
                             OnNewRSI?.Invoke(symbol, rsi);
 
                             var recent = closes.TakeLast(smaPeriod).ToList();
@@ -190,20 +191,49 @@ namespace MarketScanner.Data
         // =============== HELPER FUNCTIONS ===================
         // =====================================================
 
-        public double CalculateRSI(IReadOnlyList<double> closes)
+        /*
+        public double CalculateRSI(List<double> closes, int period = 14)
         {
-            if (closes.Count <= rsiPeriod) return double.NaN;
+            if (closes == null || closes.Count <= period)
+                return double.NaN;
 
             double gain = 0, loss = 0;
-            for (int i = closes.Count - rsiPeriod + 1; i < closes.Count; i++)
+
+            // initialize with first 'period' differences
+            for (int i = 1; i <= period; i++)
             {
-                double delta = closes[i] - closes[i - 1];
-                if (delta > 0) gain += delta;
-                else loss -= delta;
+                double diff = closes[i] - closes[i - 1];
+                if (diff >= 0)
+                    gain += diff;
+                else
+                    loss -= diff;
             }
-            double rs = loss == 0 ? 100 : gain / loss;
-            return 100 - 100 / (1 + rs);
+
+            double avgGain = gain / period;
+            double avgLoss = loss / period;
+
+            // Wilder's smoothing formula
+            for (int i = period + 1; i < closes.Count; i++)
+            {
+                double diff = closes[i] - closes[i - 1];
+                if (diff >= 0)
+                {
+                    avgGain = ((avgGain * (period - 1)) + diff) / period;
+                    avgLoss = ((avgLoss * (period - 1)) + 0) / period;
+                }
+                else
+                {
+                    avgGain = ((avgGain * (period - 1)) + 0) / period;
+                    avgLoss = ((avgLoss * (period - 1)) - diff) / period;
+                }
+            }
+
+            if (avgLoss == 0) return 100;
+
+            double rs = avgGain / avgLoss;
+            return 100 - (100 / (1 + rs));
         }
+        */
 
         public double? GetLastPrice(string symbol)
         {

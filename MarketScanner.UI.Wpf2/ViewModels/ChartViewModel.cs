@@ -1,5 +1,6 @@
 ﻿using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
+using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
 using System;
@@ -97,7 +98,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     smaPoints.Add(new DataPoint(x, sma));
                     bollinger.Add((new DataPoint(x, upper), new DataPoint(x, lower)));
 
-                    double rsi = CalculateRsi(window);
+                    double rsi = RsiCalculator.Calculate(window);
                     if (!double.IsNaN(rsi))
                         rsiPoints.Add(new DataPoint(x, rsi));
                 }
@@ -114,23 +115,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             Console.WriteLine($"[Chart] {symbol} plotted {pricePoints.Count} pts");
         }
 
-        private double CalculateRsi(List<double> closes)
-        {
-            const int period = 14;
-            if (closes.Count < period + 1) return double.NaN;
-
-            double gain = 0, loss = 0;
-            for (int i = 1; i < period; i++)
-            {
-                double diff = closes[i] - closes[i - 1];
-                if (diff >= 0) gain += diff;
-                else loss -= diff;
-            }
-
-            if (loss == 0) return 100;
-            double rs = gain / loss;
-            return 100 - (100 / (1 + rs));
-        }
+        private double CalculateRsi(List<double> closes) => RsiCalculator.Calculate(closes);
 
         public event PropertyChangedEventHandler PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string name = null)

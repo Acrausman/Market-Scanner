@@ -2,6 +2,7 @@
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
 using System;
@@ -81,6 +82,26 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _provider = new PolygonMarketDataProvider(apiKey);
             _engine = new MarketDataEngine(_provider);
 
+            _provider.CompareAdjustedAsync("CFSB");
+
+
+            // 🧠 TEMPORARY SANITY CHECK
+            _ = Task.Run(async () =>
+            {
+                var bars = await _provider.GetHistoricalBarsAsync("CFSB", 120, adjusted: false);
+                var closes = bars.Select(b => b.Close).ToList();
+
+                var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+                foreach (var b in bars.TakeLast(15))
+                {
+                    var etDate = TimeZoneInfo.ConvertTimeFromUtc(b.Timestamp, tz).ToString("yyyy-MM-dd");
+                    //Console.WriteLine($"{etDate}  close={b.Close:F2}");
+                }
+                Console.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
+                double rsi = RsiCalculator.Calculate(closes);
+                Console.WriteLine($"[SanityCheck] CFSB RSI(14)={rsi:F2}");
+            });
+
             Chart = new ChartViewModel();
             Scanner = new ScannerViewModel(new EquityScannerService(_provider));
 
@@ -103,6 +124,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 if (result.Symbol == SelectedSymbol)
                     Chart.Update(result);
             };
+
         }
 
         private async Task StartScanAsync()
@@ -134,12 +156,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
                 // 3️⃣ Fetch a fresh quote
                 var (price, volume) = await _provider.GetQuoteAsync(symbol);
-                var closes = await _provider.GetHistoricalClosesAsync(symbol, 30);
+                var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
                 double sma = closes.Count >= 14 ? closes[^14..].Average() : closes.Average();
                 double sd = _engine.StdDev(closes);
                 double upper = sma + 2 * sd;
                 double lower = sma - 2 * sd;
-                double rsi = _engine.CalculateRSI(closes);
+                double rsi = RsiCalculator.Calculate(closes);
 
                 var result = new EquityScanResult
                 {
@@ -178,6 +200,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             TryUpdateChart(symbol);
         }
+
+        public async Task TestRsiAsync()
+        {
+            var bars = await _provider.GetHistoricalBarsAsync("CFSB", 120, adjusted: false);
+            var closes = bars.Select(b => b.Close).ToList();
+
+            Console.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
+            Console.WriteLine("RSI(14) = " + RsiCalculator.Calculate(closes).ToString("F2"));
+        }
+
 
         private void TryUpdateChart(string symbol)
         {
