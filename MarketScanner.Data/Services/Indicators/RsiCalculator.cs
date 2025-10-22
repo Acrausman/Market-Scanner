@@ -6,35 +6,39 @@ namespace MarketScanner.Data.Services.Indicators
 {
     public static class RsiCalculator
     {
-        // Classic 14-period RSI using last 15 closes only (Wilder seed)
+        /// <summary>
+        /// Calculates RSI over exactly the last `period` completed trading sessions.
+        /// Uses Wilder's smoothing and skips older history.
+        /// </summary>
         public static double Calculate(IReadOnlyList<double> closes, int period = 14)
         {
-            if (closes == null) return double.NaN;
+            if (closes == null || closes.Count <= period)
+                return double.NaN;
 
-            // Clean & ensure chronological order
-            var series = closes.Where(c => !double.IsNaN(c) && c > 0).ToList();
-            if (series.Count < period + 1) return double.NaN;
-
-            // Use exactly the last (period+1) closes
-            var window = series.Skip(series.Count - (period + 1)).ToList();
+            // ✅ Only consider the most recent `period + 1` closes (15 points for RSI 14)
+            var recent = closes.Skip(Math.Max(0, closes.Count - (period + 1))).ToList();
 
             double gain = 0, loss = 0;
-            for (int i = 1; i <= period; i++)
+
+            // Initial averages from first 'period' differences
+            for (int i = 1; i < recent.Count; i++)
             {
-                double diff = window[i] - window[i - 1];
-                if (diff > 0) gain += diff; else loss -= diff;
+                double diff = recent[i] - recent[i - 1];
+                if (diff >= 0) gain += diff;
+                else loss -= diff;
             }
 
             double avgGain = gain / period;
             double avgLoss = loss / period;
 
-            if (avgLoss == 0) return 100.0;
-            if (avgGain == 0) return 0.0;
+            // ⚙️ Handle edge cases
+            if (avgLoss == 0)
+                return avgGain == 0 ? 50 : 100;
 
             double rs = avgGain / avgLoss;
-            return 100.0 - (100.0 / (1.0 + rs));
+            double rsi = 100 - (100 / (1 + rs));
+
+            return Math.Round(rsi, 2);
         }
     }
-
-
 }

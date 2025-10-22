@@ -82,9 +82,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _provider = new PolygonMarketDataProvider(apiKey);
             _engine = new MarketDataEngine(_provider);
 
-            _provider.CompareAdjustedAsync("CFSB");
-
-
             // 🧠 TEMPORARY SANITY CHECK
             _ = Task.Run(async () =>
             {

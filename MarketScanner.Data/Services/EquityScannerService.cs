@@ -100,6 +100,7 @@ namespace MarketScanner.Data.Services
                 closesForRsi = closesForRsi.Where(c => c > 0 && !double.IsNaN(c)).ToList();
                 if (closesForRsi.Count < 15) return;
 
+                Console.WriteLine($"[RSI Test] {symbol} closes: {string.Join(',', closesForRsi.TakeLast(5).Select(c => c.ToString("F2")))}");
                 // 🔹 Calculate RSI
                 double rsi = RsiCalculator.Calculate(closesForRsi);
                 double uRsi = RsiCalculator.Calculate(closesForUi);
@@ -159,29 +160,18 @@ namespace MarketScanner.Data.Services
 
         private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit)
         {
+            // Each symbol gets its own independent copy
             if (_cache.TryGetValue(symbol, out var cached))
-                return cached;
+                return new List<double>(cached); // clone to avoid mutation
 
-            var bars = await _provider.GetHistoricalBarsAsync(symbol, limit + 5);
+            var closes = await _provider.GetHistoricalClosesAsync(symbol, limit);
 
-            // ✅ strict cleaning
-            var closes = bars
-                .Where(b => b != null && b.Close > 0 && !double.IsNaN(b.Close))
-                .GroupBy(b => b.Timestamp.Date) // remove duplicates per trading day
-                .Select(g => g.Last().Close)
-                .ToList();
+            // Defensive copy and null check
+            if (closes == null || closes.Count == 0)
+                return new List<double>();
 
-            // ✅ remove today's bar if market not closed
-            var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
-            var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-            bool marketClosed = nowEt.TimeOfDay >= new TimeSpan(16, 0, 0);
-
-            if (closes.Count > 0 && !marketClosed)
-                closes = closes.Take(closes.Count - 1).ToList();
-
-            // ✅ cache cleaned result
-            _cache[symbol] = closes.TakeLast(limit).ToList();
-            return _cache[symbol];
+            _cache[symbol] = new List<double>(closes);
+            return closes;
         }
 
 

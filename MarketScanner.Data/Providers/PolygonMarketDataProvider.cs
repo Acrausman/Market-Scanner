@@ -45,7 +45,9 @@ public class PolygonMarketDataProvider : IMarketDataProvider
     /// </summary>
     public async Task<List<double>> GetHistoricalClosesAsync(string symbol, int limit = 50, bool adjusted = true)
     {
-        var bars = await GetHistoricalBarsAsync(symbol, limit, _useAdjusted);
+        Console.WriteLine($"[Provider] Fetching closes for {symbol}");
+        var bars = await GetHistoricalBarsAsync(symbol, limit);
+        Console.WriteLine($"[Provider] {symbol} -> {bars.Count} bars, last close={bars.LastOrDefault()?.Close:F2}");
         return bars.Select(b => b.Close).ToList();
     }
 
@@ -78,7 +80,8 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         /*string url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}" +
                      $"?adjusted=true&sort=asc&limit={fetch}&apiKey={_apiKey}";
         */
-        string url = $"https://api.polygon.io/v2/aggs/ticker/CFSB/range/1/day/2025-06-01/2025-07-30?adjusted={(adjusted? "true" : "false")}&sort=asc&limit=120&apiKey={_apiKey}";
+        string url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}" +
+                     $"?adjusted=true&sort=asc&limit={fetch}&apiKey={_apiKey}&_={Guid.NewGuid()}";
 
         Console.WriteLine($"[Polygon] Fetching {(adjusted ? "adjusted" : "raw")} bars for {symbol}");
         try
@@ -141,6 +144,36 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         }
     }
 
+    public async Task DebugBarAlignmentAsync(string symbol, int limit = 20)
+    {
+        var bars = await GetHistoricalBarsAsync(symbol, limit);
+
+        if(bars.Count == 0)
+        {
+            Console.WriteLine($"[AlignCHeck] {symbol}: No bars returned.");
+            return;
+        }
+
+        Console.WriteLine($"[AlignCheck] {symbol} last {bars.Count} bars:");
+        foreach(var bar in bars)
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+            var et = TimeZoneInfo.ConvertTimeFromUtc(bar.Timestamp, tz);
+            Console.WriteLine($"{et:yyyy-MM-dd (ddd)} close={bar.Close:F2}");
+        }
+
+        //Check specing between bars
+        for (int i = 1; i < bars.Count; i++)
+        {
+            var delta = bars[i].Timestamp - bars[i - 1].Timestamp;
+            if(delta.TotalDays > 3)
+            {
+                Console.WriteLine($"⚠️  Gap detected between {bars[i - 1].Timestamp:yyyy-MM-dd} and {bars[i].Timestamp:yyyy-MM-dd} ({delta.TotalDays:F1} days)");
+            }
+        }
+
+        Console.WriteLine($"[AlignCheck] Earliest={bars.First().Timestamp:yyyy-MM-dd}, Latest={bars.Last().Timestamp:yyyy-MM-dd}");
+    }
 
     public async Task<List<string>> GetAllTickersAsync()
     {
