@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Documents;
 
 public class PolygonMarketDataProvider : IMarketDataProvider
 {
@@ -24,7 +23,6 @@ public class PolygonMarketDataProvider : IMarketDataProvider
     {
         try
         {
-            // Get the most recent 15-minute bar
             var bars = await GetHistoricalBarsAsync(symbol, 30, _useAdjusted);
             if (bars.Count > 0)
             {
@@ -51,7 +49,6 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         return bars.Select(b => b.Close).ToList();
     }
 
-
     /// <summary>
     /// Gets historical timestamps for the symbol.
     /// </summary>
@@ -62,12 +59,12 @@ public class PolygonMarketDataProvider : IMarketDataProvider
     }
 
     /// <summary>
-    /// Internal method to fetch historical 15-minute bars from Polygon.
+    /// Fetches historical daily bars for a given symbol.
+    /// This version aligns Polygon's UTC bars to Eastern time market closes.
     /// </summary>
-
     public async Task<List<Bar>> GetHistoricalBarsAsync(string symbol, int limit = 50, bool adjusted = true)
     {
-        // ask for a little extra to have room to drop today's partial bar
+        // Ask for a little extra to allow dropping today's partial bar
         int fetch = Math.Max(limit + 80, 120);
 
         var to = DateTime.UtcNow;
@@ -76,14 +73,11 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         string fromStr = from.ToString("yyyy-MM-dd");
         string toStr = to.ToString("yyyy-MM-dd");
 
-        // ✅ adjusted=true ; daily ; ascending
-        /*string url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}" +
-                     $"?adjusted=true&sort=asc&limit={fetch}&apiKey={_apiKey}";
-        */
         string url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}" +
-                     $"?adjusted=true&sort=asc&limit={fetch}&apiKey={_apiKey}&_={Guid.NewGuid()}";
+                     $"?adjusted={adjusted.ToString().ToLower()}&sort=asc&limit={fetch}&apiKey={_apiKey}&_={Guid.NewGuid()}";
 
         Console.WriteLine($"[Polygon] Fetching {(adjusted ? "adjusted" : "raw")} bars for {symbol}");
+
         try
         {
             var response = await url.GetJsonAsync<JObject>();
@@ -93,7 +87,7 @@ public class PolygonMarketDataProvider : IMarketDataProvider
 
             var bars = results.Select(r =>
             {
-                long ms = r.Value<long>("t"); // unix ms UTC
+                long ms = r.Value<long>("t"); // Unix time (ms UTC)
                 var tsUtc = DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime;
                 double close = r.Value<double>("c");
                 double volume = r.Value<double>("v");
@@ -105,7 +99,6 @@ public class PolygonMarketDataProvider : IMarketDataProvider
                     Volume = volume
                 };
             })
-
             .Where(b => !double.IsNaN(b.Close) && b.Close > 0)
             .OrderBy(b => b.Timestamp)
             .ToList();
@@ -117,12 +110,21 @@ public class PolygonMarketDataProvider : IMarketDataProvider
                 return new List<Bar>();
             }
 
-            // Get ET time safely (Windows/Linux compatible)
-            // ----- ensure only completed daily bars, no “today” partials -----
+            // ✅ Keep timestamps in UTC for logic, convert to ET only for display/logging
             var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
-            var todayEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
+
+            // 🧱 Guard: prevent index errors if Polygon returned nothing
+            if (bars.Count == 0)
+            {
+                Console.WriteLine($"[Polygon] No valid bars found for {symbol}. API returned 0 results.");
+                return new List<Bar>();
+            }
+
+            // ⚙️ Drop today's partial bar if market not yet closed
+            var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var todayEt = nowEt.Date;
             var lastEt = TimeZoneInfo.ConvertTimeFromUtc(bars[^1].Timestamp, tz).Date;
-            var marketClosed = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).TimeOfDay >= new TimeSpan(16, 0, 0);
+            bool marketClosed = nowEt.TimeOfDay >= new TimeSpan(16, 0, 0);
 
             if (lastEt == todayEt && !marketClosed)
             {
@@ -130,10 +132,14 @@ public class PolygonMarketDataProvider : IMarketDataProvider
                 bars.RemoveAt(bars.Count - 1);
             }
 
-
-            // Finally trim to the requested 'limit'
+            // ✂️ Trim to the requested limit (most recent)
             if (bars.Count > limit)
                 bars = bars.Skip(Math.Max(0, bars.Count - limit)).ToList();
+
+            // 🧾 Log for verification
+            var lastEtTime = TimeZoneInfo.ConvertTimeFromUtc(bars.Last().Timestamp, tz);
+            Console.WriteLine($"[Polygon] {symbol} -> {bars.Count} bars, last close={bars.Last().Close:F2}");
+            Console.WriteLine($"[AlignCheck] {symbol} last={lastEtTime:yyyy-MM-dd HH:mm} ET");
 
             return bars;
         }
@@ -144,38 +150,35 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         }
     }
 
-    public async Task DebugBarAlignmentAsync(string symbol, int limit = 20)
+    /// <summary>
+    /// Quick visual diagnostic to confirm alignment of timestamps and closes.
+    /// </summary>
+    public async Task VerifyPolygonBarAlignmentAsync(string symbol, int limit = 5)
     {
         var bars = await GetHistoricalBarsAsync(symbol, limit);
 
-        if(bars.Count == 0)
+        if (bars == null || bars.Count == 0)
         {
-            Console.WriteLine($"[AlignCHeck] {symbol}: No bars returned.");
+            Console.WriteLine($"[Verify] {symbol}: No bars returned.");
             return;
         }
 
-        Console.WriteLine($"[AlignCheck] {symbol} last {bars.Count} bars:");
-        foreach(var bar in bars)
+        var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+        Console.WriteLine($"\n[Verify] {symbol} — Showing last {bars.Count} daily bars:\n");
+
+        foreach (var bar in bars)
         {
-            var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
             var et = TimeZoneInfo.ConvertTimeFromUtc(bar.Timestamp, tz);
-            Console.WriteLine($"{et:yyyy-MM-dd (ddd)} close={bar.Close:F2}");
+            Console.WriteLine($"  {et:yyyy-MM-dd (ddd) HH:mm} ET → Close={bar.Close:F2}");
         }
 
-        //Check specing between bars
-        for (int i = 1; i < bars.Count; i++)
-        {
-            var delta = bars[i].Timestamp - bars[i - 1].Timestamp;
-            if(delta.TotalDays > 3)
-            {
-                Console.WriteLine($"⚠️  Gap detected between {bars[i - 1].Timestamp:yyyy-MM-dd} and {bars[i].Timestamp:yyyy-MM-dd} ({delta.TotalDays:F1} days)");
-            }
-        }
-
-        Console.WriteLine($"[AlignCheck] Earliest={bars.First().Timestamp:yyyy-MM-dd}, Latest={bars.Last().Timestamp:yyyy-MM-dd}");
+        var delta = bars.Last().Timestamp - bars.First().Timestamp;
+        Console.WriteLine($"\n[Verify] Total span: {delta.TotalDays:F1} days, spacing ≈ {delta.TotalDays / (bars.Count - 1):F1} days/bar");
     }
 
-    public async Task<List<string>> GetAllTickersAsync()
+    // --- The rest of your original methods unchanged (GetAllTickersAsync, CompareAdjustedAsync, DebugTickerInfo) ---
+
+public async Task<List<string>> GetAllTickersAsync()
     {
         var tickers = new List<string>();
         string? nextUrl = $"https://api.polygon.io/v3/reference/tickers" +

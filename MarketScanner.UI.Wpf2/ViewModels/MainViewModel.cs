@@ -81,23 +81,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             _provider = new PolygonMarketDataProvider(apiKey);
             _engine = new MarketDataEngine(_provider);
-
-            // 🧠 TEMPORARY SANITY CHECK
-            _ = Task.Run(async () =>
-            {
-                var bars = await _provider.GetHistoricalBarsAsync("CFSB", 120, adjusted: false);
-                var closes = bars.Select(b => b.Close).ToList();
-
-                var tz = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
-                foreach (var b in bars.TakeLast(15))
-                {
-                    var etDate = TimeZoneInfo.ConvertTimeFromUtc(b.Timestamp, tz).ToString("yyyy-MM-dd");
-                    //Console.WriteLine($"{etDate}  close={b.Close:F2}");
-                }
-                Console.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
-                double rsi = RsiCalculator.Calculate(closes);
-                Console.WriteLine($"[SanityCheck] CFSB RSI(14)={rsi:F2}");
-            });
+            _provider.VerifyPolygonBarAlignmentAsync("AAMI", 10);
+            _provider.VerifyPolygonBarAlignmentAsync("TSLA", 10);
 
             Chart = new ChartViewModel();
             Scanner = new ScannerViewModel(new EquityScannerService(_provider));
@@ -121,6 +106,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 if (result.Symbol == SelectedSymbol)
                     Chart.Update(result);
             };
+
+            var bars = _provider.GetHistoricalBarsAsync("AAPL");
 
         }
 
