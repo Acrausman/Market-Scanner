@@ -15,30 +15,30 @@ namespace MarketScanner.Data.Services.Indicators
             if (closes == null || closes.Count <= period)
                 return double.NaN;
 
-            // ✅ Only consider the most recent `period + 1` closes (15 points for RSI 14)
-            var recent = closes.Skip(Math.Max(0, closes.Count - (period + 1))).ToList();
-
             double gain = 0, loss = 0;
-
-            // Initial averages from first 'period' differences
-            for (int i = 1; i < recent.Count; i++)
+            for (int i = 1; i <= period; i++)
             {
-                double diff = recent[i] - recent[i - 1];
-                if (diff >= 0) gain += diff;
+                double diff = closes[i] - closes[i - 1];
+                if (diff > 0) gain += diff;
                 else loss -= diff;
             }
 
             double avgGain = gain / period;
             double avgLoss = loss / period;
 
-            // ⚙️ Handle edge cases
-            if (avgLoss == 0)
-                return avgGain == 0 ? 50 : 100;
+            for (int i = period + 1; i < closes.Count; i++)
+            {
+                double diff = closes[i] - closes[i - 1];
+                double up = diff > 0 ? diff : 0;
+                double down = diff < 0 ? -diff : 0;
 
+                avgGain = ((avgGain * (period - 1)) + up) / period;
+                avgLoss = ((avgLoss * (period - 1)) + down) / period;
+            }
+
+            if (avgLoss == 0) return 100;
             double rs = avgGain / avgLoss;
-            double rsi = 100 - (100 / (1 + rs));
-
-            return Math.Round(rsi, 2);
+            return Math.Round(100 - (100 / (1 + rs)), 2);
         }
     }
 }
