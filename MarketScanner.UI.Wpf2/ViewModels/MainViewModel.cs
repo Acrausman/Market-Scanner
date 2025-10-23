@@ -2,6 +2,7 @@
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
@@ -81,8 +82,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             _provider = new PolygonMarketDataProvider(apiKey);
             _engine = new MarketDataEngine(_provider);
-            _provider.VerifyPolygonBarAlignmentAsync("AAMI", 10);
-            _provider.VerifyPolygonBarAlignmentAsync("TSLA", 10);
 
             Chart = new ChartViewModel();
             Scanner = new ScannerViewModel(new EquityScannerService(_provider));
@@ -107,7 +106,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     Chart.Update(result);
             };
 
-            var bars = _provider.GetHistoricalBarsAsync("AAPL");
+            //_provider.GetHistoricalBarsAsync("AERT");
+            
 
         }
 
@@ -190,8 +190,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             var bars = await _provider.GetHistoricalBarsAsync("CFSB", 120, adjusted: false);
             var closes = bars.Select(b => b.Close).ToList();
 
-            Console.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
-            Console.WriteLine("RSI(14) = " + RsiCalculator.Calculate(closes).ToString("F2"));
+            Logger.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
+            Logger.WriteLine("RSI(14) = " + RsiCalculator.Calculate(closes).ToString("F2"));
         }
 
 

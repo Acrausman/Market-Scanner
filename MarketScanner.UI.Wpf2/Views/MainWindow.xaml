@@ -62,7 +62,7 @@
                 </StackPanel>
 
                 <ProgressBar Minimum="0" Maximum="100"
-                             Value="{Binding Scanner.ProgressValue}"
+                             Value="{Binding ProgressValue}"
                              Height="18" Margin="0,4,0,0"/>
                 <TextBlock Text="{Binding StatusText}" Foreground="White" Margin="0,4,0,10"/>
 
