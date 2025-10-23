@@ -21,7 +21,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public int ProgressValue
         {
             get => _progressValue;
-            set { _progressValue = value; OnPropertyChanged(); }
+            set
+            {
+                if(Math.Abs(_progressValue - value) > 0.001)
+                {
+                    _progressValue = value;
+                    OnPropertyChanged(nameof(ProgressValue));
+                }
+            }
         }
 
         public ScannerViewModel(EquityScannerService scanner)
