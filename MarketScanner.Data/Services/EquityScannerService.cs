@@ -21,7 +21,7 @@ namespace MarketScanner.Data.Services
             new ConcurrentDictionary<string, List<double>>();
         private readonly ConcurrentDictionary<string, DateTime> _lastFetch = new();
 
-        // 🧩 Added: observable collections for ViewModel binding
+        // ViewModel binding
         public ObservableCollection<string> OverboughtSymbols { get; } = new();
         public ObservableCollection<string> OversoldSymbols { get; } = new();
 
@@ -30,9 +30,6 @@ namespace MarketScanner.Data.Services
             _provider = provider;
         }
 
-        /// <summary>
-        /// Scans all tickers with UI progress and cancellation support.
-        /// </summary>
         public async Task ScanAllAsync(IProgress<int> progress, CancellationToken token)
         {
             // clear UI-bound collections on UI thread
@@ -53,8 +50,7 @@ namespace MarketScanner.Data.Services
 
             int processed = 0;
 
-            // throttle concurrency so Polygon doesn't throttle you to death
-            var semaphore = new SemaphoreSlim(20); // tune this number if needed
+            var semaphore = new SemaphoreSlim(20); 
 
             var tasks = tickers.Select(async symbol =>
             {
@@ -90,7 +86,6 @@ namespace MarketScanner.Data.Services
                     }
 
                     // push progress % back to the VM
-                    // we only need to update occasionally to avoid spamming UI
                     if (current % 10 == 0 || current == tickers.Count)
                     {
                         int pct = (int)((double)current / tickers.Count * 100);
@@ -110,10 +105,6 @@ namespace MarketScanner.Data.Services
             // final 100% update
             progress?.Report(100);
         }
-
-        /// <summary>
-        /// Scans a single symbol for RSI classification.
-        /// </summary>
         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
         {
             try
@@ -132,9 +123,6 @@ namespace MarketScanner.Data.Services
                 closes = closes.TakeLast(120).ToList();
                 double rsi = RsiCalculator.Calculate(closes, 14);
 
-                //Console.WriteLine($"[RSI Test] {symbol} closes: {string.Join(",", closes.TakeLast(5).Select(v => v.ToString("F2")))}");
-                //Console.WriteLine($"[Debug RSI] {symbol}   RSI={rsi:F2}");
-
                 return new EquityScanResult
                 {
                     Symbol = symbol,
@@ -149,9 +137,6 @@ namespace MarketScanner.Data.Services
             }
         }
 
-        /// <summary>
-        /// Retrieves or caches historical closes.
-        /// </summary>
         private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit)
         {
             // Always refetch after provider changes or when cache is older than 1 hour
@@ -172,9 +157,6 @@ namespace MarketScanner.Data.Services
             return closes.TakeLast(limit).ToList();
         }
 
-        /// <summary>
-        /// Clears the in-memory cache (optional).
-        /// </summary>
         public void ClearCache() => _cache.Clear();
     }
 }

@@ -10,10 +10,6 @@ using System.Threading.Tasks;
 
 namespace MarketScanner.Data.Diagnostics
 {
-    /// <summary>
-    /// Diagnostic helper — validates Polygon RSI vs Stooq daily CSVs.
-    /// Included only in DEBUG builds.
-    /// </summary>
     public static class RsiCompareStooqHelper
     {
         private static readonly HttpClient _http = new HttpClient();

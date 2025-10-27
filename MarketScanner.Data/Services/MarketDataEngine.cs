@@ -123,9 +123,7 @@ namespace MarketScanner.Data
             await Task.WhenAll(tasks);
         }
 
-        // =====================================================
-        // =============== SINGLE SYMBOL STREAM ================
-        // =====================================================
+        // SINGLE SYMBOL STREAM 
         public void StartSymbol(string symbol)
         {
             StopSymbol(); // cancel previous stream
@@ -186,54 +184,6 @@ namespace MarketScanner.Data
             _liveCts = null;
             _liveTask = null;
         }
-
-        // =====================================================
-        // =============== HELPER FUNCTIONS ===================
-        // =====================================================
-
-        /*
-        public double CalculateRSI(List<double> closes, int period = 14)
-        {
-            if (closes == null || closes.Count <= period)
-                return double.NaN;
-
-            double gain = 0, loss = 0;
-
-            // initialize with first 'period' differences
-            for (int i = 1; i <= period; i++)
-            {
-                double diff = closes[i] - closes[i - 1];
-                if (diff >= 0)
-                    gain += diff;
-                else
-                    loss -= diff;
-            }
-
-            double avgGain = gain / period;
-            double avgLoss = loss / period;
-
-            // Wilder's smoothing formula
-            for (int i = period + 1; i < closes.Count; i++)
-            {
-                double diff = closes[i] - closes[i - 1];
-                if (diff >= 0)
-                {
-                    avgGain = ((avgGain * (period - 1)) + diff) / period;
-                    avgLoss = ((avgLoss * (period - 1)) + 0) / period;
-                }
-                else
-                {
-                    avgGain = ((avgGain * (period - 1)) + 0) / period;
-                    avgLoss = ((avgLoss * (period - 1)) - diff) / period;
-                }
-            }
-
-            if (avgLoss == 0) return 100;
-
-            double rs = avgGain / avgLoss;
-            return 100 - (100 / (1 + rs));
-        }
-        */
 
         public double? GetLastPrice(string symbol)
         {

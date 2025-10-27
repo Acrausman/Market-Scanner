@@ -11,7 +11,6 @@ namespace MarketScanner.UI.Wpf.Services
         private readonly AlertService _alertService;
         private readonly EmailService _emailService;
 
-        // 🟢 Keep a list of active alerts
         public List<Alert> Alerts { get; } = new();
 
         public AlertManager(AlertService alertService, EmailService emailService)
@@ -19,8 +18,6 @@ namespace MarketScanner.UI.Wpf.Services
             _alertService = alertService;
             _emailService = emailService;
         }
-
-        // 🟢 Called by MarketDataEngine or MainViewModel for each new EquityScanResult
         public void ProcessScanResult(EquityScanResult result)
         {
             foreach (var alert in Alerts)
@@ -51,11 +48,8 @@ namespace MarketScanner.UI.Wpf.Services
 
             if (alert.NotifyEmail)
             {
-                // send to your preferred email or configured address
                 _emailService.SendEmail("your_email@gmail.com", "recipient@example.com", subject, message);
             }
-
-            // future SMS support would go here
         }
 
         private string GenerateAlertMessage(Alert alert, EquityScanResult result)

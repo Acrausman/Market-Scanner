@@ -48,8 +48,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         [System.Runtime.InteropServices.DllImport("kernel32.dll")]
         private static extern bool AllocConsole();
 
-        private string _selectedSymbol;
-        public string SelectedSymbol
+        private SymbolViewModel _selectedSymbol;
+        public SymbolViewModel SelectedSymbol
         {
             get => _selectedSymbol;
             set
@@ -57,10 +57,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 if (_selectedSymbol != value)
                 {
                     _selectedSymbol = value;
-                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(SelectedSymbol));
 
-                    if (!string.IsNullOrWhiteSpace(_selectedSymbol))
-                        _ = LoadSymbolAsync(_selectedSymbol);
+                    if (!string.IsNullOrWhiteSpace(_selectedSymbol.Symbol))
+                        _ = LoadSymbolAsync(_selectedSymbol.Symbol);
                 }
             }
         }
@@ -89,7 +89,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
             StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
 
-            // 🔹 Event Subscriptions (Buffered updates)
+            // Event Subscriptions (Buffered updates)
             _engine.OnNewPrice += (sym, price) => UpdateCache(sym, data => data.Price = price);
             _engine.OnNewRSI += (sym, rsi) => UpdateCache(sym, data => data.RSI = rsi);
             _engine.OnNewSMA += (sym, sma, upper, lower) => UpdateCache(sym, data =>
@@ -102,11 +102,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             _engine.OnEquityScanned += result =>
             {
-                if (result.Symbol == SelectedSymbol)
+                if (result.Symbol == SelectedSymbol.Symbol)
                     Chart.Update(result);
             };
-
-            //_provider.GetHistoricalBarsAsync("AERT");
             
 
         }
@@ -119,7 +117,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             StatusText = "Scan complete";
         }
 
-        // 🟢 Load Historical + Start Live
+        // Load Historical + Start Live
         private async Task LoadSymbolAsync(string symbol)
         {
             if (string.IsNullOrWhiteSpace(symbol))
@@ -170,10 +168,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
 
-        // 🧩 Cache + merge updates before sending to chart
+        // Cache + merge updates before sending to chart
         private void UpdateCache(string symbol, Action<EquityScanResult> updateAction)
         {
-            if (symbol != SelectedSymbol) return;
+            if (symbol != SelectedSymbol.Symbol) return;
 
             if (!_latestData.ContainsKey(symbol))
                 _latestData[symbol] = new EquityScanResult { Symbol = symbol };

@@ -3,6 +3,7 @@ using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
+using OxyPlot.Axes;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -16,6 +17,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
     public class ChartViewModel : INotifyPropertyChanged
     {
         private readonly ChartManager _chartManager = new();
+        private readonly IMarketDataProvider _provider;
 
         public PlotModel PriceView => _chartManager.PriceView;
         public PlotModel RsiView => _chartManager.RsiView;
@@ -41,6 +43,53 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
+        private async void LoadChartForSymbol(string symbol)
+        {
+            _chartManager.ClearAllSeries();
+
+            var bars = await _provider.GetHistoricalBarsAsync(symbol, 125);
+
+            if (bars == null || bars.Count == 0)
+                return;
+
+            var pricePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close)).ToList();
+
+            var smaPoints = new List<DataPoint>();
+            var upperBand = new List<DataPoint>();
+            var lowerBand = new List<DataPoint>();
+
+            const int window = 14;
+            for (int i = window - 1; i < bars.Count; i++)
+            {
+                var slice = bars.Skip(i - window + 1).Take(window).Select(b => b.Close).ToList();
+                double sma = slice.Average();
+                double std = Math.Sqrt(slice.Average(v => Math.Pow(v - sma, 2)));
+                smaPoints.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma));
+                upperBand.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma + 2 * std));
+                lowerBand.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma - 2 * std));
+                
+            }
+
+            _chartManager.UpdatePriceData(pricePoints, smaPoints,
+                upperBand.Zip(lowerBand, (u, l) => (u, l)).ToList());
+
+
+            var closes = bars.Select(b => b.Close).ToList();
+            var rsiPoints = new List<DataPoint>();
+
+            for (int i = window; i < closes.Count; i++)
+            {
+                double rsi = MarketScanner.Data.Services.Indicators.RsiCalculator.Calculate(closes.Take(i + 1).ToList(), window);
+                var time = DateTimeAxis.ToDouble(bars[i].Timestamp);
+                if (!double.IsNaN(rsi))
+                    rsiPoints.Add(new DataPoint(time, rsi));
+            }
+
+            _chartManager.UpdateRsiData(rsiPoints);
+
+            var volumePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume)).ToList();
+            _chartManager.UpdateVolumeData(volumePoints);
+        }
         public void Update(EquityScanResult result)
         {
             // Ignore invalid or zeroed updates
@@ -104,7 +153,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 }
             }
 
-            // 🧭 Apply updates safely on the UI thread
             Application.Current.Dispatcher.Invoke(() =>
             {
                 _chartManager.ClearAllSeries();
@@ -114,8 +162,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             Console.WriteLine($"[Chart] {symbol} plotted {pricePoints.Count} pts");
         }
-
-        private double CalculateRsi(List<double> closes) => RsiCalculator.Calculate(closes);
 
         public event PropertyChangedEventHandler PropertyChanged;
         private void OnPropertyChanged([CallerMemberName] string name = null)

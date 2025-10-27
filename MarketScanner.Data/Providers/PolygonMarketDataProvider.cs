@@ -76,9 +76,6 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         }
     }
 
-    /// <summary>
-    /// Gets the latest 15-minute delayed price and volume for a symbol.
-    /// </summary>
     public async Task<(double price, double volume)> GetQuoteAsync(string symbol)
     {
         try
@@ -98,9 +95,6 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         }
     }
 
-    /// <summary>
-    /// Gets historical close prices for the symbol.
-    /// </summary>
     public async Task<List<double>> GetHistoricalClosesAsync(string symbol, int limit = 50, bool adjusted = true)
     {
         //Console.WriteLine($"[Provider] Fetching closes for {symbol}");
@@ -109,19 +103,11 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         return bars.Select(b => b.Close).ToList();
     }
 
-    /// <summary>
-    /// Gets historical timestamps for the symbol.
-    /// </summary>
     public async Task<List<DateTime>> GetHistoricalTimestampsAsync(string symbol, int limit = 50, bool adjusted = true)
     {
         var bars = await GetHistoricalBarsAsync(symbol, limit, _useAdjusted);
         return bars.Select(b => b.Timestamp).ToList();
     }
-
-    /// <summary>
-    /// Fetches historical daily bars for a given symbol.
-    /// This version aligns Polygon's UTC bars to Eastern time market closes.
-    /// </summary>
 
     public async Task<List<Bar>> GetHistoricalBarsAsync(string symbol, int limit = 50, bool adjusted = true)
     {
@@ -282,8 +268,6 @@ public async Task CheckBarAlignmentAsync(string symbol)
         }
     }
 
-    // --- The rest of your original methods unchanged (GetAllTickersAsync, CompareAdjustedAsync, DebugTickerInfo) ---
-
     public async Task<List<string>> GetAllTickersAsync()
     {
         var tickers = new List<string>();
@@ -307,7 +291,7 @@ public async Task CheckBarAlignmentAsync(string symbol)
                         bool? primary = r.Value<bool?>("primary_share");
                         string? ticker = r.Value<string>("ticker");
 
-                        // ✅ Relax filter if Polygon doesn’t return exchange/primary flags
+                        // Relax filter if Polygon doesn’t return exchange/primary flags
                         if (!string.IsNullOrWhiteSpace(ticker) &&
                             type == "CS" &&
                             (active ?? true) &&

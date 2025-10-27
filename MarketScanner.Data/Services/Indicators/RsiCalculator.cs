@@ -6,10 +6,6 @@ namespace MarketScanner.Data.Services.Indicators
 {
     public static class RsiCalculator
     {
-        /// <summary>
-        /// Calculates RSI over exactly the last `period` completed trading sessions.
-        /// Uses Wilder's smoothing and skips older history.
-        /// </summary>
         public static double Calculate(IReadOnlyList<double> closes, int period = 14)
         {
             if (closes == null || closes.Count <= period)
