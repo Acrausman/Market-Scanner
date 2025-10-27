@@ -16,7 +16,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class ChartViewModel : INotifyPropertyChanged
     {
-        private readonly ChartManager _chartManager = new();
+        private readonly ChartManager _chartManager;
         private readonly IMarketDataProvider _provider;
 
         public PlotModel PriceView => _chartManager.PriceView;
@@ -35,6 +35,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string _volumeText;
         public string VolumeText { get => _volumeText; set { _volumeText = value; OnPropertyChanged(); } }
 
+        public ChartViewModel(IMarketDataProvider provider, ChartManager chartManager)
+        {
+            _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+            _chartManager = chartManager ?? throw new ArgumentNullException(nameof(chartManager));
+        }
+
         public void Clear()
         {
             Application.Current.Dispatcher.Invoke(() =>
@@ -43,11 +49,29 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
-        private async void LoadChartForSymbol(string symbol)
+        public async void LoadChartForSymbol(string symbol)
         {
-            _chartManager.ClearAllSeries();
+            if (_provider == null)
+            {
+                Console.WriteLine("[Chart] Market data provider not initialized.");
+                return;
+            }
+            if (_chartManager == null)
+            {
+                Console.WriteLine("[Chart] ChartManager not initialized.");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(symbol))
+                return;
 
             var bars = await _provider.GetHistoricalBarsAsync(symbol, 125);
+            if (bars == null || bars.Count == 0)
+            {
+                Console.WriteLine($"[Chart] No bar data for {symbol}");
+                return;
+            }
+
+            _chartManager.ClearAllSeries();
 
             if (bars == null || bars.Count == 0)
                 return;

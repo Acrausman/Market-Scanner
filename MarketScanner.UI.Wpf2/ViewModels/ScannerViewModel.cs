@@ -1,4 +1,6 @@
-﻿using MarketScanner.Data.Services;
+﻿using MarketScanner.Data.Providers;
+using MarketScanner.Data.Services;
+using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -12,15 +14,22 @@ namespace MarketScanner.UI.Wpf.ViewModels
     public class ScannerViewModel : INotifyPropertyChanged
     {
         private readonly EquityScannerService _scanner;
+        private readonly IMarketDataProvider _provider;
+        private readonly ChartViewModel _chartViewModel;
+        private readonly ChartManager _chartManager;
+
+
         private CancellationTokenSource _cts;
 
         public ObservableCollection<string> OverboughtSymbols => _scanner.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _scanner.OversoldSymbols;
 
         public IProgress<int> ScanProgress { get; }
-        public ScannerViewModel(EquityScannerService scanner)
+        public ScannerViewModel(EquityScannerService scanner, ChartManager chartManager)
         {
             _scanner = scanner;
+            _chartManager = chartManager;
+            _chartViewModel = new ChartViewModel(_provider, _chartManager);
 
             ScanProgress = new Progress<int>(val =>
             {
@@ -32,6 +41,23 @@ namespace MarketScanner.UI.Wpf.ViewModels
             ProgressValue = 0;
         }
 
+        private string _selectedSymbol;
+        public string SelectedSymbol
+        {
+            get => _selectedSymbol;
+            set
+            {
+                if(_selectedSymbol != value)
+                {
+                    _selectedSymbol = value;
+                    OnPropertyChanged(nameof(SelectedSymbol));
+
+                    if(!string.IsNullOrEmpty(_selectedSymbol))
+                        _chartViewModel.LoadChartForSymbol(_selectedSymbol);
+                        
+                }
+            }
+        }
         private int _progressValue;
         public int ProgressValue
         {

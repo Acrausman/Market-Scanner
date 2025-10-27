@@ -23,6 +23,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly MarketDataEngine _engine;
 
         public ChartViewModel Chart { get; }
+        public ChartManager ChartManager { get; } = new ChartManager();
         public ScannerViewModel Scanner { get; }
 
         private string _consoleText;
@@ -59,8 +60,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _selectedSymbol = value;
                     OnPropertyChanged(nameof(SelectedSymbol));
 
-                    if (!string.IsNullOrWhiteSpace(_selectedSymbol.Symbol))
-                        _ = LoadSymbolAsync(_selectedSymbol.Symbol);
+                    if (_selectedSymbol != null)
+                        Chart.LoadChartForSymbol(_selectedSymbol.Symbol);
                 }
             }
         }
@@ -83,8 +84,31 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _provider = new PolygonMarketDataProvider(apiKey);
             _engine = new MarketDataEngine(_provider);
 
-            Chart = new ChartViewModel();
-            Scanner = new ScannerViewModel(new EquityScannerService(_provider));
+            var ChartManager = new ChartManager();
+
+            // Initialize provider and engine
+            _provider = new PolygonMarketDataProvider(apiKey);
+            _engine = new MarketDataEngine(_provider);
+
+            // Create one shared ChartManager
+            var chartManager = new ChartManager();
+
+            // Pass dependencies properly
+            Chart = new ChartViewModel(_provider, chartManager);
+            var scannerService = new EquityScannerService(_provider);
+            Scanner = new ScannerViewModel(scannerService, chartManager);
+
+            // Commands
+            StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
+            StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
+
+            // Link engine updates to chart refresh
+            _engine.OnEquityScanned += result =>
+            {
+                if (result.Symbol == SelectedSymbol.Symbol)
+                    Chart.Update(result);
+            };
+
 
             StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
             StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
