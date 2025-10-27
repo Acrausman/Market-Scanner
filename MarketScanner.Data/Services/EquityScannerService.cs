@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace MarketScanner.Data.Services
 {
@@ -34,8 +35,12 @@ namespace MarketScanner.Data.Services
         /// </summary>
         public async Task ScanAllAsync(IProgress<int> progress, CancellationToken token)
         {
-            OverboughtSymbols.Clear();
-            OversoldSymbols.Clear();
+            // clear UI-bound collections on UI thread
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                OverboughtSymbols.Clear();
+                OversoldSymbols.Clear();
+            });
 
             var tickers = await _provider.GetAllTickersAsync().ConfigureAwait(false);
             if (tickers == null || tickers.Count == 0)
@@ -48,36 +53,62 @@ namespace MarketScanner.Data.Services
 
             int processed = 0;
 
+            // throttle concurrency so Polygon doesn't throttle you to death
+            var semaphore = new SemaphoreSlim(20); // tune this number if needed
+
             var tasks = tickers.Select(async symbol =>
             {
-                token.ThrowIfCancellationRequested();
-
-                var result = await ScanSingleSymbol(symbol).ConfigureAwait(false);
-                Interlocked.Increment(ref processed);
-
-                if (result.RSI >= 70)
+                await semaphore.WaitAsync(token);
+                try
                 {
-                    Logger.WriteLine($"{symbol} is overbought with an rsi of {result.RSI}");
-                    lock (OverboughtSymbols)
-                        OverboughtSymbols.Add(symbol);
-                }
-                else if (result.RSI <= 30)
-                {
-                    Logger.WriteLine($"{symbol} is oversold with an rsi of {result.RSI}");
-                    lock (OversoldSymbols)
-                        OversoldSymbols.Add(symbol);
-                }
-                else
-                {
-                    Logger.WriteLine($"{symbol} is neutral at {result.RSI}");
-                }
+                    token.ThrowIfCancellationRequested();
 
-                    progress?.Report((int)((double)processed / tickers.Count * 100));
-            }).ToList(); // force enumeration
+                    var result = await ScanSingleSymbol(symbol).ConfigureAwait(false);
+
+                    int current = Interlocked.Increment(ref processed);
+
+                    // classify and update ObservableCollections on UI thread
+                    if (result.RSI >= 70)
+                    {
+                        Logger.WriteLine($"{symbol} is overbought with an rsi of {result.RSI}");
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            OverboughtSymbols.Add(symbol);
+                        });
+                    }
+                    else if (result.RSI <= 30)
+                    {
+                        Logger.WriteLine($"{symbol} is oversold with an rsi of {result.RSI}");
+                        Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            OversoldSymbols.Add(symbol);
+                        });
+                    }
+                    else
+                    {
+                        Logger.WriteLine($"{symbol} is neutral at {result.RSI}");
+                    }
+
+                    // push progress % back to the VM
+                    // we only need to update occasionally to avoid spamming UI
+                    if (current % 10 == 0 || current == tickers.Count)
+                    {
+                        int pct = (int)((double)current / tickers.Count * 100);
+                        progress?.Report(pct);
+                    }
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }).ToList();
 
             await Task.WhenAll(tasks).ConfigureAwait(false);
 
             Logger.WriteLine($"[Scanner] Completed. Overbought={OverboughtSymbols.Count}, Oversold={OversoldSymbols.Count}");
+
+            // final 100% update
+            progress?.Report(100);
         }
 
         /// <summary>

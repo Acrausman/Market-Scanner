@@ -62,8 +62,9 @@
                 </StackPanel>
 
                 <ProgressBar Minimum="0" Maximum="100"
-                             Value="{Binding ProgressValue}"
-                             Height="18" Margin="0,4,0,0"/>
+             Value="{Binding Scanner.ProgressValue, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+             Height="18" Margin="0,4,0,0"/>
+
                 <TextBlock Text="{Binding StatusText}" Foreground="White" Margin="0,4,0,10"/>
 
                 <Separator Margin="0,10,0,10"/>

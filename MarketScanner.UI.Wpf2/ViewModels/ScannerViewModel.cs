@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
@@ -16,6 +17,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ObservableCollection<string> OverboughtSymbols => _scanner.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _scanner.OversoldSymbols;
 
+        public IProgress<int> ScanProgress { get; }
+        public ScannerViewModel(EquityScannerService scanner)
+        {
+            _scanner = scanner;
+
+            ScanProgress = new Progress<int>(val =>
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    ProgressValue = val;
+                });
+            });
+            ProgressValue = 0;
+        }
 
         private int _progressValue;
         public int ProgressValue
@@ -23,7 +38,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             get => _progressValue;
             set
             {
-                if(Math.Abs(_progressValue - value) > 0.001)
+                if (_progressValue != value)
                 {
                     _progressValue = value;
                     OnPropertyChanged(nameof(ProgressValue));
@@ -31,10 +46,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
 
-        public ScannerViewModel(EquityScannerService scanner)
-        {
-            _scanner = scanner;
-        }
 
         public async Task StartAsync(IProgress<int> progress)
         {
@@ -43,7 +54,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             try
             {
-                await _scanner.ScanAllAsync(progress, _cts.Token);
+                await _scanner.ScanAllAsync(ScanProgress, _cts.Token);
             }
             catch (OperationCanceledException)
             {
