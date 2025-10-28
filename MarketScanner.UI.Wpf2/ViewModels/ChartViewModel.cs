@@ -1,4 +1,4 @@
-using MarketScanner.Data.Models;
+﻿using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.Data.Diagnostics;
@@ -75,83 +75,64 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
-        public async Task LoadChartForSymbolAsync(string symbol, CancellationToken cancellationToken = default)
+        public async Task LoadChartForSymbol(string symbol)
         {
-            CancelOngoingLoad();
-
             if (string.IsNullOrWhiteSpace(symbol))
-            {
-                Clear();
                 return;
-            }
-
-            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _loadCts = linkedCts;
-            var token = linkedCts.Token;
 
             try
             {
-                var bars = await _provider.GetHistoricalBarsAsync(symbol, 150).ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
+                _chartService.ClearAllSeries();
 
+                // Fetch last ~125 bars for the symbol
+                var bars = await _provider.GetHistoricalBarsAsync(symbol, 125).ConfigureAwait(false);
                 if (bars == null || bars.Count == 0)
-                {
-                    Logger.WriteLine($"[Chart] No bar data for {symbol}");
-                    await _dispatcher.InvokeAsync(() =>
-                    {
-                        _chartService.ClearAllSeries();
-                        PriceText = "";
-                        SmaText = "";
-                        RsiText = "";
-                        VolumeText = "";
-                    });
                     return;
+
+                // Create data series for price and SMA
+                var pricePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close)).ToList();
+
+                var closes = bars.Select(b => b.Close).ToList();
+                var rsiValues = RsiCalculator.CalculateSeries(closes, 14);
+                var rsiPoints = rsiValues
+                    .Select((r, i) => new DataPoint(DateTimeAxis.ToDouble(bars[i + (closes.Count - rsiValues.Count)].Timestamp), r))
+                    .ToList();
+
+                // Compute SMA (simple 14-period average)
+                var smaPoints = closes
+                    .Select((_, i) => i >= 13
+                        ? new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp),
+                            closes.Skip(i - 13).Take(14).Average())
+                        : new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), double.NaN))
+                    .ToList();
+
+                // Bollinger Bands (20 period, 2σ)
+                var bollingerPoints = new List<(DataPoint upper, DataPoint lower)>();
+                for (int i = 19; i < closes.Count; i++)
+                {
+                    var slice = closes.Skip(i - 19).Take(20).ToList();
+                    var mean = slice.Average();
+                    var sd = Math.Sqrt(slice.Sum(v => Math.Pow(v - mean, 2)) / slice.Count);
+                    var upper = mean + 2 * sd;
+                    var lower = mean - 2 * sd;
+                    var ts = DateTimeAxis.ToDouble(bars[i].Timestamp);
+                    bollingerPoints.Add((new DataPoint(ts, upper), new DataPoint(ts, lower)));
                 }
 
-                var pricePoints = CreatePriceSeries(bars);
-                var smaPoints = CreateSmaSeries(bars, out var bollingerBands);
-                var rsiPoints = CreateRsiSeries(bars);
-                var volumePoints = CreateVolumeSeries(bars);
+                // Volume series
+                var volumePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume)).ToList();
 
-                token.ThrowIfCancellationRequested();
-
-                await _dispatcher.InvokeAsync(() =>
+                // Update charts
+                App.Current.Dispatcher.Invoke(() =>
                 {
-                    _chartService.UpdatePriceData(pricePoints, smaPoints, bollingerBands, isLive: false);
+                    _chartService.UpdatePriceData(pricePoints, smaPoints, bollingerPoints);
                     _chartService.UpdateRsiData(rsiPoints);
                     _chartService.UpdateVolumeData(volumePoints);
-
-                    var lastBar = bars[^1];
-                    PriceText = $"Price: {lastBar.Close:F2}";
-                    SmaText = smaPoints.Count > 0 ? $"SMA: {smaPoints[^1].Y:F2}" : string.Empty;
-                    RsiText = rsiPoints.Count > 0 ? $"RSI: {rsiPoints[^1].Y:F2}" : string.Empty;
-                    VolumeText = $"Vol: {lastBar.Volume:N0}";
-                }, DispatcherPriority.Background);
-            }
-            catch (OperationCanceledException)
-            {
-                // ignored - selection changed
+                });
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"[Chart] Failed to load {symbol}: {ex.Message}");
-                await _dispatcher.InvokeAsync(() =>
-                {
-                    _chartService.ClearAllSeries();
-                    PriceText = string.Empty;
-                    SmaText = string.Empty;
-                    RsiText = string.Empty;
-                    VolumeText = string.Empty;
-                });
-                throw;
-            }
-            finally
-            {
-                linkedCts.Dispose();
-                if (ReferenceEquals(_loadCts, linkedCts))
-                {
-                    _loadCts = null;
-                }
+                Logger.WriteLine($"[Chart] Error loading {symbol}: {ex.Message}");
             }
         }
 

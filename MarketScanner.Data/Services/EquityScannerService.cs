@@ -68,6 +68,7 @@ namespace MarketScanner.Data.Services
                         Logger.WriteLine($"{symbol} is overbought with an rsi of {result.RSI}");
                         Application.Current.Dispatcher.Invoke(() =>
                         {
+                            if(symbol != null)
                             OverboughtSymbols.Add(symbol);
                         });
                     }
@@ -76,6 +77,7 @@ namespace MarketScanner.Data.Services
                         Logger.WriteLine($"{symbol} is oversold with an rsi of {result.RSI}");
                         Application.Current.Dispatcher.Invoke(() =>
                         {
+                            if(symbol != null)
                             OversoldSymbols.Add(symbol);
                         });
                     }

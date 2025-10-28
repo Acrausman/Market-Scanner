@@ -153,7 +153,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             try
             {
                 StatusText = $"Loading {symbol}...";
-                await _chartViewModel.LoadChartForSymbolAsync(symbol, token).ConfigureAwait(false);
+                await _chartViewModel.LoadChartForSymbol(symbol).ConfigureAwait(false);
                 await _dispatcher.InvokeAsync(() => StatusText = $"Showing {symbol}");
             }
             catch (OperationCanceledException)

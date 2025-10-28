@@ -41,37 +41,56 @@ namespace MarketScanner.UI.Wpf.Services
         }
 
         public void UpdatePriceData(IReadOnlyList<DataPoint> pricePoints,
-                                    IReadOnlyList<DataPoint> smaPoints,
-                                    IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
-                                    bool isLive = false)
+                            IReadOnlyList<DataPoint> smaPoints,
+                            IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
+                            bool isLive = false)
         {
-            if (!isLive)
-            {
-                _priceSeries.Points.Clear();
-                _smaSeries.Points.Clear();
-                _bollingerSeries.Points.Clear();
-                _bollingerSeries.Points2.Clear();
-            }
+            // Always clear existing series — ensures full redraw
+            PriceView.Series.Clear();
 
-            _priceSeries.Points.AddRange(pricePoints);
-            _smaSeries.Points.AddRange(smaPoints);
-
-            foreach (var (upper, lower) in bollingerPoints)
+            // --- Price line ---
+            var priceSeries = new LineSeries
             {
-                _bollingerSeries.Points.Add(upper);
-                _bollingerSeries.Points2.Add(lower);
-            }
+                Title = "Price",
+                Color = OxyColors.SteelBlue,
+                StrokeThickness = 2
+            };
+            priceSeries.Points.AddRange(pricePoints);
+            PriceView.Series.Add(priceSeries);
 
-            if (isLive && _priceSeries.Points.Count > 300)
+            // --- SMA line ---
+            var smaSeries = new LineSeries
             {
-                TrimSeries(_priceSeries);
-                TrimSeries(_smaSeries);
-                TrimSeries(_bollingerSeries.Points, _bollingerSeries.Points2);
+                Title = "SMA14",
+                Color = OxyColors.OrangeRed,
+                StrokeThickness = 2
+            };
+            smaSeries.Points.AddRange(smaPoints.Where(p => !double.IsNaN(p.Y)));
+            PriceView.Series.Add(smaSeries);
+
+            // --- Bollinger Bands ---
+            if (bollingerPoints != null && bollingerPoints.Count > 0)
+            {
+                var areaSeries = new AreaSeries
+                {
+                    Title = "Bollinger Bands",
+                    Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
+                    Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
+                };
+
+                foreach (var (upper, lower) in bollingerPoints)
+                {
+                    areaSeries.Points.Add(upper);
+                    areaSeries.Points2.Add(lower);
+                }
+
+                PriceView.Series.Add(areaSeries);
             }
 
             PriceView.InvalidatePlot(true);
             AdjustPriceAxis();
         }
+
 
         public void UpdateRsiData(IReadOnlyList<DataPoint> rsiPoints)
         {
@@ -158,8 +177,12 @@ namespace MarketScanner.UI.Wpf.Services
             model.Axes.Add(new DateTimeAxis
             {
                 Position = AxisPosition.Bottom,
-                StringFormat = "HH:mm:ss",
-                Title = "Time"
+                StringFormat = "MM-dd",
+                Title = "Date",
+                IntervalType = DateTimeIntervalType.Days,
+                MinorIntervalType = DateTimeIntervalType.Days,
+                IsZoomEnabled = true,
+                IsPanEnabled = true
             });
 
             model.Axes.Add(new LinearAxis
@@ -194,11 +217,19 @@ namespace MarketScanner.UI.Wpf.Services
             model.Axes.Add(new DateTimeAxis
             {
                 Position = AxisPosition.Bottom,
-                StringFormat = "HH:mm:ss",
-                Title = "Time"
+                StringFormat = "MM-dd",
+                Title = "Date",
+                IntervalType = DateTimeIntervalType.Days,
+                MinorIntervalType = DateTimeIntervalType.Days,
+                IsZoomEnabled = true,
+                IsPanEnabled = true
             });
 
-            model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Volume" });
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = "Volume"
+            });
 
             volumeSeries = new LineSeries
             {
@@ -210,6 +241,7 @@ namespace MarketScanner.UI.Wpf.Services
             model.Series.Add(volumeSeries);
             return model;
         }
+
 
         private static void TrimSeries(LineSeries series)
         {
