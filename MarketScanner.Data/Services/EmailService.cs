@@ -7,7 +7,7 @@ namespace MarketScanner.Data.Services
 {
     public class EmailService
     {
-        public void SendEmail(string from, string to, string subject, string body)
+        public void SendEmail(string to, string subject, string body)
         {
             try
             {

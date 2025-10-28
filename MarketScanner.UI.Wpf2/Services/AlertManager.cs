@@ -48,7 +48,7 @@ namespace MarketScanner.UI.Wpf.Services
 
             if (alert.NotifyEmail)
             {
-                _emailService.SendEmail("your_email@gmail.com", "recipient@example.com", subject, message);
+                _emailService.SendEmail("recipient@example.com", subject, message);
             }
         }
 

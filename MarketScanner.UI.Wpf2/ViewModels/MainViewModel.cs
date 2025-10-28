@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.AccessControl;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +21,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly ScannerViewModel _scannerViewModel;
         private readonly ChartViewModel _chartViewModel;
         private readonly EmailService _emailService;
+        private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
         private readonly StringBuilder _consoleBuilder = new();
         private readonly RelayCommand _startScanCommand;
@@ -76,8 +78,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
 
+            _appSettings = AppSettings.Load();
+            NotificationEmail = _appSettings.NotificationEmail;
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
-            _notificationEmail = string.Empty;
             TestEmailCommand = new RelayCommand(_ => TestEmail());
             _selectedTimespan = "3M";
             SelectedTimespan = TimeSpanOptions.First();
@@ -202,8 +205,18 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 {
                     _notificationEmail = value;
                     OnPropertyChanged(nameof(NotificationEmail));
+                    _appSettings.NotificationEmail = value;
+                    _appSettings.Save();
+                    Console.WriteLine($"Loaded {NotificationEmail}");
                 }
             }
+        }
+
+        private void SaveSettings()
+        {
+            _appSettings.NotificationEmail = NotificationEmail;
+            _appSettings.SelectedTimespan = SelectedTimespan;
+            _appSettings.Save();
         }
 
         private string _selectedTimespan;
@@ -217,7 +230,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _selectedTimespan = value;
                     OnPropertyChanged(nameof(SelectedTimespan));
 
-                    _chartViewModel.SetTimespan(_selectedTimespan);
+                    _appSettings.SelectedTimespan = value;
+                    _appSettings.Save();
                 }
             }
         }
@@ -237,7 +251,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private void TestEmail()
         {
             Logger.WriteLine("Test email sent");
-            EmailService.SendEmail("adam.crausman@gmail.com",NotificationEmail, "Test Email", "This is a test email");
+            EmailService.SendEmail(NotificationEmail, "Test Email", "This is a test email");
         }
 
         private void Log(string message)
