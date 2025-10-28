@@ -20,14 +20,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
     {
         private readonly ScannerViewModel _scannerViewModel;
         private readonly ChartViewModel _chartViewModel;
-        private readonly EmailService _emailService;
+        private readonly EmailService? _emailService;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
         private readonly StringBuilder _consoleBuilder = new();
         private readonly RelayCommand _startScanCommand;
         private readonly RelayCommand _stopScanCommand;
-        private CancellationTokenSource _scanCts;
-        private CancellationTokenSource _symbolCts;
+        private CancellationTokenSource? _scanCts;
+        private CancellationTokenSource? _symbolCts;
         private string _consoleText = string.Empty;
         private string _statusText = "Idle";
         private string? _selectedSymbol;
@@ -53,7 +53,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             private set => SetProperty(ref _statusText, value);
         }
 
-        public string? SelectedSymbol
+        public string SelectedSymbol
         {
             get => _selectedSymbol;
             set
@@ -82,8 +82,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             NotificationEmail = _appSettings.NotificationEmail;
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
-            _selectedTimespan = "3M";
-            SelectedTimespan = TimeSpanOptions.First();
+            SelectedTimespan = _appSettings.SelectedTimespan;
 
         }
 
@@ -234,7 +233,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _appSettings.Save();
                 }
             }
-        }
+        } 
 
         public ICommand SaveEmailCommand { get; }
         
