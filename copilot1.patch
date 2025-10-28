@@ -1,39 +1,31 @@
-﻿--- a/MarketScanner.UI.Wpf/ViewModels/MainViewModel.cs
-+++ b/MarketScanner.UI.Wpf/ViewModels/MainViewModel.cs
-@@ -75,13 +75,28 @@
-     public MainViewModel()
+﻿diff --git a/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs b/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
+index 039dfa26d86763a01d568efaae62a599dd51cf92..9b6b2c27988d60aa1fead60069755e70fb699faf 100644
+--- a/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
++++ b/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
+@@ -1,20 +1,12 @@
+-﻿using System.Threading.Tasks;
+ using System.Windows;
+-using System.Windows.Media.Animation;
+-using System.Windows.Controls;
+-using MarketScanner.UI.Wpf.ViewModels;
+-using System.Diagnostics;
+ 
+ namespace MarketScanner.UI.Views
+ {
+-public partial class MainWindow : Window
+-{
+-    public MainWindow()
++    public partial class MainWindow : Window
      {
-         AllocConsole();
-         Log("=== Market Scanner Console Initialized ===");
-
-         string apiKey = "YOUR_API_KEY_HERE";
-
--        _provider = new PolygonMarketDataProvider(apiKey);
--        _engine = new MarketDataEngine(_provider);
+-        InitializeComponent();
+-        DataContext = new MainViewModel();
 -
--        Chart = new ChartViewModel();
--        Scanner = new ScannerViewModel(new EquityScannerService(_provider));
-+        // ✅ Initialize Polygon provider and chart manager properly
-+        _provider = new PolygonMarketDataProvider(apiKey);
-+        _engine = new MarketDataEngine(_provider);
-+
-+        // create one shared ChartManager instance for the entire UI
-+        var chartManager = new ChartManager();
-+
-+        // ✅ pass both dependencies to ChartViewModel
-+        Chart = new ChartViewModel(_provider, chartManager);
-+
-+        // ✅ also pass chartManager to the scanner for later updates if needed
-+        var scannerService = new EquityScannerService(_provider);
-+        Scanner = new ScannerViewModel(scannerService, chartManager);
-+
-+        // wire up commands
-+        StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
-+        StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
-+
-+        // link engine updates to chart refresh
-+        _engine.OnEquityScanned += result =>
+-        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Critical;    }
+-}
+-
++        public MainWindow()
 +        {
-+            if (result.Symbol == SelectedSymbol)
-+                Chart.Update(result);
-+        };
++            InitializeComponent();
++        }
++    }
+ }

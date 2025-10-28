@@ -2,7 +2,6 @@
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.Data.Diagnostics;
-using Microsoft.VisualBasic;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -14,7 +13,7 @@ using System.Windows;
 
 namespace MarketScanner.Data.Services
 {
-    public class EquityScannerService
+    public class EquityScannerService : IEquityScannerService
     {
         private readonly IMarketDataProvider _provider;
         private readonly ConcurrentDictionary<string, List<double>> _cache =
@@ -30,7 +29,7 @@ namespace MarketScanner.Data.Services
             _provider = provider;
         }
 
-        public async Task ScanAllAsync(IProgress<int> progress, CancellationToken token)
+        public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken token)
         {
             // clear UI-bound collections on UI thread
             Application.Current.Dispatcher.Invoke(() =>

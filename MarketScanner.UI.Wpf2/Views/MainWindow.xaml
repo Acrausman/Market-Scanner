@@ -37,9 +37,9 @@
 
         <!-- 🔹 Chart Section -->
         <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
-            <oxy:PlotView Model="{Binding ChartManager.PriceView}" Height="300"/>
-            <oxy:PlotView Model="{Binding ChartManager.RsiView}" Height="200"/>
-            <oxy:PlotView Model="{Binding ChartManager.VolumeView}" Height="200"/>
+            <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
+            <oxy:PlotView Model="{Binding Chart.RsiView}" Height="200"/>
+            <oxy:PlotView Model="{Binding Chart.VolumeView}" Height="200"/>
 
             <StackPanel Orientation="Horizontal" Margin="10,10,0,0">
                 <TextBlock Text="{Binding Chart.PriceText}" FontWeight="Bold" Margin="5,0" Foreground="White"/>
@@ -72,7 +72,7 @@
                 <TextBlock Text="Overbought (RSI &gt; 70)"
                            Foreground="#FFAAAA" FontWeight="Bold" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Scanner.OverboughtSymbols}"
-                         SelectedItem="{Binding Scanner.SelectedSymbol, Mode=TwoWay}"
+                         SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"
                          Height="150" BorderThickness="0" FontSize="13">
@@ -92,7 +92,7 @@
                 <TextBlock Text="Oversold (RSI &lt; 30)"
                            Foreground="#A0FFA0" FontWeight="Bold" Margin="10,10,0,4"/>
                 <ListBox ItemsSource="{Binding Scanner.OversoldSymbols}"
-                         SelectedItem="{Binding Scanner.SelectedSymbol, Mode=TwoWay}"
+                         SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"
                          Height="150" BorderThickness="0" FontSize="13">

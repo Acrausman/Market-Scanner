@@ -1,238 +1,212 @@
-﻿using MarketScanner.Data;
-using MarketScanner.Data.Models;
-using MarketScanner.Data.Providers;
-using MarketScanner.Data.Services;
 using MarketScanner.Data.Diagnostics;
-using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
-using OxyPlot;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
-        private readonly PolygonMarketDataProvider _provider;
-        private readonly MarketDataEngine _engine;
+        private readonly ScannerViewModel _scannerViewModel;
+        private readonly ChartViewModel _chartViewModel;
+        private readonly Dispatcher _dispatcher;
+        private readonly StringBuilder _consoleBuilder = new();
+        private readonly RelayCommand _startScanCommand;
+        private readonly RelayCommand _stopScanCommand;
+        private CancellationTokenSource? _scanCts;
+        private CancellationTokenSource? _symbolCts;
+        private string _consoleText = string.Empty;
+        private string _statusText = "Idle";
+        private string? _selectedSymbol;
+        private bool _isScanning;
 
-        public ChartViewModel Chart { get; }
-        public ChartManager ChartManager { get; } = new ChartManager();
-        public ScannerViewModel Scanner { get; }
+        public ScannerViewModel Scanner => _scannerViewModel;
+        public ChartViewModel Chart => _chartViewModel;
 
-        private string _consoleText;
         public string ConsoleText
         {
             get => _consoleText;
-            set { _consoleText = value; OnPropertyChanged(); }
+            private set => SetProperty(ref _consoleText, value);
         }
 
-        public void Log(string message)
+        public string StatusText
         {
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                ConsoleText += $"[{DateTime.Now:HH:mm:ss}]";
-            });
+            get => _statusText;
+            private set => SetProperty(ref _statusText, value);
         }
 
-        public ICommand StartScanCommand { get; }
-        public ICommand StopScanCommand { get; }
-
-        private readonly Dictionary<string, EquityScanResult> _latestData = new();
-
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-        private static extern bool AllocConsole();
-
-        private SymbolViewModel _selectedSymbol;
-        public SymbolViewModel SelectedSymbol
+        public string? SelectedSymbol
         {
             get => _selectedSymbol;
             set
             {
-                if (_selectedSymbol != value)
+                if (SetProperty(ref _selectedSymbol, value))
                 {
-                    _selectedSymbol = value;
-                    OnPropertyChanged(nameof(SelectedSymbol));
-
-                    if (_selectedSymbol != null)
-                        Chart.LoadChartForSymbol(_selectedSymbol.Symbol);
+                    _ = LoadSelectedSymbolAsync(value);
                 }
             }
         }
 
-        private string _statusText = "Idle";
-        public string StatusText
+        public ICommand StartScanCommand => _startScanCommand;
+        public ICommand StopScanCommand => _stopScanCommand;
+
+        public MainViewModel(ScannerViewModel scannerViewModel, ChartViewModel chartViewModel, Dispatcher? dispatcher = null)
         {
-            get => _statusText;
-            set { _statusText = value; OnPropertyChanged(); }
+            _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
+            _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
+            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+
+            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
+            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
         }
 
-        public MainViewModel()
+        private bool IsScanning
         {
-            AllocConsole();
-            Log("=== Market Scanner Console Initialized ===");
-
-
-            string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
-
-            _provider = new PolygonMarketDataProvider(apiKey);
-            _engine = new MarketDataEngine(_provider);
-
-            var ChartManager = new ChartManager();
-
-            // Initialize provider and engine
-            _provider = new PolygonMarketDataProvider(apiKey);
-            _engine = new MarketDataEngine(_provider);
-
-            // Create one shared ChartManager
-            var chartManager = new ChartManager();
-
-            // Pass dependencies properly
-            Chart = new ChartViewModel(_provider, chartManager);
-            var scannerService = new EquityScannerService(_provider);
-            Scanner = new ScannerViewModel(scannerService, chartManager);
-
-            // Commands
-            StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
-            StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
-
-            // Link engine updates to chart refresh
-            _engine.OnEquityScanned += result =>
+            get => _isScanning;
+            set
             {
-                if (result.Symbol == SelectedSymbol.Symbol)
-                    Chart.Update(result);
-            };
-
-
-            StartScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => true);
-            StopScanCommand = new RelayCommand(_ => Scanner.Stop(), _ => true);
-
-            // Event Subscriptions (Buffered updates)
-            _engine.OnNewPrice += (sym, price) => UpdateCache(sym, data => data.Price = price);
-            _engine.OnNewRSI += (sym, rsi) => UpdateCache(sym, data => data.RSI = rsi);
-            _engine.OnNewSMA += (sym, sma, upper, lower) => UpdateCache(sym, data =>
-            {
-                data.SMA = sma;
-                data.Upper = upper;
-                data.Lower = lower;
-            });
-            _engine.OnNewVolume += (sym, vol) => UpdateCache(sym, data => data.Volume = vol);
-
-            _engine.OnEquityScanned += result =>
-            {
-                if (result.Symbol == SelectedSymbol.Symbol)
-                    Chart.Update(result);
-            };
-            
-
+                if (SetProperty(ref _isScanning, value, nameof(IsScanning)))
+                {
+                    _dispatcher.InvokeAsync(() =>
+                    {
+                        _startScanCommand.RaiseCanExecuteChanged();
+                        _stopScanCommand.RaiseCanExecuteChanged();
+                    });
+                }
+            }
         }
 
         private async Task StartScanAsync()
         {
-            StatusText = "Scanning...";
-            var progress = new Progress<int>(v => StatusText = $"Progress: {v}%");
-            await Scanner.StartAsync(progress);
-            StatusText = "Scan complete";
-        }
-
-        // Load Historical + Start Live
-        private async Task LoadSymbolAsync(string symbol)
-        {
-            if (string.IsNullOrWhiteSpace(symbol))
+            if (IsScanning)
+            {
                 return;
+            }
 
-            Log($"\n[Selection] User selected {symbol}");
-            StatusText = $"Loading {symbol} data...";
-            Chart.Clear();
+            _scanCts = new CancellationTokenSource();
+            IsScanning = true;
+            StatusText = "Scanning...";
+            Log("Starting equity scan...");
+
+            var progress = new Progress<int>(value =>
+            {
+                _dispatcher.InvokeAsync(() => StatusText = $"Scanning... {value}%");
+            });
 
             try
             {
-                // 1️⃣ Historical context
-                await Chart.LoadHistoricalAsync(symbol, _provider);
-
-                // 2️⃣ Start real-time updates
-                _engine.StopSymbol();
-                _engine.StartSymbol(symbol);
-
-                // 3️⃣ Fetch a fresh quote
-                var (price, volume) = await _provider.GetQuoteAsync(symbol);
-                var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
-                double sma = closes.Count >= 14 ? closes[^14..].Average() : closes.Average();
-                double sd = _engine.StdDev(closes);
-                double upper = sma + 2 * sd;
-                double lower = sma - 2 * sd;
-                double rsi = RsiCalculator.Calculate(closes);
-
-                var result = new EquityScanResult
-                {
-                    Symbol = symbol,
-                    Price = price,
-                    RSI = rsi,
-                    SMA = sma,
-                    Upper = upper,
-                    Lower = lower,
-                    Volume = volume,
-                    TimeStamp = DateTime.Now
-                };
-
-                Chart.Update(result);
-                StatusText = $"Streaming {symbol} (RSI={rsi:F1})";
-                Log($"[LoadSymbol] Ready: {symbol} RSI={rsi:F1}, SMA={sma:F2}, Price={price:F2}");
+                await _scannerViewModel.StartScanAsync(progress, _scanCts.Token).ConfigureAwait(false);
+                await _dispatcher.InvokeAsync(() => StatusText = "Scan complete");
+            }
+            catch (OperationCanceledException)
+            {
+                await _dispatcher.InvokeAsync(() => StatusText = "Scan cancelled");
+                Log("Scan cancelled by user.");
             }
             catch (Exception ex)
             {
-                StatusText = $"Error loading {symbol}";
-                Log($"[LoadSymbol] ❌ {symbol}: {ex.Message}");
+                await _dispatcher.InvokeAsync(() => StatusText = "Scan failed");
+                Log($"Scan failed: {ex.Message}");
+            }
+            finally
+            {
+                _scanCts?.Dispose();
+                _scanCts = null;
+                IsScanning = false;
             }
         }
 
-        // Cache + merge updates before sending to chart
-        private void UpdateCache(string symbol, Action<EquityScanResult> updateAction)
+        private void StopScan()
         {
-            if (symbol != SelectedSymbol.Symbol) return;
-
-            if (!_latestData.ContainsKey(symbol))
-                _latestData[symbol] = new EquityScanResult { Symbol = symbol };
-
-            var data = _latestData[symbol];
-            updateAction(data);
-            data.TimeStamp = DateTime.Now;
-
-            TryUpdateChart(symbol);
-        }
-
-        public async Task TestRsiAsync()
-        {
-            var bars = await _provider.GetHistoricalBarsAsync("CFSB", 120, adjusted: false);
-            var closes = bars.Select(b => b.Close).ToList();
-
-            Logger.WriteLine($"[Debug] Using {closes.Count} closes; latest={closes.Last():F2}, avgΔ={(closes.Last() - closes.First()) / closes.First() * 100:F2}%");
-            Logger.WriteLine("RSI(14) = " + RsiCalculator.Calculate(closes).ToString("F2"));
-        }
-
-
-        private void TryUpdateChart(string symbol)
-        {
-            var data = _latestData[symbol];
-
-            if (data.Price <= 0 || double.IsNaN(data.RSI) || double.IsNaN(data.SMA))
-                return;
-
-            Application.Current.Dispatcher.Invoke(() =>
+            if (!IsScanning)
             {
-                Chart.Update(data);
-                Log($"[Chart] Updating {symbol}: Price={data.Price:F2}, RSI={data.RSI:F2}");
+                return;
+            }
+
+            _scanCts?.Cancel();
+        }
+
+        private async Task LoadSelectedSymbolAsync(string? symbol)
+        {
+            var previous = _symbolCts;
+            previous?.Cancel();
+            previous?.Dispose();
+
+            _symbolCts = new CancellationTokenSource();
+            var currentCts = _symbolCts;
+            var token = currentCts.Token;
+
+            if (string.IsNullOrWhiteSpace(symbol))
+            {
+                StatusText = "Select a symbol to view details";
+                _chartViewModel.Clear();
+                return;
+            }
+
+            try
+            {
+                StatusText = $"Loading {symbol}...";
+                await _chartViewModel.LoadChartForSymbolAsync(symbol, token).ConfigureAwait(false);
+                await _dispatcher.InvokeAsync(() => StatusText = $"Showing {symbol}");
+            }
+            catch (OperationCanceledException)
+            {
+                // selection changed, ignore
+            }
+            catch (Exception ex)
+            {
+                await _dispatcher.InvokeAsync(() => StatusText = $"Error loading {symbol}");
+                Log($"Failed to load {symbol}: {ex.Message}");
+            }
+            finally
+            {
+                if (ReferenceEquals(_symbolCts, currentCts))
+                {
+                    _symbolCts.Dispose();
+                    _symbolCts = null;
+                }
+            }
+        }
+
+        private void Log(string message)
+        {
+            var timestamped = $"[{DateTime.Now:HH:mm:ss}] {message}";
+            Logger.WriteLine(timestamped);
+
+            _dispatcher.InvokeAsync(() =>
+            {
+                if (_consoleBuilder.Length > 0)
+                {
+                    _consoleBuilder.AppendLine();
+                }
+
+                _consoleBuilder.Append(timestamped);
+                ConsoleText = _consoleBuilder.ToString();
             });
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        private bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(storage, value))
+            {
+                return false;
+            }
+
+            storage = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

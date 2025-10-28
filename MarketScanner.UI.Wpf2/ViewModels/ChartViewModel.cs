@@ -1,194 +1,267 @@
-﻿using MarketScanner.Data.Models;
+using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
 using OxyPlot.Axes;
+using OxyPlot.Series;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
+using System.Windows.Threading;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class ChartViewModel : INotifyPropertyChanged
     {
-        private readonly ChartManager _chartManager;
         private readonly IMarketDataProvider _provider;
+        private readonly IChartService _chartService;
+        private readonly Dispatcher _dispatcher;
+        private CancellationTokenSource? _loadCts;
 
-        public PlotModel PriceView => _chartManager.PriceView;
-        public PlotModel RsiView => _chartManager.RsiView;
-        public PlotModel VolumeView => _chartManager.VolumeView;
+        public PlotModel PriceView => _chartService.PriceView;
+        public PlotModel RsiView => _chartService.RsiView;
+        public PlotModel VolumeView => _chartService.VolumeView;
 
-        private string _priceText;
-        public string PriceText { get => _priceText; set { _priceText = value; OnPropertyChanged(); } }
+        private string _priceText = string.Empty;
+        public string PriceText
+        {
+            get => _priceText;
+            private set => SetProperty(ref _priceText, value);
+        }
 
-        private string _smaText;
-        public string SmaText { get => _smaText; set { _smaText = value; OnPropertyChanged(); } }
+        private string _smaText = string.Empty;
+        public string SmaText
+        {
+            get => _smaText;
+            private set => SetProperty(ref _smaText, value);
+        }
 
-        private string _rsiText;
-        public string RsiText { get => _rsiText; set { _rsiText = value; OnPropertyChanged(); } }
+        private string _rsiText = string.Empty;
+        public string RsiText
+        {
+            get => _rsiText;
+            private set => SetProperty(ref _rsiText, value);
+        }
 
-        private string _volumeText;
-        public string VolumeText { get => _volumeText; set { _volumeText = value; OnPropertyChanged(); } }
+        private string _volumeText = string.Empty;
+        public string VolumeText
+        {
+            get => _volumeText;
+            private set => SetProperty(ref _volumeText, value);
+        }
 
-        public ChartViewModel(IMarketDataProvider provider, ChartManager chartManager)
+        public ChartViewModel(IMarketDataProvider provider, IChartService chartService, Dispatcher? dispatcher = null)
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
-            _chartManager = chartManager ?? throw new ArgumentNullException(nameof(chartManager));
+            _chartService = chartService ?? throw new ArgumentNullException(nameof(chartService));
+            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
         }
 
         public void Clear()
         {
-            Application.Current.Dispatcher.Invoke(() =>
+            _dispatcher.Invoke(() =>
             {
-                _chartManager.ClearAllSeries();
+                _chartService.ClearAllSeries();
+                PriceText = string.Empty;
+                SmaText = string.Empty;
+                RsiText = string.Empty;
+                VolumeText = string.Empty;
             });
         }
 
-        public async void LoadChartForSymbol(string symbol)
+        public async Task LoadChartForSymbolAsync(string symbol, CancellationToken cancellationToken = default)
         {
-            if (_provider == null)
-            {
-                Console.WriteLine("[Chart] Market data provider not initialized.");
-                return;
-            }
-            if (_chartManager == null)
-            {
-                Console.WriteLine("[Chart] ChartManager not initialized.");
-                return;
-            }
+            CancelOngoingLoad();
+
             if (string.IsNullOrWhiteSpace(symbol))
-                return;
-
-            var bars = await _provider.GetHistoricalBarsAsync(symbol, 125);
-            if (bars == null || bars.Count == 0)
             {
-                Console.WriteLine($"[Chart] No bar data for {symbol}");
+                Clear();
                 return;
             }
 
-            _chartManager.ClearAllSeries();
+            var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _loadCts = linkedCts;
+            var token = linkedCts.Token;
 
-            if (bars == null || bars.Count == 0)
-                return;
-
-            var pricePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close)).ToList();
-
-            var smaPoints = new List<DataPoint>();
-            var upperBand = new List<DataPoint>();
-            var lowerBand = new List<DataPoint>();
-
-            const int window = 14;
-            for (int i = window - 1; i < bars.Count; i++)
+            try
             {
-                var slice = bars.Skip(i - window + 1).Take(window).Select(b => b.Close).ToList();
-                double sma = slice.Average();
-                double std = Math.Sqrt(slice.Average(v => Math.Pow(v - sma, 2)));
-                smaPoints.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma));
-                upperBand.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma + 2 * std));
-                lowerBand.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), sma - 2 * std));
-                
+                var bars = await _provider.GetHistoricalBarsAsync(symbol, 150).ConfigureAwait(false);
+                token.ThrowIfCancellationRequested();
+
+                if (bars == null || bars.Count == 0)
+                {
+                    Logger.WriteLine($"[Chart] No bar data for {symbol}");
+                    await _dispatcher.InvokeAsync(() =>
+                    {
+                        _chartService.ClearAllSeries();
+                        PriceText = "";
+                        SmaText = "";
+                        RsiText = "";
+                        VolumeText = "";
+                    });
+                    return;
+                }
+
+                var pricePoints = CreatePriceSeries(bars);
+                var smaPoints = CreateSmaSeries(bars, out var bollingerBands);
+                var rsiPoints = CreateRsiSeries(bars);
+                var volumePoints = CreateVolumeSeries(bars);
+
+                token.ThrowIfCancellationRequested();
+
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    _chartService.UpdatePriceData(pricePoints, smaPoints, bollingerBands, isLive: false);
+                    _chartService.UpdateRsiData(rsiPoints);
+                    _chartService.UpdateVolumeData(volumePoints);
+
+                    var lastBar = bars[^1];
+                    PriceText = $"Price: {lastBar.Close:F2}";
+                    SmaText = smaPoints.Count > 0 ? $"SMA: {smaPoints[^1].Y:F2}" : string.Empty;
+                    RsiText = rsiPoints.Count > 0 ? $"RSI: {rsiPoints[^1].Y:F2}" : string.Empty;
+                    VolumeText = $"Vol: {lastBar.Volume:N0}";
+                }, DispatcherPriority.Background);
+            }
+            catch (OperationCanceledException)
+            {
+                // ignored - selection changed
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"[Chart] Failed to load {symbol}: {ex.Message}");
+                await _dispatcher.InvokeAsync(() =>
+                {
+                    _chartService.ClearAllSeries();
+                    PriceText = string.Empty;
+                    SmaText = string.Empty;
+                    RsiText = string.Empty;
+                    VolumeText = string.Empty;
+                });
+                throw;
+            }
+            finally
+            {
+                linkedCts.Dispose();
+                if (ReferenceEquals(_loadCts, linkedCts))
+                {
+                    _loadCts = null;
+                }
+            }
+        }
+
+        public void Update(EquityScanResult result)
+        {
+            if (result == null)
+            {
+                return;
             }
 
-            _chartManager.UpdatePriceData(pricePoints, smaPoints,
-                upperBand.Zip(lowerBand, (u, l) => (u, l)).ToList());
+            if (double.IsNaN(result.Price) || result.Price <= 0 ||
+                double.IsNaN(result.SMA) || double.IsNaN(result.RSI))
+            {
+                return;
+            }
 
+            _dispatcher.InvokeAsync(() =>
+            {
+                var time = DateTimeAxis.ToDouble(result.TimeStamp);
+                var pricePoint = new DataPoint(time, result.Price);
+                var smaPoint = new DataPoint(time, result.SMA);
+                var upper = new DataPoint(time, result.Upper);
+                var lower = new DataPoint(time, result.Lower);
+                var rsiPoint = new DataPoint(time, result.RSI);
+                var volumePoint = new DataPoint(time, result.Volume);
 
+                _chartService.UpdatePriceData(new[] { pricePoint }, new[] { smaPoint }, new[] { (upper, lower) }, isLive: true);
+                _chartService.UpdateRsiData(new[] { rsiPoint });
+                _chartService.UpdateVolumeData(new[] { volumePoint });
+
+                PriceText = $"Price: {result.Price:F2}";
+                SmaText = $"SMA: {result.SMA:F2}";
+                RsiText = $"RSI: {result.RSI:F2}";
+                VolumeText = $"Vol: {result.Volume:N0}";
+            }, DispatcherPriority.Background);
+        }
+
+        private void CancelOngoingLoad()
+        {
+            if (_loadCts == null)
+            {
+                return;
+            }
+
+            _loadCts.Cancel();
+            _loadCts.Dispose();
+            _loadCts = null;
+        }
+
+        private static List<DataPoint> CreatePriceSeries(IReadOnlyList<Bar> bars)
+            => bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close)).ToList();
+
+        private static List<DataPoint> CreateVolumeSeries(IReadOnlyList<Bar> bars)
+            => bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume)).ToList();
+
+        private static List<DataPoint> CreateRsiSeries(IReadOnlyList<Bar> bars, int period = 14)
+        {
             var closes = bars.Select(b => b.Close).ToList();
             var rsiPoints = new List<DataPoint>();
 
-            for (int i = window; i < closes.Count; i++)
+            for (int i = period; i < closes.Count; i++)
             {
-                double rsi = MarketScanner.Data.Services.Indicators.RsiCalculator.Calculate(closes.Take(i + 1).ToList(), window);
-                var time = DateTimeAxis.ToDouble(bars[i].Timestamp);
-                if (!double.IsNaN(rsi))
-                    rsiPoints.Add(new DataPoint(time, rsi));
-            }
-
-            _chartManager.UpdateRsiData(rsiPoints);
-
-            var volumePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume)).ToList();
-            _chartManager.UpdateVolumeData(volumePoints);
-        }
-        public void Update(EquityScanResult result)
-        {
-            // Ignore invalid or zeroed updates
-            if (result.Price <= 0 || double.IsNaN(result.Price)) return;
-            if (double.IsNaN(result.SMA) || double.IsNaN(result.RSI)) return;
-
-            Console.WriteLine($"[Chart.Update] {result.Symbol}: Price={result.Price:F2}, SMA={result.SMA:F2}, RSI={result.RSI:F2}");
-
-            var x = OxyPlot.Axes.DateTimeAxis.ToDouble(result.TimeStamp);
-            _chartManager.UpdatePriceData(
-                new List<DataPoint> { new(x, result.Price) },
-                new List<DataPoint> { new(x, result.SMA) },
-                new List<(DataPoint, DataPoint)> { (new(x, result.Upper), new(x, result.Lower)) });
-
-            _chartManager.UpdateRsiData(new List<DataPoint> { new(x, result.RSI) });
-
-            PriceText = $"Price: {result.Price:F2}";
-            SmaText = $"SMA: {result.SMA:F2}";
-            RsiText = $"RSI: {result.RSI:F2}";
-            VolumeText = $"Vol: {result.Volume:N0}";
-        }
-
-        public async Task LoadHistoricalAsync(string symbol, IMarketDataProvider provider)
-        {
-            Console.WriteLine($"[Chart] Loading history for {symbol}");
-            var closes = await provider.GetHistoricalClosesAsync(symbol, 30);
-            var timestamps = await provider.GetHistoricalTimestampsAsync(symbol, 30);
-
-            if (closes == null || timestamps == null || closes.Count == 0)
-            {
-                Console.WriteLine($"[Chart] No data for {symbol}");
-                return;
-            }
-
-            const int period = 14;
-            var pricePoints = new List<DataPoint>();
-            var smaPoints = new List<DataPoint>();
-            var bollinger = new List<(DataPoint, DataPoint)>();
-            var rsiPoints = new List<DataPoint>();
-
-            for (int i = 0; i < closes.Count && i < timestamps.Count; i++)
-            {
-                double x = OxyPlot.Axes.DateTimeAxis.ToDouble(timestamps[i]);
-                double close = closes[i];
-                pricePoints.Add(new DataPoint(x, close));
-
-                if (i >= period)
+                var slice = closes.Take(i + 1).ToList();
+                double rsi = RsiCalculator.Calculate(slice, period);
+                if (double.IsNaN(rsi))
                 {
-                    var window = closes.GetRange(i - period, period);
-                    double sma = window.Average();
-                    double sd = Math.Sqrt(window.Sum(v => Math.Pow(v - sma, 2)) / period);
-                    double upper = sma + 2 * sd;
-                    double lower = sma - 2 * sd;
-
-                    smaPoints.Add(new DataPoint(x, sma));
-                    bollinger.Add((new DataPoint(x, upper), new DataPoint(x, lower)));
-
-                    double rsi = RsiCalculator.Calculate(window);
-                    if (!double.IsNaN(rsi))
-                        rsiPoints.Add(new DataPoint(x, rsi));
+                    continue;
                 }
+
+                var time = DateTimeAxis.ToDouble(bars[i].Timestamp);
+                rsiPoints.Add(new DataPoint(time, rsi));
             }
 
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                _chartManager.ClearAllSeries();
-                _chartManager.UpdatePriceData(pricePoints, smaPoints, bollinger, isLive: false);
-                _chartManager.UpdateRsiData(rsiPoints);
-            });
-
-            Console.WriteLine($"[Chart] {symbol} plotted {pricePoints.Count} pts");
+            return rsiPoints;
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string name = null)
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        private static List<DataPoint> CreateSmaSeries(IReadOnlyList<Bar> bars, out List<(DataPoint upper, DataPoint lower)> bands, int period = 14)
+        {
+            var smaPoints = new List<DataPoint>();
+            bands = new List<(DataPoint upper, DataPoint lower)>();
+
+            for (int i = period - 1; i < bars.Count; i++)
+            {
+                var window = bars.Skip(i - period + 1).Take(period).Select(b => b.Close).ToList();
+                double sma = window.Average();
+                double std = Math.Sqrt(window.Average(v => Math.Pow(v - sma, 2)));
+                double time = DateTimeAxis.ToDouble(bars[i].Timestamp);
+
+                smaPoints.Add(new DataPoint(time, sma));
+                bands.Add((new DataPoint(time, sma + 2 * std), new DataPoint(time, sma - 2 * std)));
+            }
+
+            return smaPoints;
+        }
+
+        private bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
+        {
+            if (EqualityComparer<T>.Default.Equals(storage, value))
+            {
+                return false;
+            }
+
+            storage = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

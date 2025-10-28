@@ -1,210 +1,30 @@
-﻿using OxyPlot;
+using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Series;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace MarketScanner.UI.Wpf.Services
 {
-    public class ChartManager
+    public class ChartManager : IChartService
     {
-        public PlotModel PriceView { get; private set; }
-        public PlotModel RsiView { get; private set; }
-        public PlotModel VolumeView { get; private set; }
+        public PlotModel PriceView { get; }
+        public PlotModel RsiView { get; }
+        public PlotModel VolumeView { get; }
 
-        private LineSeries _priceSeries;
-        private LineSeries _smaSeries;
-        private AreaSeries _bollingerSeries;
-        private LineSeries _rsiSeries;
-        private LineSeries _volumeSeries;
+        private readonly LineSeries _priceSeries;
+        private readonly LineSeries _smaSeries;
+        private readonly AreaSeries _bollingerSeries;
+        private readonly LineSeries _rsiSeries;
+        private readonly LineSeries _volumeSeries;
 
         public ChartManager()
         {
-            InitializePriceView();
-            InitializeRsiView();
-            InitializeVolumeView();
+            PriceView = CreatePriceView(out _priceSeries, out _smaSeries, out _bollingerSeries);
+            RsiView = CreateRsiView(out _rsiSeries);
+            VolumeView = CreateVolumeView(out _volumeSeries);
         }
-
-        // --- PRICE + SMA + BOLLINGER ---
-        private void InitializePriceView()
-        {
-            PriceView = new PlotModel { Title = "Price & SMA", PlotAreaBorderThickness = new OxyThickness(1) };
-            PriceView.Axes.Add(new DateTimeAxis
-            {
-                Position = AxisPosition.Bottom,
-                Title = "Date",
-                StringFormat = "MM-dd",
-                IntervalType = DateTimeIntervalType.Days,
-                MinorIntervalType = DateTimeIntervalType.Days,
-                IsZoomEnabled = true,
-                IsPanEnabled = true,
-                MinimumPadding = 0.05,
-                MaximumPadding = 0.05
-            });
-            PriceView.Axes.Add(new LinearAxis
-            {
-                Position = AxisPosition.Left,
-                Title = "Price",
-                MinimumPadding = 0.2,
-                MaximumPadding = 0.2,
-                IsZoomEnabled = true,
-                IsPanEnabled = true
-            });
-
-            _priceSeries = new LineSeries { Title = "Price", Color = OxyColors.SteelBlue, StrokeThickness = 2 };
-            _smaSeries = new LineSeries { Title = "SMA14", Color = OxyColors.OrangeRed, StrokeThickness = 2 };
-            _bollingerSeries = new AreaSeries
-            {
-                Title = "Bollinger Bands",
-                Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
-                Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
-            };
-            PriceView.Series.Add(_bollingerSeries);
-            PriceView.Series.Add(_smaSeries);
-            PriceView.Series.Add(_priceSeries);
-        }
-
-        // --- RSI ---
-        private void InitializeRsiView()
-        {
-            RsiView = new PlotModel { Title = "RSI (14)", PlotAreaBorderThickness = new OxyThickness(1) };
-            RsiView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
-            RsiView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "RSI", Minimum = 0, Maximum = 100 });
-
-            _rsiSeries = new LineSeries { Title = "RSI", Color = OxyColors.MediumPurple, StrokeThickness = 2 };
-            RsiView.Series.Add(_rsiSeries);
-
-            // Add reference lines for Overbought (70) and Oversold (30)
-            RsiView.Annotations.Add(new LineAnnotation { Y = 70, Color = OxyColors.Red, LineStyle = LineStyle.Dash });
-            RsiView.Annotations.Add(new LineAnnotation { Y = 30, Color = OxyColors.Green, LineStyle = LineStyle.Dash });
-        }
-
-        // --- VOLUME ---
-        private void InitializeVolumeView()
-        {
-            VolumeView = new PlotModel { Title = "Volume", PlotAreaBorderThickness = new OxyThickness(1) };
-            VolumeView.Axes.Add(new DateTimeAxis { Position = AxisPosition.Bottom, StringFormat = "HH:mm:ss", Title = "Time" });
-            VolumeView.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Volume" });
-
-            _volumeSeries = new LineSeries { Title = "Volume", Color = OxyColors.Gray, StrokeThickness = 1.5 };
-            VolumeView.Series.Add(_volumeSeries);
-        }
-
-        // --- Update Methods ---
-        public void UpdatePriceData(
-    List<DataPoint> pricePoints,
-    List<DataPoint> smaPoints,
-    List<(DataPoint upper, DataPoint lower)> bollingerPoints,
-    bool isLive = false)
-        {
-            if (!isLive)
-            {
-                // Historical load — full refresh
-
-                _priceSeries.Points.AddRange(pricePoints);
-                _smaSeries.Points.AddRange(smaPoints);
-                foreach (var (upper, lower) in bollingerPoints)
-                {
-                    _bollingerSeries.Points.Add(upper);
-                    _bollingerSeries.Points2.Add(lower);
-                }
-            }
-            else
-            {
-                // Live incremental update
-                if (pricePoints.Count > 0)
-                    _priceSeries.Points.AddRange(pricePoints);
-                if (smaPoints.Count > 0)
-                    _smaSeries.Points.AddRange(smaPoints);
-                foreach (var (upper, lower) in bollingerPoints)
-                {
-                    _bollingerSeries.Points.Add(upper);
-                    _bollingerSeries.Points2.Add(lower);
-                }
-
-                // Keep memory limited
-                if (_priceSeries.Points.Count > 300)
-                {
-                    _priceSeries.Points.RemoveRange(0, _priceSeries.Points.Count - 300);
-                    _smaSeries.Points.RemoveRange(0, _smaSeries.Points.Count - 300);
-                    _bollingerSeries.Points.RemoveRange(0, _bollingerSeries.Points.Count - 300);
-                    _bollingerSeries.Points2.RemoveRange(0, _bollingerSeries.Points2.Count - 300);
-                }
-            }
-
-            PriceView.InvalidatePlot(true);
-            PriceView.Axes.OfType<LinearAxis>().First().MinimumPadding = 0.05;
-            PriceView.Axes.OfType<LinearAxis>().First().MaximumPadding = 0.05;
-            PriceView.Axes.OfType<LinearAxis>().First().Zoom(
-                _priceSeries.Points.Min(p => p.Y) * 0.95,
-                _priceSeries.Points.Max(p => p.Y) * 1.05);
-
-        }
-
-
-        public void UpdateRsiData(List<DataPoint> rsiPoints)
-        {
-            _rsiSeries.Points.AddRange(rsiPoints);
-            RsiView.InvalidatePlot(true);
-        }
-
-        public void UpdateVolumeData(List<DataPoint> volumePoints)
-        {
-            _volumeSeries.Points.AddRange(volumePoints);
-            VolumeView.InvalidatePlot(true);
-        }
-
-        public void AddPricePoint(double price)
-        {
-            if (_priceSeries == null) return;
-            var now = DateTimeAxis.ToDouble(DateTime.Now);
-            _priceSeries.Points.Add(new DataPoint(now, price));
-            if (_priceSeries.Points.Count > 300)
-                _priceSeries.Points.RemoveAt(0);
-            PriceView.InvalidatePlot(true);
-        }
-
-        public void AddVolumePoint(double volume)
-        {
-            if (_volumeSeries == null) return;
-            var now = DateTimeAxis.ToDouble(DateTime.Now);
-            _volumeSeries.Points.Add(new DataPoint(now, volume));
-            if (_volumeSeries.Points.Count > 300)
-                _volumeSeries.Points.RemoveAt(0);
-            VolumeView.InvalidatePlot(true);
-        }
-
-        public void AddRsiPoint(double rsi)
-        {
-            if (_rsiSeries == null) return;
-            var now = DateTimeAxis.ToDouble(DateTime.Now);
-            _rsiSeries.Points.Add(new DataPoint(now, rsi));
-            if (_rsiSeries.Points.Count > 300)
-                _rsiSeries.Points.RemoveAt(0);
-            RsiView.InvalidatePlot(true);
-        }
-
-        public void UpdateSmaBands(double sma, double upper, double lower)
-        {
-            if (_smaSeries == null || _bollingerSeries == null) return;
-            var now = DateTimeAxis.ToDouble(DateTime.Now);
-
-            _smaSeries.Points.Add(new DataPoint(now, sma));
-            _bollingerSeries.Points.Add(new DataPoint(now, upper));
-            _bollingerSeries.Points2.Add(new DataPoint(now, lower));
-
-            if (_smaSeries.Points.Count > 300)
-            {
-                _smaSeries.Points.RemoveAt(0);
-                _bollingerSeries.Points.RemoveAt(0);
-                _bollingerSeries.Points2.RemoveAt(0);
-            }
-
-            PriceView.InvalidatePlot(true);
-        }
-
 
         public void ClearAllSeries()
         {
@@ -218,6 +38,220 @@ namespace MarketScanner.UI.Wpf.Services
             PriceView.InvalidatePlot(true);
             RsiView.InvalidatePlot(true);
             VolumeView.InvalidatePlot(true);
+        }
+
+        public void UpdatePriceData(IReadOnlyList<DataPoint> pricePoints,
+                                    IReadOnlyList<DataPoint> smaPoints,
+                                    IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
+                                    bool isLive = false)
+        {
+            if (!isLive)
+            {
+                _priceSeries.Points.Clear();
+                _smaSeries.Points.Clear();
+                _bollingerSeries.Points.Clear();
+                _bollingerSeries.Points2.Clear();
+            }
+
+            _priceSeries.Points.AddRange(pricePoints);
+            _smaSeries.Points.AddRange(smaPoints);
+
+            foreach (var (upper, lower) in bollingerPoints)
+            {
+                _bollingerSeries.Points.Add(upper);
+                _bollingerSeries.Points2.Add(lower);
+            }
+
+            if (isLive && _priceSeries.Points.Count > 300)
+            {
+                TrimSeries(_priceSeries);
+                TrimSeries(_smaSeries);
+                TrimSeries(_bollingerSeries.Points, _bollingerSeries.Points2);
+            }
+
+            PriceView.InvalidatePlot(true);
+            AdjustPriceAxis();
+        }
+
+        public void UpdateRsiData(IReadOnlyList<DataPoint> rsiPoints)
+        {
+            _rsiSeries.Points.Clear();
+            _rsiSeries.Points.AddRange(rsiPoints);
+            RsiView.InvalidatePlot(true);
+        }
+
+        public void UpdateVolumeData(IReadOnlyList<DataPoint> volumePoints)
+        {
+            _volumeSeries.Points.Clear();
+            _volumeSeries.Points.AddRange(volumePoints);
+            VolumeView.InvalidatePlot(true);
+        }
+
+        private static PlotModel CreatePriceView(out LineSeries priceSeries,
+                                                 out LineSeries smaSeries,
+                                                 out AreaSeries bollingerSeries)
+        {
+            var model = new PlotModel
+            {
+                Title = "Price & SMA",
+                PlotAreaBorderThickness = new OxyThickness(1)
+            };
+
+            model.Axes.Add(new DateTimeAxis
+            {
+                Position = AxisPosition.Bottom,
+                Title = "Date",
+                StringFormat = "MM-dd",
+                IntervalType = DateTimeIntervalType.Days,
+                MinorIntervalType = DateTimeIntervalType.Days,
+                IsZoomEnabled = true,
+                IsPanEnabled = true,
+                MinimumPadding = 0.05,
+                MaximumPadding = 0.05
+            });
+
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = "Price",
+                MinimumPadding = 0.2,
+                MaximumPadding = 0.2,
+                IsZoomEnabled = true,
+                IsPanEnabled = true
+            });
+
+            priceSeries = new LineSeries
+            {
+                Title = "Price",
+                Color = OxyColors.SteelBlue,
+                StrokeThickness = 2
+            };
+
+            smaSeries = new LineSeries
+            {
+                Title = "SMA14",
+                Color = OxyColors.OrangeRed,
+                StrokeThickness = 2
+            };
+
+            bollingerSeries = new AreaSeries
+            {
+                Title = "Bollinger Bands",
+                Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
+                Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
+            };
+
+            model.Series.Add(bollingerSeries);
+            model.Series.Add(smaSeries);
+            model.Series.Add(priceSeries);
+            return model;
+        }
+
+        private static PlotModel CreateRsiView(out LineSeries rsiSeries)
+        {
+            var model = new PlotModel
+            {
+                Title = "RSI (14)",
+                PlotAreaBorderThickness = new OxyThickness(1)
+            };
+
+            model.Axes.Add(new DateTimeAxis
+            {
+                Position = AxisPosition.Bottom,
+                StringFormat = "HH:mm:ss",
+                Title = "Time"
+            });
+
+            model.Axes.Add(new LinearAxis
+            {
+                Position = AxisPosition.Left,
+                Title = "RSI",
+                Minimum = 0,
+                Maximum = 100
+            });
+
+            rsiSeries = new LineSeries
+            {
+                Title = "RSI",
+                Color = OxyColors.MediumPurple,
+                StrokeThickness = 2
+            };
+
+            model.Series.Add(rsiSeries);
+            model.Annotations.Add(new LineAnnotation { Y = 70, Color = OxyColors.Red, LineStyle = LineStyle.Dash });
+            model.Annotations.Add(new LineAnnotation { Y = 30, Color = OxyColors.Green, LineStyle = LineStyle.Dash });
+            return model;
+        }
+
+        private static PlotModel CreateVolumeView(out LineSeries volumeSeries)
+        {
+            var model = new PlotModel
+            {
+                Title = "Volume",
+                PlotAreaBorderThickness = new OxyThickness(1)
+            };
+
+            model.Axes.Add(new DateTimeAxis
+            {
+                Position = AxisPosition.Bottom,
+                StringFormat = "HH:mm:ss",
+                Title = "Time"
+            });
+
+            model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = "Volume" });
+
+            volumeSeries = new LineSeries
+            {
+                Title = "Volume",
+                Color = OxyColors.Gray,
+                StrokeThickness = 1.5
+            };
+
+            model.Series.Add(volumeSeries);
+            return model;
+        }
+
+        private static void TrimSeries(LineSeries series)
+        {
+            if (series.Points.Count <= 300)
+            {
+                return;
+            }
+
+            series.Points.RemoveRange(0, series.Points.Count - 300);
+        }
+
+        private static void TrimSeries(IList<DataPoint> series, IList<DataPoint> secondary)
+        {
+            if (series.Count <= 300)
+            {
+                return;
+            }
+
+            var remove = series.Count - 300;
+            for (int i = 0; i < remove; i++)
+            {
+                series.RemoveAt(0);
+                secondary.RemoveAt(0);
+            }
+        }
+
+        private void AdjustPriceAxis()
+        {
+            if (_priceSeries.Points.Count == 0)
+            {
+                return;
+            }
+
+            var linearAxis = PriceView.Axes.OfType<LinearAxis>().FirstOrDefault();
+            if (linearAxis == null)
+            {
+                return;
+            }
+
+            var min = _priceSeries.Points.Min(p => p.Y) * 0.95;
+            var max = _priceSeries.Points.Max(p => p.Y) * 1.05;
+            linearAxis.Zoom(min, max);
         }
     }
 }
