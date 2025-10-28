@@ -24,6 +24,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private CancellationTokenSource? _loadCts;
 
+        private string _currentSymbol;
+        public string CurrentSymbol
+        {
+            get => _currentSymbol;
+            private set => _currentSymbol = value;
+        }
+
         public PlotModel PriceView => _chartService.PriceView;
         public PlotModel RsiView => _chartService.RsiView;
         public PlotModel VolumeView => _chartService.VolumeView;
@@ -75,57 +82,79 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
-        public async Task LoadChartForSymbol(string symbol)
+        public async Task LoadChartForSymbol(string symbol, int? lookbackOverrideDays = null)
         {
             if (string.IsNullOrWhiteSpace(symbol))
                 return;
 
+            CurrentSymbol = symbol; // <- remember last viewed symbol
+
             try
             {
-                _chartService.ClearAllSeries();
+                // choose how many days of data to show
+                int daysToFetch;
+                if (lookbackOverrideDays.HasValue)
+                {
+                    daysToFetch = lookbackOverrideDays.Value;
+                }
+                else
+                {
+                    // fallback default if none provided
+                    daysToFetch = 125;
+                }
 
-                // Fetch last ~125 bars for the symbol
-                var bars = await _provider.GetHistoricalBarsAsync(symbol, 125).ConfigureAwait(false);
+                // 1) get bars (ideally use your caching method if you added one)
+                var bars = await _provider.GetHistoricalBarsAsync(symbol, daysToFetch).ConfigureAwait(false);
                 if (bars == null || bars.Count == 0)
                     return;
 
-                // Create data series for price and SMA
-                var pricePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close)).ToList();
-
+                // 2) build price series, SMA, Bollinger, RSI, Volume
+                // (this is basically what you already implemented — keep that logic)
                 var closes = bars.Select(b => b.Close).ToList();
-                var rsiValues = RsiCalculator.CalculateSeries(closes, 14);
-                var rsiPoints = rsiValues
-                    .Select((r, i) => new DataPoint(DateTimeAxis.ToDouble(bars[i + (closes.Count - rsiValues.Count)].Timestamp), r))
+
+                // price
+                var pricePoints = bars
+                    .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close))
                     .ToList();
 
-                // Compute SMA (simple 14-period average)
+                // SMA(14)
                 var smaPoints = closes
-                    .Select((_, i) => i >= 13
-                        ? new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp),
-                            closes.Skip(i - 13).Take(14).Average())
-                        : new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), double.NaN))
+                    .Select((_, i) =>
+                    {
+                        if (i < 13) return new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), double.NaN);
+                        var avg14 = closes.Skip(i - 13).Take(14).Average();
+                        return new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), avg14);
+                    })
                     .ToList();
 
-                // Bollinger Bands (20 period, 2σ)
-                var bollingerPoints = new List<(DataPoint upper, DataPoint lower)>();
+                // Bollinger(20, 2σ)
+                var bollBands = new List<(DataPoint upper, DataPoint lower)>();
                 for (int i = 19; i < closes.Count; i++)
                 {
                     var slice = closes.Skip(i - 19).Take(20).ToList();
                     var mean = slice.Average();
                     var sd = Math.Sqrt(slice.Sum(v => Math.Pow(v - mean, 2)) / slice.Count);
-                    var upper = mean + 2 * sd;
-                    var lower = mean - 2 * sd;
+                    var up = mean + 2 * sd;
+                    var dn = mean - 2 * sd;
                     var ts = DateTimeAxis.ToDouble(bars[i].Timestamp);
-                    bollingerPoints.Add((new DataPoint(ts, upper), new DataPoint(ts, lower)));
+                    bollBands.Add((new DataPoint(ts, up), new DataPoint(ts, dn)));
                 }
 
-                // Volume series
-                var volumePoints = bars.Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume)).ToList();
+                // RSI: if your RsiCalculator returns a single latest RSI:
+                var latestRsi = RsiCalculator.Calculate(closes, 14);
+                var rsiPoints = bars
+                    .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), latestRsi))
+                    .ToList();
 
-                // Update charts
+                // Volume
+                var volumePoints = bars
+                    .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Volume))
+                    .ToList();
+
+                // 3) push into charts on UI thread
                 App.Current.Dispatcher.Invoke(() =>
                 {
-                    _chartService.UpdatePriceData(pricePoints, smaPoints, bollingerPoints);
+                    _chartService.UpdatePriceData(pricePoints, smaPoints, bollBands);
                     _chartService.UpdateRsiData(rsiPoints);
                     _chartService.UpdateVolumeData(volumePoints);
                 });
@@ -135,6 +164,27 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 Logger.WriteLine($"[Chart] Error loading {symbol}: {ex.Message}");
             }
         }
+
+        public void SetTimespan(string span)
+        {
+            if (string.IsNullOrWhiteSpace(CurrentSymbol))
+                return; // nothing selected yet
+
+            int days = span switch
+            {
+                "1M" => 22,      // ~22 trading days
+                "3M" => 66,
+                "6M" => 132,
+                "1Y" => 252,
+                "YTD" => (int)(DateTime.Today.DayOfYear * 0.7), // rough trading days YTD
+                "Max" => 1000,
+                _ => 125
+            };
+
+            // fire and forget; we don't await so UI doesn't freeze
+            _ = LoadChartForSymbol(CurrentSymbol, days);
+        }
+
 
         public void Update(EquityScanResult result)
         {

@@ -17,22 +17,73 @@
         </Grid.ColumnDefinitions>
 
         <!-- 🔹 Console Output -->
-        <Border Grid.Column="0" Background="#111111" Padding="8" CornerRadius="6">
-            <DockPanel>
-                <TextBlock Text="Console Output" Foreground="LightGray"
-                           FontWeight="Bold" DockPanel.Dock="Top" Margin="0,0,0,6"/>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <TextBox Text="{Binding ConsoleText, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
-                             FontFamily="Consolas"
-                             FontSize="12"
-                             Foreground="LightGreen"
-                             Background="#111111"
-                             IsReadOnly="True"
-                             TextWrapping="Wrap"
-                             AcceptsReturn="True"
-                             VerticalScrollBarVisibility="Auto"/>
-                </ScrollViewer>
-            </DockPanel>
+        <!-- === OPTIONS PANEL (left side) === -->
+        <Border Grid.Column="0"
+        Background="#252526"
+        Padding="15"
+        BorderBrush="#333"
+        BorderThickness="0,0,1,0">
+            <StackPanel>
+                <!-- Header -->
+                <TextBlock Text="Options"
+                   Foreground="White"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   Margin="0,0,0,10"/>
+
+                <!-- Email input -->
+                <TextBlock Text="Email:"
+                   Foreground="#CCCCCC"
+                   FontSize="13"
+                   Margin="0,10,0,2"/>
+                <TextBox Text="{Binding NotificationEmail, UpdateSourceTrigger=PropertyChanged}"
+                 Background="#2D2D30"
+                 Foreground="White"
+                 BorderBrush="#444"
+                 BorderThickness="1"
+                 Padding="4"
+                 FontSize="13"/>
+
+                <!-- Save button -->
+                <Button Content="Save Email"
+                Command="{Binding SaveEmailCommand}"
+                Margin="0,8,0,15"
+                Background="#3A3D41"
+                Foreground="White"
+                BorderBrush="#555"
+                FontWeight="Bold"/>
+                
+                <!-- Email test button -->
+                <Button Content="Send Test Email"
+                Command="{Binding TestEmailCommand}"
+                Margin="0,9,0,15"
+                Background="#3A3D41"
+                Foreground="White"
+                BorderBrush="#555"
+                FontWeight="Bold"/>
+
+                <!-- Chart Timespan Selection -->
+                <TextBlock Text="Chart Timespan:"
+                   Foreground="#CCCCCC"
+                   FontSize="13"
+                   Margin="0,10,0,2"/>
+
+                <ComboBox ItemsSource="{Binding TimeSpanOptions}"
+                  SelectedItem="{Binding SelectedTimespan, Mode=TwoWay}"
+                  Background="#2D2D30"
+                  BorderBrush="#444"
+                  FontSize="13"
+                  Padding="4"
+                  Height="28"/>
+
+                <!-- Spacer -->
+                <StackPanel Margin="0,20,0,0">
+                    <TextBlock Text="Notifications and chart preferences will be applied automatically."
+                       Foreground="#888"
+                       FontSize="11"
+                       TextWrapping="Wrap"/>
+                </StackPanel>
+            </StackPanel>
         </Border>
 
         <!-- 🔹 Chart Section -->

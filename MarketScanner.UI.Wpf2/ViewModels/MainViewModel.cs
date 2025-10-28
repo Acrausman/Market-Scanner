@@ -1,8 +1,11 @@
 using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Services;
 using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -16,19 +19,25 @@ namespace MarketScanner.UI.Wpf.ViewModels
     {
         private readonly ScannerViewModel _scannerViewModel;
         private readonly ChartViewModel _chartViewModel;
+        private readonly EmailService _emailService;
         private readonly Dispatcher _dispatcher;
         private readonly StringBuilder _consoleBuilder = new();
         private readonly RelayCommand _startScanCommand;
         private readonly RelayCommand _stopScanCommand;
-        private CancellationTokenSource? _scanCts;
-        private CancellationTokenSource? _symbolCts;
+        private CancellationTokenSource _scanCts;
+        private CancellationTokenSource _symbolCts;
         private string _consoleText = string.Empty;
         private string _statusText = "Idle";
         private string? _selectedSymbol;
         private bool _isScanning;
 
+        public ObservableCollection<string> TimeSpanOptions { get; } =
+            new ObservableCollection<string> { "1M", "3M", "6M", "1Y", "YTD", "Max" };
+
         public ScannerViewModel Scanner => _scannerViewModel;
         public ChartViewModel Chart => _chartViewModel;
+
+        public EmailService EmailService => _emailService;
 
         public string ConsoleText
         {
@@ -57,14 +66,22 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand StartScanCommand => _startScanCommand;
         public ICommand StopScanCommand => _stopScanCommand;
 
-        public MainViewModel(ScannerViewModel scannerViewModel, ChartViewModel chartViewModel, Dispatcher? dispatcher = null)
+        public MainViewModel(ScannerViewModel scannerViewModel, ChartViewModel chartViewModel, EmailService? emailService, Dispatcher? dispatcher = null)
         {
             _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
             _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            _emailService = emailService;
 
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
+
+            SaveEmailCommand = new RelayCommand(_ => SaveEmail());
+            _notificationEmail = string.Empty;
+            TestEmailCommand = new RelayCommand(_ => TestEmail());
+            _selectedTimespan = "3M";
+            SelectedTimespan = TimeSpanOptions.First();
+
         }
 
         private bool IsScanning
@@ -173,6 +190,54 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _symbolCts = null;
                 }
             }
+        }
+
+        private string _notificationEmail;
+        public string NotificationEmail
+        {
+            get => _notificationEmail;
+            set
+            {
+                if (_notificationEmail != value)
+                {
+                    _notificationEmail = value;
+                    OnPropertyChanged(nameof(NotificationEmail));
+                }
+            }
+        }
+
+        private string _selectedTimespan;
+        public string SelectedTimespan
+        {
+            get => _selectedTimespan;
+            set
+            {
+                if (_selectedTimespan != value)
+                {
+                    _selectedTimespan = value;
+                    OnPropertyChanged(nameof(SelectedTimespan));
+
+                    _chartViewModel.SetTimespan(_selectedTimespan);
+                }
+            }
+        }
+
+        public ICommand SaveEmailCommand { get; }
+        
+        private void SaveEmail()
+        {
+            if (!string.IsNullOrWhiteSpace(NotificationEmail))
+            {
+                Logger.WriteLine($"[Options] Email saved: {NotificationEmail}");
+                // TODO: persist this to a config file or user settings later
+            }
+        }
+
+        public ICommand TestEmailCommand { get; }
+        private void TestEmail()
+        {
+            Logger.WriteLine("Test email sent");
+            EmailService.SendEmail("adam.crausman@gmail.com",NotificationEmail, "Test Email", "This is a test email");
         }
 
         private void Log(string message)
