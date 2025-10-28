@@ -16,11 +16,10 @@ namespace MarketScanner.Data.Services
     public class EquityScannerService : IEquityScannerService
     {
         private readonly IMarketDataProvider _provider;
-        private readonly ConcurrentDictionary<string, List<double>> _cache =
-            new ConcurrentDictionary<string, List<double>>();
+        private readonly ConcurrentDictionary<string, List<double>> _cache = new();
         private readonly ConcurrentDictionary<string, DateTime> _lastFetch = new();
 
-        // ViewModel binding
+        // UI binding
         public ObservableCollection<string> OverboughtSymbols { get; } = new();
         public ObservableCollection<string> OversoldSymbols { get; } = new();
 
@@ -31,7 +30,7 @@ namespace MarketScanner.Data.Services
 
         public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken token)
         {
-            // clear UI-bound collections on UI thread
+            // Reset UI state on scan start
             Application.Current.Dispatcher.Invoke(() =>
             {
                 OverboughtSymbols.Clear();
@@ -45,81 +44,109 @@ namespace MarketScanner.Data.Services
                 return;
             }
 
-            Logger.WriteLine($"[Scanner] Starting full scan for {tickers.Count} tickers...");
+            Logger.WriteLine($"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
 
+            using var semaphore = new SemaphoreSlim(12);
+            var batch = new ConcurrentBag<(string Symbol, bool Overbought, bool Oversold)>();
             int processed = 0;
-
-            var semaphore = new SemaphoreSlim(20); 
+            int batchSize = 30;
+            int lastReported = 0;
 
             var tasks = tickers.Select(async symbol =>
             {
-                await semaphore.WaitAsync(token);
                 try
                 {
+                    await semaphore.WaitAsync(token);
+
+                    // Cancel early if requested
                     token.ThrowIfCancellationRequested();
 
                     var result = await ScanSingleSymbol(symbol).ConfigureAwait(false);
+                    Interlocked.Increment(ref processed);
 
-                    int current = Interlocked.Increment(ref processed);
-
-                    // classify and update ObservableCollections on UI thread
-                    if (result.RSI >= 70)
+                    if (!double.IsNaN(result.RSI))
                     {
-                        Logger.WriteLine($"{symbol} is overbought with an rsi of {result.RSI}");
-                        Application.Current.Dispatcher.Invoke(() =>
+                        bool ob = result.RSI >= 70;
+                        bool os = result.RSI <= 30;
+                        if (ob || os)
+                            batch.Add((result.Symbol, ob, os));
+                    }
+
+                    // UI updates in batches
+                    if (processed % batchSize == 0 || processed == tickers.Count)
+                    {
+                        token.ThrowIfCancellationRequested();
+
+                        var localBatch = new List<(string, bool, bool)>();
+                        while (batch.TryTake(out var item))
+                            localBatch.Add(item);
+
+                        if (localBatch.Count > 0)
                         {
-                            if(symbol != null)
-                            OverboughtSymbols.Add(symbol);
-                        });
-                    }
-                    else if (result.RSI <= 30)
-                    {
-                        Logger.WriteLine($"{symbol} is oversold with an rsi of {result.RSI}");
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            if(symbol != null)
-                            OversoldSymbols.Add(symbol);
-                        });
-                    }
-                    else
-                    {
-                        Logger.WriteLine($"{symbol} is neutral at {result.RSI}");
-                    }
+                            await Application.Current.Dispatcher.BeginInvoke(() =>
+                            {
+                                foreach (var (s, ob, os) in localBatch)
+                                {
+                                    if (ob)
+                                        OverboughtSymbols.Add(s);
+                                    else if (os)
+                                        OversoldSymbols.Add(s);
+                                }
+                            });
+                        }
 
-                    // push progress % back to the VM
-                    if (current % 10 == 0 || current == tickers.Count)
-                    {
-                        int pct = (int)((double)current / tickers.Count * 100);
-                        progress?.Report(pct);
+                        int pct = (int)((double)processed / tickers.Count * 100);
+                        if (pct > lastReported)
+                        {
+                            progress?.Report(pct);
+                            lastReported = pct;
+                        }
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    Logger.WriteLine($"[Cancel] {symbol} scan aborted.");
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine($"[Error] {symbol}: {ex.Message}");
                 }
                 finally
                 {
                     semaphore.Release();
+                    // Small delay to avoid hitting Polygon too fast
+                    try { await Task.Delay(25, token); } catch { /* ignored */ }
                 }
             }).ToList();
 
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            try
+            {
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.WriteLine("[Scanner] Scan cancelled by user.");
+            }
 
-            Logger.WriteLine($"[Scanner] Completed. Overbought={OverboughtSymbols.Count}, Oversold={OversoldSymbols.Count}");
-
-            // final 100% update
-            progress?.Report(100);
+            // Final report
+            if (!token.IsCancellationRequested)
+            {
+                progress?.Report(100);
+                Logger.WriteLine($"[Scanner] Completed. Overbought={OverboughtSymbols.Count}, Oversold={OversoldSymbols.Count}");
+            }
+            else
+            {
+                Logger.WriteLine("[Scanner] Cancelled mid-run.");
+            }
         }
+
         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
         {
             try
             {
                 var closes = await GetCachedClosesAsync(symbol, 150);
                 if (closes == null || closes.Count < 15)
-                {
-                    //Console.WriteLine($"[Scan] {symbol}: insufficient data ({closes?.Count ?? 0} bars)");
-                    return new EquityScanResult
-                    {
-                        Symbol = symbol,
-                        RSI = double.NaN
-                    };
-                }
+                    return new EquityScanResult { Symbol = symbol, RSI = double.NaN };
 
                 closes = closes.TakeLast(120).ToList();
                 double rsi = RsiCalculator.Calculate(closes, 14);
@@ -140,16 +167,15 @@ namespace MarketScanner.Data.Services
 
         private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit)
         {
-            // Always refetch after provider changes or when cache is older than 1 hour
+            // Use cached data if it's recent enough
             if (_cache.TryGetValue(symbol, out var cached))
             {
-                // Example freshness check
                 if (cached.Count >= limit && _lastFetch.TryGetValue(symbol, out var ts) &&
-                    DateTime.UtcNow - ts < TimeSpan.FromHours(1))
+                    DateTime.UtcNow - ts < TimeSpan.FromHours(2))
                     return cached.TakeLast(limit).ToList();
             }
 
-            var closes = await _provider.GetHistoricalClosesAsync(symbol, 150);
+            var closes = await _provider.GetHistoricalClosesAsync(symbol, limit + 50);
             if (closes == null || closes.Count == 0)
                 return new List<double>();
 
