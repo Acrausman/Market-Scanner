@@ -7,7 +7,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Security.AccessControl;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,17 +20,98 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly ScannerViewModel _scannerViewModel;
         private readonly ChartViewModel _chartViewModel;
         private readonly EmailService? _emailService;
+        private readonly System.Timers.Timer _alertTimer;
+        private readonly AlertManager _alertManager;
+        private readonly List<int> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
+        private int _selectedInterval = 15;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
+
+        // running console text buffer for in-app "console"
         private readonly StringBuilder _consoleBuilder = new();
+
+        // commands
         private readonly RelayCommand _startScanCommand;
         private readonly RelayCommand _stopScanCommand;
+
+        // cancellation tokens for long-running ops
         private CancellationTokenSource? _scanCts;
         private CancellationTokenSource? _symbolCts;
+
+        // backing fields for bindable props
         private string _consoleText = string.Empty;
         private string _statusText = "Idle";
         private string? _selectedSymbol;
         private bool _isScanning;
+
+        // persisted / options fields
+        private string _notificationEmail = string.Empty;
+        private string _selectedTimespan = "3M";
+        public IEnumerable<int> IntervalOptions => _intervalOptions;
+
+        public int SelectedInterval
+        {
+            get => _selectedInterval;
+            set
+            {
+                if (_selectedInterval != value)
+                {
+                    _selectedInterval = value;
+                    OnPropertyChanged(nameof(SelectedInterval));
+
+                    // Restart timer with new interval
+                    _alertTimer.Interval = TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds;
+                    _alertTimer.Start();
+
+                    _appSettings.AlertIntervalMinutes = _selectedInterval;
+                    _appSettings.Save();
+
+                    Logger.WriteLine($"[Options] Alert interval updated: {_selectedInterval} minutes");
+                }
+            }
+        }
+
+
+        public MainViewModel(
+            ScannerViewModel scannerViewModel,
+            ChartViewModel chartViewModel,
+            EmailService? emailService,
+            Dispatcher? dispatcher = null)
+        {
+            _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
+            _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
+            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            _emailService = emailService;
+
+            // Commands that show up in XAML
+            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
+            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
+
+            // Load persisted settings
+            _appSettings = AppSettings.Load();
+            _notificationEmail = _appSettings.NotificationEmail ?? string.Empty;
+            _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
+                ? "3M"
+                : _appSettings.SelectedTimespan;
+            _selectedInterval = _appSettings.AlertIntervalMinutes;
+
+            // Commands for options panel
+            SaveEmailCommand = new RelayCommand(_ => SaveEmail());
+            TestEmailCommand = new RelayCommand(_ => TestEmail());
+
+            // push initial persisted values through their setters
+            NotificationEmail = _notificationEmail;
+            SelectedTimespan = _selectedTimespan;
+
+            _alertManager = new AlertManager(new AlertService(), new EmailService());
+
+            _alertTimer = new System.Timers.Timer(TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds);
+            _alertTimer.Elapsed += (_, _) => _alertManager.SendPendingDigest(NotificationEmail);
+            _alertTimer.AutoReset = true;
+            _alertTimer.Start();
+        }
+
+        // -------- Public bindable collections / exposed viewmodels --------
 
         public ObservableCollection<string> TimeSpanOptions { get; } =
             new ObservableCollection<string> { "1M", "3M", "6M", "1Y", "YTD", "Max" };
@@ -39,7 +119,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ScannerViewModel Scanner => _scannerViewModel;
         public ChartViewModel Chart => _chartViewModel;
 
-        public EmailService EmailService => _emailService;
+        // If you want to bind to EmailService in XAML, expose it as nullable
+        public EmailService? EmailService => _emailService;
+
+        // -------- Console / Status UI --------
 
         public string ConsoleText
         {
@@ -53,7 +136,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             private set => SetProperty(ref _statusText, value);
         }
 
-        public string SelectedSymbol
+        // -------- Symbol selection / chart sync --------
+
+        public string? SelectedSymbol
         {
             get => _selectedSymbol;
             set
@@ -65,26 +150,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
 
+        // -------- Scan control / commands --------
+
         public ICommand StartScanCommand => _startScanCommand;
         public ICommand StopScanCommand => _stopScanCommand;
-
-        public MainViewModel(ScannerViewModel scannerViewModel, ChartViewModel chartViewModel, EmailService? emailService, Dispatcher? dispatcher = null)
-        {
-            _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
-            _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
-            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
-            _emailService = emailService;
-
-            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
-            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
-
-            _appSettings = AppSettings.Load();
-            NotificationEmail = _appSettings.NotificationEmail;
-            SaveEmailCommand = new RelayCommand(_ => SaveEmail());
-            TestEmailCommand = new RelayCommand(_ => TestEmail());
-            SelectedTimespan = _appSettings.SelectedTimespan;
-
-        }
 
         private bool IsScanning
         {
@@ -93,6 +162,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 if (SetProperty(ref _isScanning, value, nameof(IsScanning)))
                 {
+                    // update CanExecute on the commands after state change
                     _dispatcher.InvokeAsync(() =>
                     {
                         _startScanCommand.RaiseCanExecuteChanged();
@@ -105,9 +175,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private async Task StartScanAsync()
         {
             if (IsScanning)
-            {
                 return;
-            }
 
             _scanCts = new CancellationTokenSource();
             IsScanning = true;
@@ -145,15 +213,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private void StopScan()
         {
             if (!IsScanning)
-            {
                 return;
-            }
 
             _scanCts?.Cancel();
         }
 
+        // -------- Chart loading for selected symbol --------
+
         private async Task LoadSelectedSymbolAsync(string? symbol)
         {
+            // cancel any in-flight symbol load
             var previous = _symbolCts;
             previous?.Cancel();
             previous?.Dispose();
@@ -194,7 +263,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
 
-        private string _notificationEmail;
+        // -------- Notification Email + Timespan persistence --------
+
         public string NotificationEmail
         {
             get => _notificationEmail;
@@ -202,56 +272,84 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 if (_notificationEmail != value)
                 {
-                    _notificationEmail = value;
+                    _notificationEmail = value ?? string.Empty;
                     OnPropertyChanged(nameof(NotificationEmail));
-                    _appSettings.NotificationEmail = value;
+
+                    _appSettings.NotificationEmail = _notificationEmail;
                     _appSettings.Save();
-                    Console.WriteLine($"Loaded {NotificationEmail}");
+
+                    Console.WriteLine($"[Settings] NotificationEmail now '{_notificationEmail}'");
                 }
             }
         }
 
-        private void SaveSettings()
-        {
-            _appSettings.NotificationEmail = NotificationEmail;
-            _appSettings.SelectedTimespan = SelectedTimespan;
-            _appSettings.Save();
-        }
-
-        private string _selectedTimespan;
         public string SelectedTimespan
         {
             get => _selectedTimespan;
             set
             {
-                if (_selectedTimespan != value)
+                if (_selectedTimespan != value && !string.IsNullOrWhiteSpace(value))
                 {
                     _selectedTimespan = value;
                     OnPropertyChanged(nameof(SelectedTimespan));
 
-                    _appSettings.SelectedTimespan = value;
+                    _appSettings.SelectedTimespan = _selectedTimespan;
                     _appSettings.Save();
+
                 }
             }
-        } 
+        }
+
+        public void Dispose()
+        {
+            _alertTimer?.Stop();
+            _alertTimer?.Dispose();
+        }
 
         public ICommand SaveEmailCommand { get; }
-        
         private void SaveEmail()
         {
             if (!string.IsNullOrWhiteSpace(NotificationEmail))
             {
                 Logger.WriteLine($"[Options] Email saved: {NotificationEmail}");
-                // TODO: persist this to a config file or user settings later
+                // Additional persistence already handled in setter
             }
         }
 
         public ICommand TestEmailCommand { get; }
         private void TestEmail()
         {
-            Logger.WriteLine("Test email sent");
-            EmailService.SendEmail(NotificationEmail, "Test Email", "This is a test email");
+            Logger.WriteLine("[Email] Test email triggered.");
+
+            if (string.IsNullOrWhiteSpace(NotificationEmail))
+            {
+                Logger.WriteLine("[Email] Cannot send test: no address configured.");
+                return;
+            }
+
+            if (_emailService == null)
+            {
+                Logger.WriteLine("[Email] Cannot send test: no email service available.");
+                return;
+            }
+
+            try
+            {
+                _emailService.SendEmail(
+                    NotificationEmail,
+                    "Test Email",
+                    "This is a test email from MarketScanner."
+                );
+
+                Logger.WriteLine($"[Email] Test message sent to {NotificationEmail}");
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"[Email] Send failed: {ex.Message}");
+            }
         }
+
+        // -------- Console logging helper --------
 
         private void Log(string message)
         {
@@ -261,21 +359,19 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _dispatcher.InvokeAsync(() =>
             {
                 if (_consoleBuilder.Length > 0)
-                {
                     _consoleBuilder.AppendLine();
-                }
 
                 _consoleBuilder.Append(timestamped);
                 ConsoleText = _consoleBuilder.ToString();
             });
         }
 
+        // -------- INotifyPropertyChanged helpers --------
+
         private bool SetProperty<T>(ref T storage, T value, [CallerMemberName] string? propertyName = null)
         {
             if (EqualityComparer<T>.Default.Equals(storage, value))
-            {
                 return false;
-            }
 
             storage = value;
             OnPropertyChanged(propertyName);

@@ -76,6 +76,22 @@
                   Padding="4"
                   Height="28"/>
 
+                <!-- Email notification interval> -->
+                <TextBlock Text="Email Digest Interval (minutes)"
+                  Foreground="White"
+                  FontWeight="Bold"
+                  Margin="0,0,0,5"/>
+
+                <ComboBox ItemsSource="{Binding IntervalOptions}"
+                  SelectedItem="{Binding SelectedInterval, Mode=TwoWay}"
+                  Width="120"
+                  Margin="0,0,0,15"
+                  Background="#3A3D41"
+                  Foreground="White"
+                  BorderBrush="#555"
+                  FontWeight="Bold"/>
+
+
                 <!-- Spacer -->
                 <StackPanel Margin="0,20,0,0">
                     <TextBlock Text="Notifications and chart preferences will be applied automatically."

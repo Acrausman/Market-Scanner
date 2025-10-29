@@ -196,7 +196,7 @@ public class PolygonMarketDataProvider : IMarketDataProvider
             if (bars.Count > limit)
                 bars = bars.Skip(bars.Count - limit).ToList();
 
-            Console.WriteLine($"[Polygon] {symbol} -> {bars.Count} bars, last close={bars.Last().Close:F2}");
+            //Console.WriteLine($"[Polygon] {symbol} -> {bars.Count} bars, last close={bars.Last().Close:F2}");
             return bars;
         }
         catch (Exception ex)

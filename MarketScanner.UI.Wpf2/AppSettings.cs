@@ -8,6 +8,7 @@ namespace MarketScanner.UI.Wpf
     {
         public string NotificationEmail { get; set; } = "";
         public string SelectedTimespan { get; set; } = "3M";
+        public int AlertIntervalMinutes { get; set; } = 15;
 
         private static readonly string SettingsPath =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

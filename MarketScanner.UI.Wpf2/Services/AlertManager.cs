@@ -1,4 +1,5 @@
-﻿using MarketScanner.Data.Models;
+﻿using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Models;
 using MarketScanner.Data.Services;
 using System;
 using System.Collections.Generic;
@@ -10,6 +11,10 @@ namespace MarketScanner.UI.Wpf.Services
     {
         private readonly AlertService _alertService;
         private readonly EmailService _emailService;
+
+        private readonly List<string> _pendingMessages = new();
+        private readonly object _lock = new();
+        private DateTime _lastDigestSent = DateTime.MinValue;
 
         public List<Alert> Alerts { get; } = new();
 
@@ -48,8 +53,33 @@ namespace MarketScanner.UI.Wpf.Services
 
             if (alert.NotifyEmail)
             {
-                _emailService.SendEmail("recipient@example.com", subject, message);
+                lock(_lock)
+                {
+                    _pendingMessages.Add($"{alert.Symbol}: {message}");
+                }
             }
+        }
+
+        public void SendPendingDigest(string recipientEmail)
+        {
+            if (string.IsNullOrWhiteSpace(recipientEmail))
+                return;
+
+            List<string> snapshot;
+            lock (_lock)
+            {
+                if (_pendingMessages.Count == 0)
+                    return;
+
+                snapshot = new List<string>(_pendingMessages);
+                _pendingMessages.Clear();
+            }
+
+            var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
+            var body = "Recent ALerts:\n\n" + string.Join("\n", snapshot);
+            Logger.WriteLine("Sent RSI Digest");
+            _emailService.SendEmail(recipientEmail, subject, body);
+            _lastDigestSent = DateTime.Now;
         }
 
         private string GenerateAlertMessage(Alert alert, EquityScanResult result)
