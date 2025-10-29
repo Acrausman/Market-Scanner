@@ -104,9 +104,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
             SelectedTimespan = _selectedTimespan;
 
             _alertManager = new AlertManager(new AlertService(), new EmailService());
-
             _alertTimer = new System.Timers.Timer(TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds);
-            _alertTimer.Elapsed += (_, _) => _alertManager.SendPendingDigest(NotificationEmail);
+            _alertTimer.Elapsed += async (_, _) =>
+            {
+                try
+                {
+                    Logger.WriteLine($"[Timer] Triggering email digest for {NotificationEmail} at {DateTime.Now:T}");
+                    await Task.Run(() => _alertManager.SendPendingDigest(NotificationEmail));
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine($"[Timer] Digest send failed: {ex.Message}");
+                }
+            };
+
             _alertTimer.AutoReset = true;
             _alertTimer.Start();
         }

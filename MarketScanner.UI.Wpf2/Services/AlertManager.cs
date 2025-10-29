@@ -76,7 +76,7 @@ namespace MarketScanner.UI.Wpf.Services
             }
 
             var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
-            var body = "Recent ALerts:\n\n" + string.Join("\n", snapshot);
+            var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
             Logger.WriteLine("Sent RSI Digest");
             _emailService.SendEmail(recipientEmail, subject, body);
             _lastDigestSent = DateTime.Now;
