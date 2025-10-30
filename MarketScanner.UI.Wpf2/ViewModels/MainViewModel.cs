@@ -32,6 +32,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
         private double _alertIntervalMinutes = 30;
+
+        private bool enableEmail = false;
         public double AlertIntervalMinutes
         {
             get => _alertIntervalMinutes;
@@ -136,7 +138,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _digestTimer.Tick += (s, e) =>
             {
                 Logger.WriteLine($"[Timer] Triggering digest at {DateTime.Now:T}");
-                _alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
+                if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
             };
             _digestTimer.Start();
 

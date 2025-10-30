@@ -30,6 +30,11 @@
                    FontSize="18"
                    FontWeight="Bold"
                    Margin="0,0,0,10"/>
+                <CheckBox
+                   Foreground="White"
+                   FontSize="18"
+                   FontWeight="Bold"
+                   Margin="0,0,0,11"/>
 
                 <!-- Email input -->
                 <TextBlock Text="Email:"

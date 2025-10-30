@@ -12,7 +12,7 @@ namespace MarketScanner.Data.Services.Indicators
             for (int i = 1; i < closes.Count; i++)
             {
                 var diff = closes[i] - closes[i - 1];
-                Console.WriteLine($"Delta={diff:F4}, close={closes[i]:F2}");
+                //Console.WriteLine($"Delta={diff:F4}, close={closes[i]:F2}");
             }
 
             if (closes == null || closes.Count <= period)
