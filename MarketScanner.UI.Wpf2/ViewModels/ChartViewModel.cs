@@ -158,6 +158,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 var rsiPoints = bars
                     .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), latestRsi))
                     .ToList();
+                Console.WriteLine($"RSI values for {symbol}: {string.Join(", ", rsiPoints.TakeLast(5))}");
+
 
                 // Volume
                 var volumePoints = bars

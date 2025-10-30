@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MarketScanner.Data.Diagnostics;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -8,6 +9,12 @@ namespace MarketScanner.Data.Services.Indicators
     {
         public static double Calculate(IReadOnlyList<double> closes, int period = 14)
         {
+            for (int i = 1; i < closes.Count; i++)
+            {
+                var diff = closes[i] - closes[i - 1];
+                Console.WriteLine($"Delta={diff:F4}, close={closes[i]:F2}");
+            }
+
             if (closes == null || closes.Count <= period)
                 return double.NaN;
 

@@ -123,7 +123,7 @@ public class PolygonMarketDataProvider : IMarketDataProvider
         string toStr = to.ToString("yyyy-MM-dd");
 
         string url = $"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{fromStr}/{toStr}" +
-                     $"?adjusted=true&sort=asc&limit={fetch}&apiKey={_apiKey}";
+                     $"?adjusted=true&unadjusted=false&sort=asc&limit={fetch}&apiKey={_apiKey}";
 
         try
         {
