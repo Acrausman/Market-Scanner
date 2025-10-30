@@ -16,6 +16,7 @@ namespace MarketScanner.Data.Services
     public class EquityScannerService : IEquityScannerService
     {
         private readonly IMarketDataProvider _provider;
+        private IAlertSink? _alertSink;
         private readonly ConcurrentDictionary<string, List<double>> _cache = new();
         private readonly ConcurrentDictionary<string, DateTime> _lastFetch = new();
 
@@ -23,9 +24,11 @@ namespace MarketScanner.Data.Services
         public ObservableCollection<string> OverboughtSymbols { get; } = new();
         public ObservableCollection<string> OversoldSymbols { get; } = new();
 
-        public EquityScannerService(IMarketDataProvider provider)
+        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink)
         {
             _provider = provider;
+            _alertSink = alertSink;
+
         }
 
         public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken token)
@@ -69,7 +72,13 @@ namespace MarketScanner.Data.Services
                         bool ob = result.RSI >= 70;
                         bool os = result.RSI <= 30;
                         if (ob || os)
+                        {
                             batch.Add((result.Symbol, ob, os));
+
+                            var msg = $"{result.Symbol} is {(ob ? "overbought" : "Oversold")} (RSI{result.RSI:F2})";
+                            _alertSink?.AddAlert(msg);
+                        }
+ 
                     }
 
                     // UI updates in batches
@@ -138,6 +147,11 @@ namespace MarketScanner.Data.Services
             {
                 Logger.WriteLine("[Scanner] Cancelled mid-run.");
             }
+        }
+
+        public void SetAlertSink(IAlertSink alertSink)
+        {
+            _alertSink = alertSink;
         }
 
         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)

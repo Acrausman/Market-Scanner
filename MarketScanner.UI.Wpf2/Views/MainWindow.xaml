@@ -53,7 +53,7 @@
                 BorderBrush="#555"
                 FontWeight="Bold"/>
                 
-                <!-- Email test button -->
+                <!-- Email test buttons -->
                 <Button Content="Send Test Email"
                 Command="{Binding TestEmailCommand}"
                 Margin="0,9,0,15"
@@ -61,6 +61,15 @@
                 Foreground="White"
                 BorderBrush="#555"
                 FontWeight="Bold"/>
+
+                <Button Content="Send Digest Now"
+        Command="{Binding SendDigestNow}"
+        Margin="0,9,0,15"
+        Background="#3A3D41"
+        Foreground="White"
+        BorderBrush="#555"
+        FontWeight="Bold"/>
+
 
                 <!-- Chart Timespan Selection -->
                 <TextBlock Text="Chart Timespan:"

@@ -1,4 +1,5 @@
 using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
 using MarketScanner.UI.Wpf.Services;
 using System;
@@ -17,7 +18,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
+        private readonly IMarketDataProvider _provider;
+        private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
+        private readonly EquityScannerService _equityScannerService;
         private readonly ChartViewModel _chartViewModel;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
@@ -26,6 +30,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private int _selectedInterval = 15;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
+        private readonly DispatcherTimer _digestTimer;
 
         // running console text buffer for in-app "console"
         private readonly StringBuilder _consoleBuilder = new();
@@ -45,9 +50,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private bool _isScanning;
 
         // persisted / options fields
+        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\r\n";
         private string _notificationEmail = string.Empty;
         private string _selectedTimespan = "3M";
         public IEnumerable<int> IntervalOptions => _intervalOptions;
+        public ICommand SendDigestNow { get; }
 
         public int SelectedInterval
         {
@@ -75,14 +82,17 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public MainViewModel(
             ScannerViewModel scannerViewModel,
             ChartViewModel chartViewModel,
-            EmailService? emailService,
-            Dispatcher? dispatcher = null)
+            EmailService emailService,
+            Dispatcher dispatcher,
+            AlertManager alertManager)
         {
+            _provider = new PolygonMarketDataProvider(apiKey);
             _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
             _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
             _emailService = emailService;
-
+            _alertManager = alertManager;
+            _scannerService = new EquityScannerService(_provider, _alertManager);
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
@@ -93,33 +103,29 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
                 ? "3M"
                 : _appSettings.SelectedTimespan;
-            _selectedInterval = _appSettings.AlertIntervalMinutes;
+            _selectedInterval = _appSettings.AlertIntervalMinutes > 0
+                ? _appSettings.AlertIntervalMinutes
+                : 15;
 
             // Commands for options panel
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
+            SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
 
             // push initial persisted values through their setters
             NotificationEmail = _notificationEmail;
             SelectedTimespan = _selectedTimespan;
-
-            _alertManager = new AlertManager(new AlertService(), new EmailService());
-            _alertTimer = new System.Timers.Timer(TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds);
-            _alertTimer.Elapsed += async (_, _) =>
+            _digestTimer = new DispatcherTimer
             {
-                try
-                {
-                    Logger.WriteLine($"[Timer] Triggering email digest for {NotificationEmail} at {DateTime.Now:T}");
-                    await Task.Run(() => _alertManager.SendPendingDigest(NotificationEmail));
-                }
-                catch (Exception ex)
-                {
-                    Logger.WriteLine($"[Timer] Digest send failed: {ex.Message}");
-                }
+                Interval = TimeSpan.FromMinutes(_appSettings.AlertIntervalMinutes)
             };
+            _digestTimer.Tick += (s, e) =>
+            {
+                Logger.WriteLine($"[Timer] Triggering digest at {DateTime.Now:T}");
+                _alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
+            };
+            _digestTimer.Start();
 
-            _alertTimer.AutoReset = true;
-            _alertTimer.Start();
         }
 
         // -------- Public bindable collections / exposed viewmodels --------
