@@ -63,6 +63,19 @@ namespace MarketScanner.UI.Wpf.ViewModels
             private set => SetProperty(ref _volumeText, value);
         }
 
+        private string _selectedTimespan = "3M";
+        public string SelectedTimespan
+        {
+            get => _selectedTimespan;
+            set
+            {
+                if(SetProperty(ref _selectedTimespan, value))
+                {
+                    SetTimespan(value);
+                }
+            }
+        }
+
         public ChartViewModel(IMarketDataProvider provider, IChartService chartService, Dispatcher? dispatcher = null)
         {
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));

@@ -78,7 +78,7 @@
                    Margin="0,10,0,2"/>
 
                 <ComboBox ItemsSource="{Binding TimeSpanOptions}"
-                  SelectedItem="{Binding SelectedTimespan, Mode=TwoWay}"
+                  SelectedItem="{Binding Chart.SelectedTimespan, Mode=TwoWay}"
                   Background="#2D2D30"
                   BorderBrush="#444"
                   FontSize="13"
