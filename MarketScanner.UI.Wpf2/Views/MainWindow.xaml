@@ -92,11 +92,10 @@
                   Margin="0,0,0,5"/>
 
                 <ComboBox ItemsSource="{Binding IntervalOptions}"
-                  SelectedItem="{Binding SelectedInterval, Mode=TwoWay}"
+                  SelectedItem="{Binding AlertIntervalMinutes, Mode=TwoWay}"
                   Width="120"
                   Margin="0,0,0,15"
                   Background="#3A3D41"
-                  Foreground="White"
                   BorderBrush="#555"
                   FontWeight="Bold"/>
 

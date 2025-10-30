@@ -26,11 +26,25 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
-        private readonly List<int> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
+        private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
+        private double _alertIntervalMinutes = 30;
+        public double AlertIntervalMinutes
+        {
+            get => _alertIntervalMinutes;
+            set
+            {
+                if(Math.Abs(_alertIntervalMinutes - value) > 0.01)
+                {
+                    _alertIntervalMinutes = value;
+                    OnPropertyChanged(nameof(AlertIntervalMinutes));
+                    UpdateAlertTimerInterval();
+                }
+            }
+        }
 
         // running console text buffer for in-app "console"
         private readonly StringBuilder _consoleBuilder = new();
@@ -53,7 +67,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\r\n";
         private string _notificationEmail = string.Empty;
         private string _selectedTimespan = "3M";
-        public IEnumerable<int> IntervalOptions => _intervalOptions;
+        public IEnumerable<double> IntervalOptions => _intervalOptions;
         public ICommand SendDigestNow { get; }
 
         public int SelectedInterval
@@ -188,6 +202,22 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 }
             }
         }
+
+        private void UpdateAlertTimerInterval()
+        {
+            if (_digestTimer == null)
+            {
+                Logger.WriteLine("[Timer] Attempted to change interval, but timer not initialized.");
+                return;
+            }
+
+            _digestTimer.Stop();
+            _digestTimer.Interval = TimeSpan.FromMinutes(_alertIntervalMinutes);
+            _digestTimer.Start();
+
+            Logger.WriteLine($"[Timer] Digest interval updated to {_alertIntervalMinutes} minutes.");
+        }
+
 
         private async Task StartScanAsync()
         {
