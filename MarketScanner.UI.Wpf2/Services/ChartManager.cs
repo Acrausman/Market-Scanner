@@ -2,6 +2,7 @@ using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Series;
+using OxyPlot.Legends;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -34,6 +35,10 @@ namespace MarketScanner.UI.Wpf.Services
             _bollingerSeries.Points2.Clear();
             _rsiSeries.Points.Clear();
             _volumeSeries.Points.Clear();
+
+            _priceSeries.TrackerFormatString = "Date: {2:MM-dd}\nPrice: {4:F2}";
+            _smaSeries.TrackerFormatString = "Date: {2:MM-dd}\nSMA: {4:F2}";
+            _volumeSeries.TrackerFormatString = "Date: {2:MM-dd}\nVolume: {4:N0}";
 
             PriceView.InvalidatePlot(true);
             RsiView.InvalidatePlot(true);
@@ -96,6 +101,40 @@ namespace MarketScanner.UI.Wpf.Services
         {
             _rsiSeries.Points.Clear();
             _rsiSeries.Points.AddRange(rsiPoints);
+
+            RsiView.Annotations.Clear();
+
+            RsiView.Annotations.Add(new LineAnnotation { Y = 70, Color = OxyColors.Red, LineStyle = LineStyle.Dash});
+            RsiView.Annotations.Add(new LineAnnotation { Y = 30, Color = OxyColors.Green, LineStyle = LineStyle.Dash});
+
+            foreach (var p in rsiPoints)
+            {
+                if(p.Y >= 70)
+                {
+                    RsiView.Annotations.Add(new PointAnnotation
+                    {
+                        X = p.X,
+                        Y = p.Y,
+                        Shape = MarkerType.Triangle,
+                        TextColor = OxyColors.Red,
+                        Size = 5,
+                        ToolTip = $"Overbought RSI={p.Y:F1} ({DateTimeAxis.ToDateTime(p.X):MM/dd})"
+                    });
+                }
+                else if (p.Y <= 30)
+                {
+                    RsiView.Annotations.Add(new PointAnnotation
+                    {
+                        X = p.X,
+                        Y = p.Y,
+                        Shape = MarkerType.Triangle,
+                        TextColor = OxyColors.Green,
+                        Size = 5,
+                        ToolTip = $"Oversold RSI={p.Y:F1} ({DateTimeAxis.ToDateTime(p.X):MM/dd})"
+                    });
+                }
+            }
+
             RsiView.InvalidatePlot(true);
         }
 
@@ -115,6 +154,15 @@ namespace MarketScanner.UI.Wpf.Services
                 Title = "Price & SMA",
                 PlotAreaBorderThickness = new OxyThickness(1)
             };
+
+            model.IsLegendVisible = true;
+            model.Legends.Clear();
+            model.Legends.Add(new Legend
+            {
+                LegendTitle = "",
+                LegendPosition = LegendPosition.TopRight,
+                LegendOrientation = LegendOrientation.Horizontal
+            });
 
             model.Axes.Add(new DateTimeAxis
             {

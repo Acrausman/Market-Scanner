@@ -17,5 +17,6 @@ namespace MarketScanner.UI.Wpf.Services
                              bool isLive = false);
         void UpdateRsiData(IReadOnlyList<DataPoint> rsiPoints);
         void UpdateVolumeData(IReadOnlyList<DataPoint> volumePoints);
+
     }
 }
