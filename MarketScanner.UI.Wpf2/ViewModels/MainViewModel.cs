@@ -31,6 +31,91 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string? _selectedSymbol;
         private bool _isScanning;
 
+<<<<<<< Updated upstream
+=======
+        // persisted / options fields
+        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\r\n";
+        private string _notificationEmail = string.Empty;
+        private string _selectedTimespan = "3M";
+        public IEnumerable<double> IntervalOptions => _intervalOptions;
+        public ICommand SendDigestNow { get; }
+
+        public int SelectedInterval
+        {
+            get => _selectedInterval;
+            set
+            {
+                if (_selectedInterval != value)
+                {
+                    _selectedInterval = value;
+                    OnPropertyChanged(nameof(SelectedInterval));
+
+                    // Restart timer with new interval
+                    _alertTimer.Interval = TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds;
+                    _alertTimer.Start();
+
+                    _appSettings.AlertIntervalMinutes = _selectedInterval;
+                    _appSettings.Save();
+
+                    Logger.WriteLine($"[Options] Alert interval updated: {_selectedInterval} minutes");
+                }
+            }
+        }
+
+
+        public MainViewModel(
+            ScannerViewModel scannerViewModel,
+            ChartViewModel chartViewModel,
+            EmailService emailService,
+            Dispatcher dispatcher,
+            AlertManager alertManager)
+        {
+            _provider = new PolygonMarketDataProvider(apiKey);
+            _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
+            _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
+            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            _emailService = emailService;
+            _alertManager = alertManager;
+            _scannerService = new EquityScannerService(_provider, _alertManager);
+            // Commands that show up in XAML
+            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
+            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
+
+            // Load persisted settings
+            _appSettings = AppSettings.Load();
+            _notificationEmail = _appSettings.NotificationEmail ?? string.Empty;
+            _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
+                ? "3M"
+                : _appSettings.SelectedTimespan;
+            _selectedInterval = _appSettings.AlertIntervalMinutes > 0
+                ? _appSettings.AlertIntervalMinutes
+                : 15;
+
+            // Commands for options panel
+            SaveEmailCommand = new RelayCommand(_ => SaveEmail());
+            TestEmailCommand = new RelayCommand(_ => TestEmail());
+            SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
+
+            // push initial persisted values through their setters
+            NotificationEmail = _notificationEmail;
+            SelectedTimespan = _selectedTimespan;
+            _digestTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(_appSettings.AlertIntervalMinutes)
+            };
+            _digestTimer.Tick += (s, e) =>
+            {
+                Logger.WriteLine($"[Timer] Triggering digest at {DateTime.Now:T}");
+                if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
+            };
+
+            _digestTimer.Start();
+
+        }
+
+        // -------- Public bindable collections / exposed viewmodels --------
+
+>>>>>>> Stashed changes
         public ObservableCollection<string> TimeSpanOptions { get; } =
             new ObservableCollection<string> { "1M", "3M", "6M", "1Y", "YTD", "Max" };
 

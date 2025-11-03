@@ -6,72 +6,105 @@ namespace MarketScanner.Data.Services.Indicators
 {
     public static class RsiCalculator
     {
+        // ✅ Single-value RSI (used for comparisons or last-bar RSI)
         public static double Calculate(IReadOnlyList<double> closes, int period = 14)
         {
             if (closes == null || closes.Count <= period)
                 return double.NaN;
 
+            // find first window with movement
+            int start = 1;
+            while (start < closes.Count && closes[start] == closes[start - 1])
+                start++;
+
+            if (start + period >= closes.Count)
+                return 50; // too flat / insufficient data
+
             double gain = 0, loss = 0;
-            for (int i = 1; i <= period; i++)
+            for (int i = start; i < start + period; i++)
             {
                 double diff = closes[i] - closes[i - 1];
-                if (diff > 0) gain += diff;
+                if (diff >= 0) gain += diff;
                 else loss -= diff;
             }
 
-            double avgGain = gain / period;
-            double avgLoss = loss / period;
+            gain /= period;
+            loss /= period;
 
-            for (int i = period + 1; i < closes.Count; i++)
+            double rsi = 50;
+            for (int i = start + period; i < closes.Count; i++)
             {
                 double diff = closes[i] - closes[i - 1];
-                double up = diff > 0 ? diff : 0;
-                double down = diff < 0 ? -diff : 0;
+                double g = diff > 0 ? diff : 0;
+                double l = diff < 0 ? -diff : 0;
+                gain = (gain * (period - 1) + g) / period;
+                loss = (loss * (period - 1) + l) / period;
 
-                avgGain = ((avgGain * (period - 1)) + up) / period;
-                avgLoss = ((avgLoss * (period - 1)) + down) / period;
+                // neutralization for flat segments
+                if (gain == 0 && loss == 0) rsi = 50;
+                else if (loss == 0) rsi = 100;
+                else if (gain == 0) rsi = 0;
+                else
+                {
+                    double rs = gain / loss;
+                    rsi = 100 - (100 / (1 + rs));
+                }
             }
 
-            if (avgLoss == 0) return 100;
-            double rs = avgGain / avgLoss;
-            return Math.Round(100 - (100 / (1 + rs)), 2);
+            return rsi;
         }
-        public static List<double> CalculateSeries(List<double> closes, int period)
+
+        // ✅ Full-series RSI (used for charting)
+        public static List<double> CalculateSeries(List<double> closes, int period = 14)
         {
             var rsiValues = new List<double>();
-            if (closes.Count < period + 1)
+            if (closes == null || closes.Count < period + 1)
                 return rsiValues;
 
+            // find first meaningful window
+            int start = 1;
+            while (start < closes.Count && closes[start] == closes[start - 1])
+                start++;
+
+            if (start + period >= closes.Count)
+                return Enumerable.Repeat(50.0, closes.Count).ToList();
+
             double gain = 0, loss = 0;
-            for (int i = 1; i <= period; i++)
+            for (int i = start; i < start + period; i++)
             {
-                double change = closes[i] - closes[i - 1];
-                if (change > 0) gain += change;
-                else loss -= change;
+                double diff = closes[i] - closes[i - 1];
+                if (diff >= 0) gain += diff;
+                else loss -= diff;
             }
 
-            double avgGain = gain / period;
-            double avgLoss = loss / period;
+            gain /= period;
+            loss /= period;
 
-            double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
-            rsiValues.Add(100 - (100 / (1 + rs)));
+            double rsi = 50;
+            for (int i = 0; i < start + period; i++)
+                rsiValues.Add(double.NaN); // prefill for alignment
 
-            for (int i = period + 1; i < closes.Count; i++)
+            for (int i = start + period; i < closes.Count; i++)
             {
-                double change = closes[i] - closes[i - 1];
-                double gainVal = change > 0 ? change : 0;
-                double lossVal = change < 0 ? -change : 0;
+                double diff = closes[i] - closes[i - 1];
+                double g = diff > 0 ? diff : 0;
+                double l = diff < 0 ? -diff : 0;
+                gain = (gain * (period - 1) + g) / period;
+                loss = (loss * (period - 1) + l) / period;
 
-                avgGain = ((avgGain * (period - 1)) + gainVal) / period;
-                avgLoss = ((avgLoss * (period - 1)) + lossVal) / period;
+                if (gain == 0 && loss == 0) rsi = 50;
+                else if (loss == 0) rsi = 100;
+                else if (gain == 0) rsi = 0;
+                else
+                {
+                    double rs = gain / loss;
+                    rsi = 100 - (100 / (1 + rs));
+                }
 
-                rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
-                double rsi = 100 - (100 / (1 + rs));
                 rsiValues.Add(rsi);
             }
 
             return rsiValues;
         }
-
     }
 }

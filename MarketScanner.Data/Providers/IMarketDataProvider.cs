@@ -11,6 +11,8 @@ namespace MarketScanner.Data.Providers
         Task<List<Bar>> GetHistoricalBarsAsync(string symbol, int limit = 50, bool adjusted = true);
         Task<List<string>> GetAllTickersAsync();
 
+        Task CompareRsiWithYahooAsync(string symbol, int period = 14);
+
     }
 
 }

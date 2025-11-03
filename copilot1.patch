@@ -1,31 +1,26 @@
-﻿diff --git a/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs b/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
-index 039dfa26d86763a01d568efaae62a599dd51cf92..9b6b2c27988d60aa1fead60069755e70fb699faf 100644
---- a/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
-+++ b/MarketScanner.UI.Wpf2/Views/MainWindow.xaml.cs
-@@ -1,20 +1,12 @@
--﻿using System.Threading.Tasks;
- using System.Windows;
--using System.Windows.Media.Animation;
--using System.Windows.Controls;
--using MarketScanner.UI.Wpf.ViewModels;
--using System.Diagnostics;
- 
- namespace MarketScanner.UI.Views
- {
--public partial class MainWindow : Window
--{
--    public MainWindow()
-+    public partial class MainWindow : Window
-     {
--        InitializeComponent();
--        DataContext = new MainViewModel();
--
--        PresentationTraceSources.DataBindingSource.Switch.Level = SourceLevels.Critical;    }
--}
--
-+        public MainWindow()
-+        {
-+            InitializeComponent();
-+        }
-+    }
- }
+﻿// ✅ Apply split and dividend adjustments
+- await ApplyCorporateActionsAsync(symbol, bars);
++ 
++ // 🔍 Check if Polygon data is already adjusted
++ bool isAdjusted = true;
++ try
++ {
++     string splitUrl = $"https://api.polygon.io/v3/reference/splits?ticker={symbol}&apiKey={_apiKey}";
++     var splitResp = await splitUrl.GetJsonAsync<JObject>();
++     var splits = splitResp["results"]?.ToList() ?? new List<JToken>();
++     isAdjusted = DetectIfPolygonDataIsAdjusted(bars, splits);
++ 
++     if (!isAdjusted)
++     {
++         Logger.WriteLine($"[Polygon] {symbol}: detected unadjusted data — applying corporate actions...");
++         await ApplyCorporateActionsAsync(symbol, bars);
++     }
++     else
++     {
++         Logger.WriteLine($"[Polygon] {symbol}: data already adjusted by Polygon, skipping manual adjustments.");
++     }
++ }
++ catch (Exception ex)
++ {
++     Logger.WriteLine($"[Polygon] {symbol}: adjustment check failed ({ex.Message}), assuming adjusted=true.");
++ }
