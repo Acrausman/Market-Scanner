@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MarketScanner.Data.Diagnostics;
+using System;
 using System.IO;
 using Newtonsoft.Json;
 
@@ -38,7 +39,7 @@ namespace MarketScanner.UI.Wpf
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Settings] Failed to save settings: {ex.Message}");
+                Logger.Error($"[Settings] Failed to save settings: {ex.Message}");
             }
         }
     }

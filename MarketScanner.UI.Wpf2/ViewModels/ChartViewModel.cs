@@ -116,13 +116,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     daysToFetch = 125;
                 }
 
-                // 1) get bars (ideally use your caching method if you added one)
-                var bars = await _provider.GetHistoricalBarsAsync(symbol, daysToFetch).ConfigureAwait(false);
-                if (bars == null || bars.Count == 0)
+                var end = DateTime.UtcNow;
+                var start = end.AddDays(-daysToFetch);
+                var bars = (await _provider.GetHistoricalBarsAsync(symbol, start, end, CancellationToken.None).ConfigureAwait(false)).ToList();
+                if (bars.Count == 0)
                     return;
 
                 // 2) build price series, SMA, Bollinger, RSI, Volume
-                // (this is basically what you already implemented — keep that logic)
                 var closes = bars.Select(b => b.Close).ToList();
 
                 // price
@@ -130,35 +130,15 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), b.Close))
                     .ToList();
 
-                // SMA(14)
-                var smaPoints = closes
-                    .Select((_, i) =>
-                    {
-                        if (i < 13) return new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), double.NaN);
-                        var avg14 = closes.Skip(i - 13).Take(14).Average();
-                        return new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), avg14);
-                    })
-                    .ToList();
+                var smaSeries = SmaCalculator.CalculateSeries(closes, 14);
+                var smaPoints = BuildAlignedSeries(bars, smaSeries);
 
-                // Bollinger(20, 2σ)
-                var bollBands = new List<(DataPoint upper, DataPoint lower)>();
-                for (int i = 19; i < closes.Count; i++)
-                {
-                    var slice = closes.Skip(i - 19).Take(20).ToList();
-                    var mean = slice.Average();
-                    var sd = Math.Sqrt(slice.Sum(v => Math.Pow(v - mean, 2)) / slice.Count);
-                    var up = mean + 2 * sd;
-                    var dn = mean - 2 * sd;
-                    var ts = DateTimeAxis.ToDouble(bars[i].Timestamp);
-                    bollBands.Add((new DataPoint(ts, up), new DataPoint(ts, dn)));
-                }
+                var bollSeries = BollingerBandsCalculator.CalculateSeries(closes, 20);
+                var bollBands = BuildAlignedBands(bars, bollSeries);
 
-                // RSI: if your RsiCalculator returns a single latest RSI:
-                var latestRsi = RsiCalculator.Calculate(closes, 14);
-                var rsiPoints = bars
-                    .Select(b => new DataPoint(DateTimeAxis.ToDouble(b.Timestamp), latestRsi))
-                    .ToList();
-                Console.WriteLine($"RSI values for {symbol}: {string.Join(", ", rsiPoints.TakeLast(5))}");
+                var rsiSeries = RsiCalculator.CalculateSeries(closes, 14);
+                var rsiPoints = BuildAlignedSeries(bars, rsiSeries);
+                Logger.Debug($"RSI values for {symbol}: {string.Join(", ", rsiPoints.TakeLast(Math.Min(5, rsiPoints.Count)))}");
 
 
                 // Volume
@@ -176,7 +156,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"[Chart] Error loading {symbol}: {ex.Message}");
+                Logger.Error($"[Chart] Error loading {symbol}: {ex.Message}");
             }
         }
 
@@ -198,6 +178,42 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             // fire and forget; we don't await so UI doesn't freeze
             _ = LoadChartForSymbol(CurrentSymbol, days);
+        }
+
+        private static List<DataPoint> BuildAlignedSeries(IReadOnlyList<Bar> bars, IReadOnlyList<double> series)
+        {
+            var points = new List<DataPoint>(bars.Count);
+            int offset = bars.Count - series.Count;
+            for (int i = 0; i < bars.Count; i++)
+            {
+                int index = i - offset;
+                double value = (index >= 0 && index < series.Count) ? series[index] : double.NaN;
+                points.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), value));
+            }
+
+            return points;
+        }
+
+        private static List<(DataPoint upper, DataPoint lower)> BuildAlignedBands(IReadOnlyList<Bar> bars, IReadOnlyList<(double Middle, double Upper, double Lower)> series)
+        {
+            var bands = new List<(DataPoint upper, DataPoint lower)>(bars.Count);
+            int offset = bars.Count - series.Count;
+            for (int i = 0; i < bars.Count; i++)
+            {
+                int index = i - offset;
+                double timestamp = DateTimeAxis.ToDouble(bars[i].Timestamp);
+                if (index >= 0 && index < series.Count)
+                {
+                    var entry = series[index];
+                    bands.Add((new DataPoint(timestamp, entry.Upper), new DataPoint(timestamp, entry.Lower)));
+                }
+                else
+                {
+                    bands.Add((new DataPoint(timestamp, double.NaN), new DataPoint(timestamp, double.NaN)));
+                }
+            }
+
+            return bands;
         }
 
 

@@ -1,4 +1,5 @@
 ﻿#if DEBUG
+using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using System;
 using System.Collections.Generic;
@@ -23,24 +24,26 @@ namespace MarketScanner.Data.Diagnostics
 
         public static async Task CompareAllAsync(PolygonMarketDataProvider provider, params string[] symbols)
         {
-            Console.WriteLine($"\n==== RSI COMPARISON TEST (Stooq) {DateTime.UtcNow:yyyy-MM-dd} ====\n");
+            Logger.Info($"\n==== RSI COMPARISON TEST (Stooq) {DateTime.UtcNow:yyyy-MM-dd} ====\n");
             foreach (var sym in symbols)
             {
                 await CompareAsync(provider, sym);
                 await Task.Delay(1500); // polite delay
             }
-            Console.WriteLine("\n==== DONE ====\n");
+            Logger.Info("\n==== DONE ====\n");
         }
 
         public static async Task CompareAsync(PolygonMarketDataProvider provider, string symbol, int period = 14)
         {
             try
             {
-                var bars = await provider.GetHistoricalBarsAsync(symbol, 150);
+                var end = DateTime.UtcNow;
+                var start = end.AddDays(-200);
+                var bars = await provider.GetHistoricalBarsAsync(symbol, start, end).ConfigureAwait(false);
                 var myCloses = bars.OrderBy(b => b.Timestamp).Select(b => b.Close).ToList();
                 if (myCloses.Count == 0)
                 {
-                    Console.WriteLine($"[RSI Compare] {symbol}: no provider bars.");
+                    Logger.Warn($"[RSI Compare] {symbol}: no provider bars.");
                     return;
                 }
 
@@ -55,12 +58,12 @@ namespace MarketScanner.Data.Diagnostics
                     DateTime.UtcNow - File.GetLastWriteTimeUtc(cacheFile) < TimeSpan.FromHours(24))
                 {
                     csv = await File.ReadAllTextAsync(cacheFile);
-                    Console.WriteLine($"[Stooq] Using cached CSV for {stooqSymbol}");
+                    Logger.Debug($"[Stooq] Using cached CSV for {stooqSymbol}");
                 }
                 else
                 {
                     var url = $"https://stooq.com/q/d/l/?s={stooqSymbol}&i=d";
-                    Console.WriteLine($"[Stooq] Downloading CSV for {stooqSymbol}...");
+                    Logger.Info($"[Stooq] Downloading CSV for {stooqSymbol}...");
                     csv = await _http.GetStringAsync(url);
                     await File.WriteAllTextAsync(cacheFile, csv);
                 }
@@ -68,14 +71,14 @@ namespace MarketScanner.Data.Diagnostics
                 var stooqCloses = ParseStooqCloses(csv);
                 if (stooqCloses.Count == 0)
                 {
-                    Console.WriteLine($"[Stooq] No rows parsed for {stooqSymbol}");
+                    Logger.Warn($"[Stooq] No rows parsed for {stooqSymbol}");
                     return;
                 }
 
                 // Normalize scale
                 double ratio = myCloses.Last() / stooqCloses.Last();
                 stooqCloses = stooqCloses.Select(c => c * ratio).ToList();
-                Console.WriteLine($"[Normalize] {symbol}: scaled Stooq closes by ratio {ratio:F3}");
+                Logger.Debug($"[Normalize] {symbol}: scaled Stooq closes by ratio {ratio:F3}");
 
                 // Align series length and drop incomplete bar
                 int count = Math.Min(myCloses.Count, stooqCloses.Count);
@@ -86,20 +89,20 @@ namespace MarketScanner.Data.Diagnostics
 
                 double stooqRsi = RsiCalculator.Calculate(stooqCloses, period);
 
-                Console.WriteLine($"\n[RSI Compare] {symbol} (Stooq={stooqSymbol})");
-                Console.WriteLine($"  Provider RSI = {myRsi:F2}");
-                Console.WriteLine($"  Stooq    RSI = {stooqRsi:F2}");
-                Console.WriteLine($"  δ = {Math.Abs(myRsi - stooqRsi):F2} points\n");
+                Logger.Info($"\n[RSI Compare] {symbol} (Stooq={stooqSymbol})");
+                Logger.Info($"  Provider RSI = {myRsi:F2}");
+                Logger.Info($"  Stooq    RSI = {stooqRsi:F2}");
+                Logger.Info($"  δ = {Math.Abs(myRsi - stooqRsi):F2} points\n");
 
-                Console.WriteLine("  Recent closes (Provider vs Stooq):");
+                Logger.Info("  Recent closes (Provider vs Stooq):");
                 for (int i = 0; i < 5 && i < myCloses.Count && i < stooqCloses.Count; i++)
                 {
-                    Console.WriteLine($"   {i + 1,2}: Provider={myCloses[^(i + 1)],8:F2} | Stooq={stooqCloses[^(i + 1)],8:F2}");
+                    Logger.Info($"   {i + 1,2}: Provider={myCloses[^(i + 1)],8:F2} | Stooq={stooqCloses[^(i + 1)],8:F2}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[RSI Compare] {symbol}: failed — {ex.Message}");
+                Logger.Error($"[RSI Compare] {symbol}: failed — {ex.Message}");
             }
         }
 

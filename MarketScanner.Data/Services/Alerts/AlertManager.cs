@@ -1,0 +1,117 @@
+using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Services;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+
+namespace MarketScanner.Data.Services.Alerts
+{
+    public class AlertManager : IAlertManager
+    {
+        private readonly ILogger _logger;
+        private readonly ConcurrentQueue<ScannerAlert> _pendingAlerts = new();
+        private IAlertSink? _alertSink;
+
+        public AlertManager(ILogger logger)
+        {
+            _logger = logger;
+            OverboughtSymbols = new ObservableCollection<string>();
+            OversoldSymbols = new ObservableCollection<string>();
+        }
+
+        public ObservableCollection<string> OverboughtSymbols { get; }
+        public ObservableCollection<string> OversoldSymbols { get; }
+
+        public int OverboughtCount => OverboughtSymbols.Count;
+        public int OversoldCount => OversoldSymbols.Count;
+
+        public void SetSink(IAlertSink? sink)
+        {
+            _alertSink = sink;
+        }
+
+        public void Enqueue(string symbol, string triggerName, double value)
+        {
+            var alert = new ScannerAlert(symbol, triggerName, value);
+            _pendingAlerts.Enqueue(alert);
+
+            var formatted = $"{symbol} {triggerName} ({value:F2})";
+            _logger.Info($"[AlertManager] Queued alert: {formatted}");
+            _logger.Info($"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
+
+            _alertSink?.AddAlert(formatted);
+        }
+
+        public async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            if (_pendingAlerts.IsEmpty)
+            {
+                return;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var drained = new List<ScannerAlert>();
+            while (_pendingAlerts.TryDequeue(out var alert))
+            {
+                drained.Add(alert);
+            }
+
+            if (drained.Count == 0)
+            {
+                return;
+            }
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                foreach (var alert in drained)
+                {
+                    if (IsOverbought(alert.TriggerName))
+                    {
+                        if (!OverboughtSymbols.Contains(alert.Symbol))
+                        {
+                            OverboughtSymbols.Add(alert.Symbol);
+                        }
+                    }
+                    else if (IsOversold(alert.TriggerName))
+                    {
+                        if (!OversoldSymbols.Contains(alert.Symbol))
+                        {
+                            OversoldSymbols.Add(alert.Symbol);
+                        }
+                    }
+                }
+            });
+        }
+
+        public async Task ResetAsync()
+        {
+            while (_pendingAlerts.TryDequeue(out _))
+            {
+                // drain any remaining alerts
+            }
+
+            await Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                OverboughtSymbols.Clear();
+                OversoldSymbols.Clear();
+            });
+        }
+
+        private static bool IsOverbought(string triggerName)
+        {
+            return triggerName.IndexOf("overbought", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsOversold(string triggerName)
+        {
+            return triggerName.IndexOf("oversold", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private readonly record struct ScannerAlert(string Symbol, string TriggerName, double Value);
+    }
+}

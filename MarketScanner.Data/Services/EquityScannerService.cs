@@ -1,7 +1,10 @@
-﻿using MarketScanner.Data.Models;
-using MarketScanner.Data.Providers;
-using MarketScanner.Data.Services.Indicators;
 using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Models;
+using MarketScanner.Data.Providers;
+using MarketScanner.Data.Services.Alerts;
+using MarketScanner.Data.Services.Analysis;
+using MarketScanner.Data.Services.Data;
+using MarketScanner.Data.Services.Indicators;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,124 +12,71 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 
 namespace MarketScanner.Data.Services
 {
     public class EquityScannerService : IEquityScannerService
     {
+        private const int MinimumCloseCount = 150;
+        private const int IndicatorWindow = 120;
+        private const int IndicatorPeriod = 14;
+        private const int BatchSize = 30;
+        private const int MaxConcurrency = 12;
+
         private readonly IMarketDataProvider _provider;
-        private IAlertSink? _alertSink;
-        private readonly ConcurrentDictionary<string, List<double>> _cache = new();
-        private readonly ConcurrentDictionary<string, DateTime> _lastFetch = new();
+        private readonly HistoricalPriceCache _priceCache;
+        private readonly IAlertManager _alertManager;
+        private readonly ILogger _logger;
+        private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
 
-        // UI binding
-        public ObservableCollection<string> OverboughtSymbols { get; } = new();
-        public ObservableCollection<string> OversoldSymbols { get; } = new();
-
-        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink)
+        public EquityScannerService(
+            IMarketDataProvider provider,
+            IDataCleaner dataCleaner,
+            IAlertManager alertManager,
+            ILogger logger)
         {
             _provider = provider;
-            _alertSink = alertSink;
-
+            _alertManager = alertManager;
+            _logger = logger;
+            _priceCache = new HistoricalPriceCache(provider, dataCleaner);
         }
 
-        public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken token)
+        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink)
+            : this(
+                  provider,
+                  CreateDataCleaner(provider, out var logger),
+                  CreateAlertManager(logger, alertSink),
+                  logger)
         {
-            // Reset UI state on scan start
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                OverboughtSymbols.Clear();
-                OversoldSymbols.Clear();
-            });
+        }
 
-            var tickers = await _provider.GetAllTickersAsync().ConfigureAwait(false);
+        public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
+        public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
+
+        public void SetAlertSink(IAlertSink alertSink)
+        {
+            _alertManager.SetSink(alertSink);
+        }
+
+        public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken cancellationToken)
+        {
+            await _alertManager.ResetAsync().ConfigureAwait(false);
+
+            var tickers = await _provider.GetAllTickersAsync(cancellationToken).ConfigureAwait(false);
             if (tickers == null || tickers.Count == 0)
             {
-                Logger.WriteLine("[Scanner] No tickers available from provider.");
+                _logger.Info("[Scanner] No tickers available from provider.");
                 return;
             }
 
-            Logger.WriteLine($"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
+            _logger.Info($"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
 
-            using var semaphore = new SemaphoreSlim(12);
-            var batch = new ConcurrentBag<(string Symbol, bool Overbought, bool Oversold)>();
-            int processed = 0;
-            int batchSize = 30;
-            int lastReported = 0;
+            using var limiter = new SemaphoreSlim(MaxConcurrency);
+            var tracker = new ScanProgressTracker();
 
-            var tasks = tickers.Select(async symbol =>
-            {
-                try
-                {
-                    await semaphore.WaitAsync(token);
-
-                    // Cancel early if requested
-                    token.ThrowIfCancellationRequested();
-
-                    var result = await ScanSingleSymbol(symbol).ConfigureAwait(false);
-                    Interlocked.Increment(ref processed);
-
-                    if (!double.IsNaN(result.RSI))
-                    {
-                        bool ob = result.RSI >= 70;
-                        bool os = result.RSI <= 30;
-                        if (ob || os)
-                        {
-                            batch.Add((result.Symbol, ob, os));
-
-                            var msg = $"{result.Symbol} is {(ob ? "overbought" : "Oversold")} (RSI{result.RSI:F2})";
-                            _alertSink?.AddAlert(msg);
-                        }
- 
-                    }
-
-                    // UI updates in batches
-                    if (processed % batchSize == 0 || processed == tickers.Count)
-                    {
-                        token.ThrowIfCancellationRequested();
-
-                        var localBatch = new List<(string, bool, bool)>();
-                        while (batch.TryTake(out var item))
-                            localBatch.Add(item);
-
-                        if (localBatch.Count > 0)
-                        {
-                            await Application.Current.Dispatcher.BeginInvoke(() =>
-                            {
-                                foreach (var (s, ob, os) in localBatch)
-                                {
-                                    if (ob)
-                                        OverboughtSymbols.Add(s);
-                                    else if (os)
-                                        OversoldSymbols.Add(s);
-                                }
-                            });
-                        }
-
-                        int pct = (int)((double)processed / tickers.Count * 100);
-                        if (pct > lastReported)
-                        {
-                            progress?.Report(pct);
-                            lastReported = pct;
-                        }
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    Logger.WriteLine($"[Cancel] {symbol} scan aborted.");
-                }
-                catch (Exception ex)
-                {
-                    Logger.WriteLine($"[Error] {symbol}: {ex.Message}");
-                }
-                finally
-                {
-                    semaphore.Release();
-                    // Small delay to avoid hitting Polygon too fast
-                    try { await Task.Delay(25, token); } catch { /* ignored */ }
-                }
-            }).ToList();
+            var tasks = tickers
+                .Select(symbol => ProcessSymbolAsync(symbol, limiter, tickers.Count, tracker, progress, cancellationToken))
+                .ToList();
 
             try
             {
@@ -134,70 +84,214 @@ namespace MarketScanner.Data.Services
             }
             catch (OperationCanceledException)
             {
-                Logger.WriteLine("[Scanner] Scan cancelled by user.");
+                _logger.Info("[Scanner] Scan cancelled by user.");
             }
 
-            // Final report
-            if (!token.IsCancellationRequested)
+            try
+            {
+                await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            if (!cancellationToken.IsCancellationRequested)
             {
                 progress?.Report(100);
-                Logger.WriteLine($"[Scanner] Completed. Overbought={OverboughtSymbols.Count}, Oversold={OversoldSymbols.Count}");
+                _logger.Info($"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
             }
             else
             {
-                Logger.WriteLine("[Scanner] Cancelled mid-run.");
+                _logger.Info("[Scanner] Cancelled mid-run.");
             }
-        }
-
-        public void SetAlertSink(IAlertSink alertSink)
-        {
-            _alertSink = alertSink;
         }
 
         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
         {
+            return await ScanSingleSymbol(symbol, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        public async Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken)
+        {
             try
             {
-                var closes = await GetCachedClosesAsync(symbol, 150);
-                if (closes == null || closes.Count < 15)
-                    return new EquityScanResult { Symbol = symbol, RSI = double.NaN };
-
-                closes = closes.TakeLast(120).ToList();
-                double rsi = RsiCalculator.Calculate(closes, 14);
-
-                return new EquityScanResult
-                {
-                    Symbol = symbol,
-                    RSI = rsi,
-                    TimeStamp = DateTime.UtcNow
-                };
+                var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                _scanCache[symbol] = result;
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"[Error] {symbol}: {ex.Message}");
-                return new EquityScanResult { Symbol = symbol, RSI = double.NaN };
+                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
+                return CreateEmptyResult(symbol);
             }
         }
 
-        private async Task<List<double>> GetCachedClosesAsync(string symbol, int limit)
+        public void ClearCache()
         {
-            // Use cached data if it's recent enough
-            if (_cache.TryGetValue(symbol, out var cached))
-            {
-                if (cached.Count >= limit && _lastFetch.TryGetValue(symbol, out var ts) &&
-                    DateTime.UtcNow - ts < TimeSpan.FromHours(2))
-                    return cached.TakeLast(limit).ToList();
-            }
-
-            var closes = await _provider.GetHistoricalClosesAsync(symbol, limit + 50);
-            if (closes == null || closes.Count == 0)
-                return new List<double>();
-
-            _cache[symbol] = closes;
-            _lastFetch[symbol] = DateTime.UtcNow;
-            return closes.TakeLast(limit).ToList();
+            _priceCache.Clear();
+            _scanCache.Clear();
         }
 
-        public void ClearCache() => _cache.Clear();
+        private async Task ProcessSymbolAsync(
+            string symbol,
+            SemaphoreSlim limiter,
+            int totalSymbols,
+            ScanProgressTracker tracker,
+            IProgress<int>? progress,
+            CancellationToken cancellationToken)
+        {
+            await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                _scanCache[symbol] = result;
+
+                QueueAlerts(result);
+
+                var processed = Interlocked.Increment(ref tracker.Processed);
+                if (processed % BatchSize == 0 || processed == totalSymbols)
+                {
+                    try
+                    {
+                        await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+
+                    ReportProgress(totalSymbols, processed, tracker, progress);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.Info($"[Scanner] Scan cancelled for {symbol}.");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
+            }
+            finally
+            {
+                limiter.Release();
+                try
+                {
+                    await Task.Delay(25, cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+        }
+
+        private static void ReportProgress(int totalSymbols, int processed, ScanProgressTracker tracker, IProgress<int>? progress)
+        {
+            if (totalSymbols == 0)
+            {
+                return;
+            }
+
+            var percentage = (int)((double)processed / totalSymbols * 100);
+            var last = Volatile.Read(ref tracker.LastReported);
+            if (percentage > last)
+            {
+                progress?.Report(percentage);
+                Interlocked.Exchange(ref tracker.LastReported, percentage);
+            }
+        }
+
+        private void QueueAlerts(EquityScanResult result)
+        {
+            if (double.IsNaN(result.RSI))
+            {
+                return;
+            }
+
+            if (result.RSI >= 70)
+            {
+                _alertManager.Enqueue(result.Symbol, "overbought", result.RSI);
+            }
+            else if (result.RSI <= 30)
+            {
+                _alertManager.Enqueue(result.Symbol, "oversold", result.RSI);
+            }
+        }
+
+        private async Task<EquityScanResult> ScanSymbolCoreAsync(string symbol, CancellationToken cancellationToken)
+        {
+            var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
+            if (closes == null || closes.Count < IndicatorPeriod)
+            {
+                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
+                return CreateEmptyResult(symbol);
+            }
+
+            var trimmed = closes.Skip(Math.Max(0, closes.Count - IndicatorWindow)).ToList();
+            if (trimmed.Count < IndicatorPeriod)
+            {
+                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
+                return CreateEmptyResult(symbol);
+            }
+
+            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod);
+            var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
+            var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
+
+            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
+
+            return new EquityScanResult
+            {
+                Symbol = symbol,
+                Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
+                Volume = volume,
+                RSI = rsi,
+                SMA = sma,
+                Upper = upper,
+                Lower = lower,
+                TimeStamp = DateTime.UtcNow
+            };
+        }
+
+        private static EquityScanResult CreateEmptyResult(string symbol)
+        {
+            return new EquityScanResult
+            {
+                Symbol = symbol,
+                Price = double.NaN,
+                Volume = double.NaN,
+                RSI = double.NaN,
+                SMA = double.NaN,
+                Upper = double.NaN,
+                Lower = double.NaN,
+                TimeStamp = DateTime.UtcNow
+            };
+        }
+
+        private sealed class ScanProgressTracker
+        {
+            public int Processed;
+            public int LastReported;
+        }
+
+        private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out ILogger logger)
+        {
+            logger = new LoggerAdapter();
+            return new DataCleaner(provider, logger);
+        }
+
+        private static IAlertManager CreateAlertManager(ILogger logger, IAlertSink alertSink)
+        {
+            var manager = new Alerts.AlertManager(logger);
+            manager.SetSink(alertSink);
+            return manager;
+        }
     }
 }

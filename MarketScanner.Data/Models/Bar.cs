@@ -1,6 +1,11 @@
-﻿public class Bar
+﻿using System;
+
+namespace MarketScanner.Data.Models
 {
-    public double Close { get; set; }
-    public double Volume { get; set; }
-    public DateTime Timestamp { get; set; }
+    public class Bar
+    {
+        public double Close { get; set; }
+        public double Volume { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
 }

@@ -1,4 +1,6 @@
-﻿namespace MarketScanner.Data.Models
+﻿using System;
+
+namespace MarketScanner.Data.Models
 {
     public class EquityScanResult
     {

@@ -1,5 +1,5 @@
-﻿using MarketScanner.Data.Models;
-using MarketScanner.Data.Models.MarketScanner.Data.Models;
+﻿using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using System;
@@ -73,20 +73,18 @@ namespace MarketScanner.Data
             var semaphore = new SemaphoreSlim(5);
             var tasks = Symbols.Select(async symbol =>
             {
-                await semaphore.WaitAsync();
+                await semaphore.WaitAsync().ConfigureAwait(false);
                 try
                 {
-                    var (price, volume) = await _provider.GetQuoteAsync(symbol);
-                    var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
-                    var timestamps = await _provider.GetHistoricalTimestampsAsync(symbol, 50);
+                    var (price, volume) = await _provider.GetQuoteAsync(symbol).ConfigureAwait(false);
+                    var closes = await LoadRecentClosesAsync(symbol, Math.Max(rsiPeriod, smaPeriod)).ConfigureAwait(false);
+                    if (closes.Count < Math.Max(rsiPeriod, smaPeriod))
+                    {
+                        return;
+                    }
 
-                    if (closes.Count < 14) return;
-
-                    double rsi = RsiCalculator.Calculate(closes);
-                    double sma = closes.TakeLast(smaPeriod).Average();
-                    double sd = StdDev(closes.TakeLast(smaPeriod).ToList());
-                    double upper = sma + 2 * sd;
-                    double lower = sma - 2 * sd;
+                    double rsi = RsiCalculator.Calculate(closes, rsiPeriod);
+                    var (sma, upper, lower) = BollingerBandsCalculator.Calculate(closes, smaPeriod);
 
                     _lastPrices[symbol] = price;
                     _lastVolumes[symbol] = volume;
@@ -112,7 +110,7 @@ namespace MarketScanner.Data
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Scanner] {symbol}: {ex.Message}");
+                    Logger.Warn($"[Scanner] {symbol}: {ex.Message}");
                 }
                 finally
                 {
@@ -133,12 +131,12 @@ namespace MarketScanner.Data
 
             _liveTask = Task.Run(async () =>
             {
-                Console.WriteLine($"[Live] Started stream for {symbol}");
+                Logger.Info($"[Live] Started stream for {symbol}");
                 while (!token.IsCancellationRequested)
                 {
                     try
                     {
-                        var (price, volume) = await _provider.GetQuoteAsync(symbol);
+                        var (price, volume) = await _provider.GetQuoteAsync(symbol).ConfigureAwait(false);
 
                         if (!double.IsNaN(price))
                             OnNewPrice?.Invoke(symbol, price);
@@ -146,19 +144,17 @@ namespace MarketScanner.Data
                         if (!double.IsNaN(volume))
                             OnNewVolume?.Invoke(symbol, volume);
 
-                        var closes = await _provider.GetHistoricalClosesAsync(symbol, 120);
-                        if (closes.Count >= 14)
+                        var closes = await LoadRecentClosesAsync(symbol, Math.Max(rsiPeriod, smaPeriod)).ConfigureAwait(false);
+                        if (closes.Count >= rsiPeriod)
                         {
-                            double rsi = RsiCalculator.Calculate(closes);
+                            double rsi = RsiCalculator.Calculate(closes, rsiPeriod);
                             OnNewRSI?.Invoke(symbol, rsi);
 
-                            var recent = closes.TakeLast(smaPeriod).ToList();
-                            double sma = recent.Average();
-                            double sd = StdDev(recent);
-                            OnNewSMA?.Invoke(symbol, sma, sma + 2 * sd, sma - 2 * sd);
+                            var (sma, upper, lower) = BollingerBandsCalculator.Calculate(closes, smaPeriod);
+                            OnNewSMA?.Invoke(symbol, sma, upper, lower);
                         }
 
-                        await Task.Delay(10000, token); // refresh every 10s
+                        await Task.Delay(10000, token).ConfigureAwait(false); // refresh every 10s
                     }
                     catch (TaskCanceledException)
                     {
@@ -166,12 +162,12 @@ namespace MarketScanner.Data
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Live] {symbol}: {ex.Message}");
-                        await Task.Delay(5000, token);
+                        Logger.Warn($"[Live] {symbol}: {ex.Message}");
+                        await Task.Delay(5000, token).ConfigureAwait(false);
                     }
                 }
 
-                Console.WriteLine($"[Live] Stream stopped for {symbol}");
+                Logger.Info($"[Live] Stream stopped for {symbol}");
             }, token);
         }
 
@@ -179,7 +175,7 @@ namespace MarketScanner.Data
         {
             if (_liveCts == null) return;
 
-            Console.WriteLine("[Live] Stopping previous stream...");
+            Logger.Info("[Live] Stopping previous stream...");
             _liveCts.Cancel();
             _liveCts = null;
             _liveTask = null;
@@ -201,7 +197,7 @@ namespace MarketScanner.Data
 
         public double? GetLastRSI(string symbol)
         {
-            if (_lastPrices.TryGetValue(symbol, out var v))
+            if (_lastRSI.TryGetValue(symbol, out var v))
                 return v;
             return null;
         }
@@ -214,12 +210,12 @@ namespace MarketScanner.Data
         }
 
 
-        public double StdDev(List<double> values)
+        private async Task<List<double>> LoadRecentClosesAsync(string symbol, int lookback)
         {
-            if (values.Count <= 1) return 0;
-            double avg = values.Average();
-            double sum = values.Sum(v => Math.Pow(v - avg, 2));
-            return Math.Sqrt(sum / (values.Count - 1));
+            var end = DateTime.UtcNow;
+            var start = end.AddDays(-(lookback + 100));
+            var bars = await _provider.GetHistoricalBarsAsync(symbol, start, end).ConfigureAwait(false);
+            return bars.Select(b => b.Close).ToList();
         }
     }
 }

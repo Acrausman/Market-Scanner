@@ -46,8 +46,8 @@ namespace MarketScanner.UI.Wpf.Services
                 _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
             }
 
-            Logger.WriteLine($"[AlertManager] Queued alert: {message}");
-            Logger.WriteLine($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
+            Logger.Info($"[AlertManager] Queued alert: {message}");
+            Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
         }
 
         private void HandleAlert(Alert alert, EquityScanResult result)
@@ -75,11 +75,11 @@ namespace MarketScanner.UI.Wpf.Services
 
         public void SendPendingDigest(string recipientEmail)
         {
-            Logger.WriteLine($"Pending alerts: {_pendingMessages.Count}");
+            Logger.Debug($"Pending alerts: {_pendingMessages.Count}");
 
             if (string.IsNullOrWhiteSpace(recipientEmail))
             {
-                Logger.WriteLine("[AlertManager] Digest skipped — no recipient email configured.");
+                Logger.Warn("[AlertManager] Digest skipped — no recipient email configured.");
                 return;
             }
 
@@ -88,7 +88,7 @@ namespace MarketScanner.UI.Wpf.Services
             {
                 if (_pendingMessages.Count == 0)
                 {
-                    Logger.WriteLine("[AlertManager] No pending alerts to send.");
+                    Logger.Debug("[AlertManager] No pending alerts to send.");
                     return;
                 }
 
@@ -99,7 +99,7 @@ namespace MarketScanner.UI.Wpf.Services
             var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
             var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
 
-            Logger.WriteLine($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
+            Logger.Info($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
             _emailService.SendEmail(recipientEmail, subject, body);
             _lastDigestSent = DateTime.Now;
         }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MarketScanner.Data.Diagnostics;
+using System;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -21,7 +22,7 @@ namespace MarketScanner.Data.Services
         {
             try
             {
-                Console.WriteLine($"[SMS] Sending via Textbelt to {to}: {message}");
+                Logger.Info($"[SMS] Sending via Textbelt to {to}: {message}");
                 Debug.WriteLine($"[SMS] Sending via Textbelt to {to}: {message}");
 
                 var content = new FormUrlEncodedContent(new Dictionary<string, string>
@@ -34,12 +35,12 @@ namespace MarketScanner.Data.Services
                 var response = await _httpClient.PostAsync("https://textbelt.com/text", content);
                 var result = await response.Content.ReadAsStringAsync();
 
-                Console.WriteLine($"[SMS Response] {result}");
+                Logger.Info($"[SMS Response] {result}");
                 Debug.WriteLine($"[SMS Response] {result}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[SMS Error] {ex.Message}");
+                Logger.Error($"[SMS Error] {ex.Message}");
                 Debug.WriteLine($"[SMS Error] {ex.Message}");
             }
         }

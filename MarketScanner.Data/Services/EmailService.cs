@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MarketScanner.Data.Diagnostics;
+using System;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Mail;
@@ -11,7 +12,7 @@ namespace MarketScanner.Data.Services
         {
             try
             {
-                Console.WriteLine($"[Email] To: {to} | Subject: {subject} | Message: {body}");
+                Logger.Info($"[Email] To: {to} | Subject: {subject} | Message: {body}");
                 Debug.WriteLine($"[Email] To: {to} | Subject: {subject} | Message: {body}");
 
                 using var client = new SmtpClient("smtp.gmail.com", 587)
@@ -25,7 +26,7 @@ namespace MarketScanner.Data.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Email Error] {ex.Message}");
+                Logger.Error($"[Email Error] {ex.Message}");
             }
         }
     }

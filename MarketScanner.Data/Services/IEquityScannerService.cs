@@ -13,6 +13,7 @@ namespace MarketScanner.Data.Services
 
         Task ScanAllAsync(IProgress<int>? progress, CancellationToken token);
         Task<EquityScanResult> ScanSingleSymbol(string symbol);
+        Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken);
         void ClearCache();
     }
 }

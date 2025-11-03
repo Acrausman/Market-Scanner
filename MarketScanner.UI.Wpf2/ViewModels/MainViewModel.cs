@@ -89,7 +89,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _appSettings.AlertIntervalMinutes = _selectedInterval;
                     _appSettings.Save();
 
-                    Logger.WriteLine($"[Options] Alert interval updated: {_selectedInterval} minutes");
+                    Logger.Info($"[Options] Alert interval updated: {_selectedInterval} minutes");
                 }
             }
         }
@@ -137,7 +137,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             };
             _digestTimer.Tick += (s, e) =>
             {
-                Logger.WriteLine($"[Timer] Triggering digest at {DateTime.Now:T}");
+                Logger.Info($"[Timer] Triggering digest at {DateTime.Now:T}");
                 if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
             };
             _digestTimer.Start();
@@ -209,7 +209,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             if (_digestTimer == null)
             {
-                Logger.WriteLine("[Timer] Attempted to change interval, but timer not initialized.");
+                Logger.Warn("[Timer] Attempted to change interval, but timer not initialized.");
                 return;
             }
 
@@ -217,7 +217,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _digestTimer.Interval = TimeSpan.FromMinutes(_alertIntervalMinutes);
             _digestTimer.Start();
 
-            Logger.WriteLine($"[Timer] Digest interval updated to {_alertIntervalMinutes} minutes.");
+            Logger.Info($"[Timer] Digest interval updated to {_alertIntervalMinutes} minutes.");
         }
 
 
@@ -327,7 +327,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _appSettings.NotificationEmail = _notificationEmail;
                     _appSettings.Save();
 
-                    Console.WriteLine($"[Settings] NotificationEmail now '{_notificationEmail}'");
+                    Logger.Info($"[Settings] NotificationEmail now '{_notificationEmail}'");
                 }
             }
         }
@@ -360,7 +360,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             if (!string.IsNullOrWhiteSpace(NotificationEmail))
             {
-                Logger.WriteLine($"[Options] Email saved: {NotificationEmail}");
+                Logger.Info($"[Options] Email saved: {NotificationEmail}");
                 // Additional persistence already handled in setter
             }
         }
@@ -368,17 +368,17 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand TestEmailCommand { get; }
         private void TestEmail()
         {
-            Logger.WriteLine("[Email] Test email triggered.");
+            Logger.Info("[Email] Test email triggered.");
 
             if (string.IsNullOrWhiteSpace(NotificationEmail))
             {
-                Logger.WriteLine("[Email] Cannot send test: no address configured.");
+                Logger.Warn("[Email] Cannot send test: no address configured.");
                 return;
             }
 
             if (_emailService == null)
             {
-                Logger.WriteLine("[Email] Cannot send test: no email service available.");
+                Logger.Warn("[Email] Cannot send test: no email service available.");
                 return;
             }
 
@@ -390,11 +390,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     "This is a test email from MarketScanner."
                 );
 
-                Logger.WriteLine($"[Email] Test message sent to {NotificationEmail}");
+                Logger.Info($"[Email] Test message sent to {NotificationEmail}");
             }
             catch (Exception ex)
             {
-                Logger.WriteLine($"[Email] Send failed: {ex.Message}");
+                Logger.Error($"[Email] Send failed: {ex.Message}");
             }
         }
 
@@ -403,7 +403,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private void Log(string message)
         {
             var timestamped = $"[{DateTime.Now:HH:mm:ss}] {message}";
-            Logger.WriteLine(timestamped);
+            Logger.Debug(timestamped);
 
             _dispatcher.InvokeAsync(() =>
             {
