@@ -1,5 +1,6 @@
-using MarketScanner.Data.Diagnostics;
+﻿using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Models;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using Newtonsoft.Json.Linq;
 using System;

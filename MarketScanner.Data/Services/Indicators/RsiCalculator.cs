@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using YahooFinanceApi;
+using MarketScanner.Core.Enums;
 
 namespace MarketScanner.Data.Services.Indicators
 {
@@ -10,6 +11,9 @@ namespace MarketScanner.Data.Services.Indicators
         public static double Calculate(IReadOnlyList<double> closes, int period = 14,
                                        RsiSmoothingMethod method = RsiSmoothingMethod.Wilder)
         {
+            if (closes == null || closes.Count <= period)
+                return double.NaN;
+
             return method switch
             { RsiSmoothingMethod.Simple => CalculateSimple(closes,period),
               RsiSmoothingMethod.Ema => CalculateEma(closes,period),

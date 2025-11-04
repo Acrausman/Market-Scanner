@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using MarketScanner.Data.Models;
+using MarketScanner.Core.Models;
 
 namespace MarketScanner.Data.Services
 {

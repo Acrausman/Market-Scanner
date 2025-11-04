@@ -1,4 +1,5 @@
-﻿using MarketScanner.Data.Models;
+﻿using MarketScanner.Core.Models;
+using MarketScanner.Data.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading;

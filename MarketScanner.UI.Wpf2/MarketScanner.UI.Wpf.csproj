@@ -6,15 +6,16 @@
 		<UseWPF>true</UseWPF>
 	</PropertyGroup>
 
-	<ItemGroup>
-	  <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
-	  <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
-	  <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
-	</ItemGroup>
+        <ItemGroup>
+          <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
+          <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+          <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
+        </ItemGroup>
 
-	<ItemGroup>
-	  <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
-	</ItemGroup>
+        <ItemGroup>
+          <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
+          <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
+        </ItemGroup>
 
 	<ItemGroup>
 	  <Page Update="Views\MainWindow.xaml">

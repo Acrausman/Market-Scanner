@@ -1,0 +1,1476 @@
+﻿diff --git a/Market Scanner.sln b/Market Scanner.sln
+index 9b50d2c0374eebfab9da2881baa16414e5011db6..2d08deb61f9e402f7516482ee2377ac74929a9c6 100644
+--- a/Market Scanner.sln	
++++ b/Market Scanner.sln	
+@@ -1,31 +1,38 @@
+-﻿
++
+ Microsoft Visual Studio Solution File, Format Version 12.00
+ # Visual Studio Version 17
+ VisualStudioVersion = 17.14.36518.9
+ MinimumVisualStudioVersion = 10.0.40219.1
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketScanner.UI.Wpf", "MarketScanner.UI.Wpf2\MarketScanner.UI.Wpf.csproj", "{5CC09A9B-4C3E-4F77-B81B-E15DB4A63299}"
+ EndProject
+ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketScanner.Data", "MarketScanner.Data\MarketScanner.Data.csproj", "{39EE66D8-94A6-49A0-98E7-0E5A9669B5EF}"
+ EndProject
++
++Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarketScanner.Core", "MarketScanner.Core\MarketScanner.Core.csproj", "{D485108C-4C82-47A6-B4B5-46CCEE04A48E}"
++EndProject
+ Global
+ 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+ 		Debug|Any CPU = Debug|Any CPU
+ 		Release|Any CPU = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
++		{D485108C-4C82-47A6-B4B5-46CCEE04A48E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
++		{D485108C-4C82-47A6-B4B5-46CCEE04A48E}.Debug|Any CPU.Build.0 = Debug|Any CPU
++		{D485108C-4C82-47A6-B4B5-46CCEE04A48E}.Release|Any CPU.ActiveCfg = Release|Any CPU
++		{D485108C-4C82-47A6-B4B5-46CCEE04A48E}.Release|Any CPU.Build.0 = Release|Any CPU
+ 		{5CC09A9B-4C3E-4F77-B81B-E15DB4A63299}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+ 		{5CC09A9B-4C3E-4F77-B81B-E15DB4A63299}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{5CC09A9B-4C3E-4F77-B81B-E15DB4A63299}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{5CC09A9B-4C3E-4F77-B81B-E15DB4A63299}.Release|Any CPU.Build.0 = Release|Any CPU
+ 		{39EE66D8-94A6-49A0-98E7-0E5A9669B5EF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+ 		{39EE66D8-94A6-49A0-98E7-0E5A9669B5EF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+ 		{39EE66D8-94A6-49A0-98E7-0E5A9669B5EF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+ 		{39EE66D8-94A6-49A0-98E7-0E5A9669B5EF}.Release|Any CPU.Build.0 = Release|Any CPU
+ 	EndGlobalSection
+ 	GlobalSection(SolutionProperties) = preSolution
+ 		HideSolutionNode = FALSE
+ 	EndGlobalSection
+ 	GlobalSection(ExtensibilityGlobals) = postSolution
+ 		SolutionGuid = {A6A1A4A1-28DB-44D8-9D4E-4BC01CD9C724}
+ 	EndGlobalSection
+ EndGlobal
+
+ diff --git a/MarketScanner.Core/Abstractions/IAppLogger.cs b/MarketScanner.Core/Abstractions/IAppLogger.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..0924d24c11f145735a3340cafa703efa4aa6e2a1
+--- /dev/null
++++ b/MarketScanner.Core/Abstractions/IAppLogger.cs
+@@ -0,0 +1,15 @@
++namespace MarketScanner.Core.Abstractions;
++
++/// <summary>
++/// Contract for logging that must be implemented by hosting layers such as UI or infrastructure projects.
++/// </summary>
++public interface IAppLogger
++{
++    /// <summary>
++    /// Records an application message using the specified severity. Implemented by outer layers to direct logs to appropriate sinks.
++    /// </summary>
++    /// <param name="severity">Severity associated with the log entry.</param>
++    /// <param name="message">Human-readable message to persist.</param>
++    /// <param name="exception">Optional exception that supplies additional diagnostic context.</param>
++    void Log(LogSeverity severity, string message, Exception? exception = null);
++}
+
+diff --git a/MarketScanner.Core/Abstractions/ISettingsProvider.cs b/MarketScanner.Core/Abstractions/ISettingsProvider.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..7b67b2e89acb7f5e57f38e3c6683a3f2133d6fb7
+--- /dev/null
++++ b/MarketScanner.Core/Abstractions/ISettingsProvider.cs
+@@ -0,0 +1,24 @@
++using MarketScanner.Core.Models;
++
++namespace MarketScanner.Core.Abstractions;
++
++/// <summary>
++/// Contract for providing immutable snapshots of user-configurable scanner settings. Implement this in outer layers that handle persistence.
++/// </summary>
++public interface ISettingsProvider
++{
++    /// <summary>
++    /// Retrieves the current scanner settings as defined by the host application or user preferences.
++    /// </summary>
++    /// <param name="cancellationToken">Token that allows the caller to cancel the retrieval operation.</param>
++    /// <returns>A task that resolves to the latest <see cref="ScannerSettings"/> instance.</returns>
++    ValueTask<ScannerSettings> GetScannerSettingsAsync(CancellationToken cancellationToken = default);
++
++    /// <summary>
++    /// Persists updated scanner settings supplied by business logic components.
++    /// </summary>
++    /// <param name="settings">Settings snapshot to persist.</param>
++    /// <param name="cancellationToken">Token that allows the caller to cancel the persistence operation.</param>
++    /// <returns>A task that completes when the settings have been stored.</returns>
++    ValueTask SaveScannerSettingsAsync(ScannerSettings settings, CancellationToken cancellationToken = default);
++}
+
+diff --git a/MarketScanner.Core/Abstractions/LogSeverity.cs b/MarketScanner.Core/Abstractions/LogSeverity.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..5e695ecd6f8df2f05ba0e5f674236a96d9580f31
+--- /dev/null
++++ b/MarketScanner.Core/Abstractions/LogSeverity.cs
+@@ -0,0 +1,27 @@
++namespace MarketScanner.Core.Abstractions;
++
++/// <summary>
++/// Defines the severity levels for logging messages produced by infrastructure implementations of <see cref="IAppLogger"/>.
++/// </summary>
++public enum LogSeverity
++{
++    /// <summary>
++    /// Informational events that highlight the progress of the application.
++    /// </summary>
++    Information,
++
++    /// <summary>
++    /// Potentially harmful situations that warrant attention.
++    /// </summary>
++    Warning,
++
++    /// <summary>
++    /// Error events that may still allow the application to continue running.
++    /// </summary>
++    Error,
++
++    /// <summary>
++    /// Detailed diagnostic events intended for development or troubleshooting scenarios.
++    /// </summary>
++    Debug
++}
+
+diff --git a/MarketScanner.Core/MarketScanner.Core.csproj b/MarketScanner.Core/MarketScanner.Core.csproj
+new file mode 100644
+index 0000000000000000000000000000000000000000..b12bdb55791bfa7d098aab99bd0c8ba08bb113dc
+--- /dev/null
++++ b/MarketScanner.Core/MarketScanner.Core.csproj
+@@ -0,0 +1,9 @@
++<Project Sdk="Microsoft.NET.Sdk">
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <Nullable>enable</Nullable>
++    <GenerateDocumentationFile>true</GenerateDocumentationFile>
++    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
++  </PropertyGroup>
++</Project>
+
+diff --git a/MarketScanner.Core/Models/Bar.cs b/MarketScanner.Core/Models/Bar.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..1861af534d1236b3045567d5227fcf0c4495278a
+--- /dev/null
++++ b/MarketScanner.Core/Models/Bar.cs
+@@ -0,0 +1,40 @@
++using System;
++
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Represents a single market data bar. Data providers populate the values and
++/// analytics layers consume them to derive indicators.
++/// </summary>
++public record Bar
++{
++    /// <summary>
++    /// Gets the UTC timestamp for the bar as supplied by the market data source.
++    /// </summary>
++    public DateTime Timestamp { get; init; }
++
++    /// <summary>
++    /// Gets the opening price observed during the interval.
++    /// </summary>
++    public double Open { get; init; }
++
++    /// <summary>
++    /// Gets the highest price observed during the interval.
++    /// </summary>
++    public double High { get; init; }
++
++    /// <summary>
++    /// Gets the lowest price observed during the interval.
++    /// </summary>
++    public double Low { get; init; }
++
++    /// <summary>
++    /// Gets the closing price for the interval.
++    /// </summary>
++    public double Close { get; init; }
++
++    /// <summary>
++    /// Gets the traded volume for the interval.
++    /// </summary>
++    public double Volume { get; init; }
++}
+
+diff --git a/MarketScanner.Core/Models/EquityScanResult.cs b/MarketScanner.Core/Models/EquityScanResult.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..efa2895095763b2f4940ebef95757041073ca819
+--- /dev/null
++++ b/MarketScanner.Core/Models/EquityScanResult.cs
+@@ -0,0 +1,56 @@
++using System;
++using System.Collections.Generic;
++
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Represents the outcome of analysing a symbol during a scan. Data and UI layers
++/// exchange this model without sharing implementation details.
++/// </summary>
++public record EquityScanResult
++{
++    /// <summary>
++    /// Gets the ticker symbol that was evaluated.
++    /// </summary>
++    public string Symbol { get; init; } = string.Empty;
++
++    /// <summary>
++    /// Gets the most recent trade price observed for the symbol.
++    /// </summary>
++    public double Price { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the current RSI value calculated for the configured lookback period.
++    /// </summary>
++    public double RSI { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the simple moving average computed for the symbol.
++    /// </summary>
++    public double SMA { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the upper Bollinger band derived from the observed closes.
++    /// </summary>
++    public double Upper { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the lower Bollinger band derived from the observed closes.
++    /// </summary>
++    public double Lower { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the latest traded volume reported by the market data provider.
++    /// </summary>
++    public double Volume { get; init; } = double.NaN;
++
++    /// <summary>
++    /// Gets the timestamp when the scan was produced.
++    /// </summary>
++    public DateTime TimeStamp { get; init; } = DateTime.UtcNow;
++
++    /// <summary>
++    /// Gets the triggers that fired as part of the scan evaluation.
++    /// </summary>
++    public IReadOnlyList<TriggerHit> TriggerHits { get; init; } = Array.Empty<TriggerHit>();
++}
+
+diff --git a/MarketScanner.Core/Models/RsiOptions.cs b/MarketScanner.Core/Models/RsiOptions.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..51b844010d1a3c15fd9886db442aea6db8a79de8
+--- /dev/null
++++ b/MarketScanner.Core/Models/RsiOptions.cs
+@@ -0,0 +1,22 @@
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Captures configuration values for an RSI-based trigger. Implementations outside the core library interpret these values.
++/// </summary>
++public record RsiOptions
++{
++    /// <summary>
++    /// Gets the number of periods to use in RSI calculations.
++    /// </summary>
++    public int Period { get; init; } = 14;
++
++    /// <summary>
++    /// Gets the RSI threshold above which an asset is considered overbought.
++    /// </summary>
++    public decimal Overbought { get; init; } = 70m;
++
++    /// <summary>
++    /// Gets the RSI threshold below which an asset is considered oversold.
++    /// </summary>
++    public decimal Oversold { get; init; } = 30m;
++}
+
+diff --git a/MarketScanner.Core/Models/ScannerSettings.cs b/MarketScanner.Core/Models/ScannerSettings.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..849e0ef9d1acff86f6908168177d51c51e83adf5
+--- /dev/null
++++ b/MarketScanner.Core/Models/ScannerSettings.cs
+@@ -0,0 +1,27 @@
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Immutable configuration snapshot shared across application layers. Constructed by configuration providers in data or UI projects.
++/// </summary>
++public record ScannerSettings
++{
++    /// <summary>
++    /// Gets the collection of market symbols that the scanner should evaluate. Outer layers populate this list from user input or persisted configuration.
++    /// </summary>
++    public IReadOnlyList<string> Symbols { get; init; } = Array.Empty<string>();
++
++    /// <summary>
++    /// Gets the delay between successive scans. Host applications determine the appropriate cadence.
++    /// </summary>
++    public TimeSpan ScanInterval { get; init; } = TimeSpan.FromMinutes(5);
++
++    /// <summary>
++    /// Gets trigger definitions that should be evaluated during a scan. Each definition is maintained by user-facing layers.
++    /// </summary>
++    public IReadOnlyList<TriggerSettings> Triggers { get; init; } = Array.Empty<TriggerSettings>();
++
++    /// <summary>
++    /// Gets the maximum number of concurrent symbol evaluations allowed. Infrastructure layers interpret this value when dispatching work.
++    /// </summary>
++    public int MaxConcurrentScans { get; init; } = 1;
++}
+
+diff --git a/MarketScanner.Core/Models/TriggerHit.cs b/MarketScanner.Core/Models/TriggerHit.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c49364f8bd46704cb1e13d102731c0fcaf66ad2c
+--- /dev/null
++++ b/MarketScanner.Core/Models/TriggerHit.cs
+@@ -0,0 +1,22 @@
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Describes the activation of a configured trigger during a scan. Generated by analytics engines and consumed by downstream workflows.
++/// </summary>
++public record TriggerHit
++{
++    /// <summary>
++    /// Gets the name of the trigger responsible for the hit.
++    /// </summary>
++    public string TriggerName { get; init; } = string.Empty;
++
++    /// <summary>
++    /// Gets a descriptive message explaining why the trigger fired.
++    /// </summary>
++    public string Description { get; init; } = string.Empty;
++
++    /// <summary>
++    /// Gets the point in time when the trigger fired.
++    /// </summary>
++    public DateTimeOffset OccurredAt { get; init; }
++}
+
+diff --git a/MarketScanner.Core/Models/TriggerSettings.cs b/MarketScanner.Core/Models/TriggerSettings.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..c56e576206d7e8a9e7718699e2a30f377ac79699
+--- /dev/null
++++ b/MarketScanner.Core/Models/TriggerSettings.cs
+@@ -0,0 +1,22 @@
++namespace MarketScanner.Core.Models;
++
++/// <summary>
++/// Describes a single rule that evaluates a market condition. Populated by UI or configuration layers for consumption by analytics components.
++/// </summary>
++public record TriggerSettings
++{
++    /// <summary>
++    /// Gets the human-readable name of the trigger supplied by configurators.
++    /// </summary>
++    public string Name { get; init; } = string.Empty;
++
++    /// <summary>
++    /// Gets a value indicating whether the trigger should be active. Outer layers toggle this flag to enable or disable logic.
++    /// </summary>
++    public bool IsEnabled { get; init; } = true;
++
++    /// <summary>
++    /// Gets settings for a relative strength index condition when applicable. Null indicates the trigger is of another type.
++    /// </summary>
++    public RsiOptions? Rsi { get; init; }
++}
+
+diff --git a/MarketScanner.Core/README.md b/MarketScanner.Core/README.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..30c96668388aff19dcf026081fd7cca61203d81f
+--- /dev/null
++++ b/MarketScanner.Core/README.md
+@@ -0,0 +1,18 @@
++# MarketScanner.Core
++
++## Purpose
++MarketScanner.Core defines shared contracts, enums, and configuration models that express the domain language of the MarketScanner solution. The project contains only pure .NET primitives (records, interfaces, and enums) so that every other layer can coordinate behaviour without introducing infrastructure dependencies.
++
++## Dependency Direction
++* All other MarketScanner projects reference **MarketScanner.Core**.
++* **MarketScanner.Core** does not reference any UI, data provider, or external API projects.
++* No framework-specific abstractions (e.g., `HttpClient`, `ILogger`, `IConfiguration`, or WPF types) live in this project. Consumers are expected to provide their own implementations.
++
++## Extensibility Guidance
++When extending the core library:
++1. Add only dependency-free records, enums, and interfaces that represent shared contracts.
++2. Avoid introducing static global state or referencing infrastructure types.
++3. Model new dependencies as interfaces so that implementation projects can supply behaviour without creating circular references.
++4. After adding new types, ensure they sit in the appropriate namespace (`MarketScanner.Core.Abstractions` or `MarketScanner.Core.Models`) to keep the project layered and discoverable.
++
++Following these guidelines ensures the solution maintains a clean dependency graph: outer projects depend on Core, while Core remains independent.
+
+diff --git a/MarketScanner.Data/Diagnostics/ILogger.cs b/MarketScanner.Data/Diagnostics/ILogger.cs
+deleted file mode 100644
+index b1f6e963fd4a1cbca37d2712b7a989e3061c4805..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Diagnostics/ILogger.cs
++++ /dev/null
+@@ -1,10 +0,0 @@
+-namespace MarketScanner.Data.Diagnostics
+-{
+-    public interface ILogger
+-    {
+-        void Info(string message);
+-        void Warn(string message);
+-        void Error(string message);
+-        void Debug(string message);
+-    }
+-}
+
+diff --git a/MarketScanner.Data/Diagnostics/LoggerAdapter.cs b/MarketScanner.Data/Diagnostics/LoggerAdapter.cs
+index bc7b13c75aff8cb1dacf15349eecd42bb1f49741..392db3a68409664e191c7f782ebb570ead3d9025 100644
+--- a/MarketScanner.Data/Diagnostics/LoggerAdapter.cs
++++ b/MarketScanner.Data/Diagnostics/LoggerAdapter.cs
+@@ -1,10 +1,29 @@
++using System;
++using MarketScanner.Core.Abstractions;
++
+ namespace MarketScanner.Data.Diagnostics
+ {
+-    public sealed class LoggerAdapter : ILogger
++    public sealed class LoggerAdapter : IAppLogger
+     {
+-        public void Info(string message) => Logger.Info(message);
+-        public void Warn(string message) => Logger.Warn(message);
+-        public void Error(string message) => Logger.Error(message);
+-        public void Debug(string message) => Logger.Debug(message);
++        public void Log(LogSeverity severity, string message, Exception? exception = null)
++        {
++            var formatted = exception is null ? message : $"{message} :: {exception}";
++
++            switch (severity)
++            {
++                case LogSeverity.Debug:
++                    Logger.Debug(formatted);
++                    break;
++                case LogSeverity.Warning:
++                    Logger.Warn(formatted);
++                    break;
++                case LogSeverity.Error:
++                    Logger.Error(formatted);
++                    break;
++                default:
++                    Logger.Info(formatted);
++                    break;
++            }
++        }
+     }
+ }
+
+ diff --git a/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs b/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
+index f72bffa267de7b50afa3b78f0e188ab80c68a638..564961fd2408872b41f432db098a47dcc81ea4cc 100644
+--- a/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
++++ b/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
+@@ -1,27 +1,28 @@
+-using Flurl;
++﻿using Flurl;
+ using Flurl.Http;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Providers.Polygon;
+ using MarketScanner.Data.Services.Indicators;
+ using Newtonsoft.Json.Linq;
+ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.Linq;
+ using System.Net.Http;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Diagnostics
+ {
+     public class PolygonDiagnosticsService
+     {
+         private readonly PolygonMarketDataProvider _provider;
+         private readonly string _apiKey;
+         private readonly HttpClient _httpClient;
+ 
+         public PolygonDiagnosticsService(PolygonMarketDataProvider provider, string apiKey)
+         {
+             _provider = provider;
+             _apiKey = apiKey;
+
+diff --git a/MarketScanner.Data/MarketScanner.Data.csproj b/MarketScanner.Data/MarketScanner.Data.csproj
+index 47c02a5418f104ec03577210bdbdc7c1004ea8a3..294c2c0108fe68daeb71673bcff1585ef4688ee7 100644
+--- a/MarketScanner.Data/MarketScanner.Data.csproj
++++ b/MarketScanner.Data/MarketScanner.Data.csproj
+@@ -1,21 +1,25 @@
+ ﻿<Project Sdk="Microsoft.NET.Sdk">
+ 
+   <PropertyGroup>
+     <TargetFramework>net8.0-windows</TargetFramework>
+     <ImplicitUsings>enable</ImplicitUsings>
+     <Nullable>enable</Nullable>
+   </PropertyGroup>
+ 
+   <ItemGroup>
+     <Compile Remove="Services\SmsService.cs" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+     <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
+     <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+     <PackageReference Include="Polygon" Version="1.0.1" />
+     <PackageReference Include="Twilio" Version="7.13.3" />
+     <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
+   </ItemGroup>
+ 
++  <ItemGroup>
++    <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
++  </ItemGroup>
++
+ </Project>
+ diff --git a/MarketScanner.Data/Models/Bar.cs b/MarketScanner.Data/Models/Bar.cs
+deleted file mode 100644
+index 0251efe2a0c8bdbf3d4762bca7cc2135e3426d7a..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Models/Bar.cs
++++ /dev/null
+@@ -1,11 +0,0 @@
+-﻿using System;
+-
+-namespace MarketScanner.Data.Models
+-{
+-    public class Bar
+-    {
+-        public double Close { get; set; }
+-        public double Volume { get; set; }
+-        public DateTime Timestamp { get; set; }
+-    }
+-}
+diff --git a/MarketScanner.Data/Models/EquityScanResult.cs b/MarketScanner.Data/Models/EquityScanResult.cs
+deleted file mode 100644
+index 6f50a00bd9b3cf14018cf7e3190afa8eb6a73941..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Models/EquityScanResult.cs
++++ /dev/null
+@@ -1,19 +0,0 @@
+-﻿using System;
+-
+-namespace MarketScanner.Data.Models
+-{
+-    public class EquityScanResult
+-    {
+-        public string Symbol { get; set; } = string.Empty;
+-        public double Price { get; set; }
+-        public double RSI { get; set; }
+-        public double SMA { get; set; }
+-        public double Upper { get; set; }
+-        public double Lower { get; set; }
+-        public double Volume { get; set; }
+-        public DateTime TimeStamp { get; set; }
+-
+-        // New helper property for UI
+-        public string VolumeDisplay => double.IsNaN(Volume) ? "N/A" : Volume.ToString("F2");
+-    }
+-}
+diff --git a/MarketScanner.Data/Providers/IMarketDataProvider.cs b/MarketScanner.Data/Providers/IMarketDataProvider.cs
+index 474983e5164c3cb009fa8348e6011779f5e8c24f..dbacf89eb19356f73cd78ff75ce8affad8a560f8 100644
+--- a/MarketScanner.Data/Providers/IMarketDataProvider.cs
++++ b/MarketScanner.Data/Providers/IMarketDataProvider.cs
+@@ -1,17 +1,18 @@
+-﻿using MarketScanner.Data.Models;
++﻿using MarketScanner.Core.Models;
++using MarketScanner.Data.Models;
+ using System;
+ using System.Collections.Generic;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Providers
+ {
+     public interface IMarketDataProvider
+     {
+         Task<(double price, double volume)> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default);
+         Task<IReadOnlyList<Bar>> GetHistoricalBarsAsync(string symbol, DateTime start, DateTime end, CancellationToken cancellationToken = default);
+         Task<IReadOnlyList<SplitAdjustment>> GetSplitAdjustmentsAsync(string symbol, CancellationToken cancellationToken = default);
+         Task<IReadOnlyList<string>> GetAllTickersAsync(CancellationToken cancellationToken = default);
+     }
+ 
+ }
+ diff --git a/MarketScanner.Data/Providers/Polygon/PolygonBarDownloader.cs b/MarketScanner.Data/Providers/Polygon/PolygonBarDownloader.cs
+index 42a426d087900a41099020d9f31f2cf34a50c3dc..2745c763022bfa39c1b27f51dbdb217c9cfebd46 100644
+--- a/MarketScanner.Data/Providers/Polygon/PolygonBarDownloader.cs
++++ b/MarketScanner.Data/Providers/Polygon/PolygonBarDownloader.cs
+@@ -1,27 +1,27 @@
+-using MarketScanner.Data.Diagnostics;
+-using MarketScanner.Data.Models;
++﻿using MarketScanner.Data.Diagnostics;
++using MarketScanner.Core.Models;
+ using Newtonsoft.Json.Linq;
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Providers.Polygon
+ {
+     internal class PolygonBarDownloader
+     {
+         private readonly PolygonRestClient _client;
+         private readonly TimeZoneInfo _easternTimeZone;
+ 
+         public PolygonBarDownloader(PolygonRestClient client)
+         {
+             _client = client;
+             _easternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Eastern Standard Time");
+         }
+ 
+         public async Task<List<Bar>> FetchDailyBarsAsync(string symbol, DateTime start, DateTime end, CancellationToken cancellationToken, bool adjusted = true)
+         {
+             var paddedStart = start.AddDays(-Math.Max(40, (end - start).TotalDays / 2));
+             var bars = await FetchAggregatesAsync(symbol, paddedStart, end, adjusted, cancellationToken).ConfigureAwait(false);
+             if (adjusted)
+diff --git a/MarketScanner.Data/Providers/Polygon/PolygonCorporateActionService.cs b/MarketScanner.Data/Providers/Polygon/PolygonCorporateActionService.cs
+index 90417065e0d779b0d504e7a2021042c8de97a632..32b4896ee447a93aece1d81d28c43b6d4bc20089 100644
+--- a/MarketScanner.Data/Providers/Polygon/PolygonCorporateActionService.cs
++++ b/MarketScanner.Data/Providers/Polygon/PolygonCorporateActionService.cs
+@@ -1,27 +1,28 @@
+-using MarketScanner.Data.Diagnostics;
++﻿using MarketScanner.Data.Diagnostics;
+ using MarketScanner.Data.Models;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Providers;
+ using Newtonsoft.Json.Linq;
+ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Providers.Polygon
+ {
+     internal class PolygonCorporateActionService
+     {
+         private readonly PolygonRestClient _client;
+ 
+         public PolygonCorporateActionService(PolygonRestClient client)
+         {
+             _client = client;
+         }
+ 
+         public async Task<IReadOnlyList<SplitAdjustment>> GetSplitAdjustmentsAsync(string symbol, CancellationToken cancellationToken)
+         {
+             var adjustments = new List<SplitAdjustment>();
+             string url = $"https://api.polygon.io/v3/reference/splits?ticker={symbol}";
+             try
+diff --git a/MarketScanner.Data/Providers/Polygon/PolygonMarketDataProvider.cs b/MarketScanner.Data/Providers/Polygon/PolygonMarketDataProvider.cs
+index 0df93c2404d6a87ecb13ec5bf2e16953ec60c1b2..e711ba646f4c442deb0bcb3c4babce6330013fab 100644
+--- a/MarketScanner.Data/Providers/Polygon/PolygonMarketDataProvider.cs
++++ b/MarketScanner.Data/Providers/Polygon/PolygonMarketDataProvider.cs
+@@ -1,26 +1,27 @@
+-using MarketScanner.Data.Diagnostics;
++﻿using MarketScanner.Data.Diagnostics;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Models;
+ using MarketScanner.Data.Providers.Polygon;
+ using Newtonsoft.Json.Linq;
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Providers
+ {
+     public class PolygonMarketDataProvider : IMarketDataProvider
+     {
+         private readonly PolygonRestClient _client;
+         private readonly PolygonBarDownloader _barDownloader;
+         private readonly PolygonCorporateActionService _corporateActionService;
+ 
+         public PolygonMarketDataProvider(string apiKey)
+         {
+             _client = new PolygonRestClient(apiKey);
+             _barDownloader = new PolygonBarDownloader(_client);
+             _corporateActionService = new PolygonCorporateActionService(_client);
+         }
+ 
+         public async Task<(double price, double volume)> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
+         diff --git a/MarketScanner.Data/Services/AlertService.cs b/MarketScanner.Data/Services/AlertService.cs
+index b2acf9ef2183d17c43192ca7b733236c843c487f..8e8b0907d7f39d6ebec2ad74c5615bc7367d81bc 100644
+--- a/MarketScanner.Data/Services/AlertService.cs
++++ b/MarketScanner.Data/Services/AlertService.cs
+@@ -1,28 +1,29 @@
+ ﻿using System;
+ using System.Diagnostics;
+ using MarketScanner.Data.Models;
++using MarketScanner.Core.Models;
+ 
+ namespace MarketScanner.Data.Services
+ {
+     public class AlertService
+     {
+         public bool ShouldTrigger(Alert alert, EquityScanResult result)
+         {
+             if (alert == null || result == null)
+                 return false;
+ 
+             bool trigger = false;
+ 
+             switch (alert.Type)
+             {
+                 case AlertType.RsiOverbought:
+                     if (alert.RsiAbove.HasValue && result.RSI >= alert.RsiAbove.Value)
+                     {
+                         trigger = true;
+                         alert.Message = $"{result.Symbol} RSI is overbought ({result.RSI:F2} ≥ {alert.RsiAbove.Value})";
+                     }
+                     break;
+ 
+                 case AlertType.RsiOversold:
+                     if (alert.RsiBelow.HasValue && result.RSI <= alert.RsiBelow.Value)
+                     {
+
+diff --git a/MarketScanner.Data/Services/Alerts/AlertManager.cs b/MarketScanner.Data/Services/Alerts/AlertManager.cs
+index d976f648ec1a49328ebdb7a6c802cfa6b683100b..f293ef663356c1b6e7773e3dde38223ec8e8a042 100644
+--- a/MarketScanner.Data/Services/Alerts/AlertManager.cs
++++ b/MarketScanner.Data/Services/Alerts/AlertManager.cs
+@@ -1,69 +1,69 @@
+-using MarketScanner.Data.Diagnostics;
++﻿using MarketScanner.Core.Abstractions;
+ using MarketScanner.Data.Services;
+ using System;
+ using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+ using System.Threading;
+ using System.Threading.Tasks;
+ using System.Windows;
+ 
+ namespace MarketScanner.Data.Services.Alerts
+ {
+     public class AlertManager : IAlertManager
+     {
+-        private readonly ILogger _logger;
++        private readonly IAppLogger _logger;
+         private readonly ConcurrentQueue<ScannerAlert> _pendingAlerts = new();
+         private IAlertSink? _alertSink;
+ 
+-        public AlertManager(ILogger logger)
++        public AlertManager(IAppLogger logger)
+         {
+             _logger = logger;
+             OverboughtSymbols = new ObservableCollection<string>();
+             OversoldSymbols = new ObservableCollection<string>();
+         }
+ 
+         public ObservableCollection<string> OverboughtSymbols { get; }
+         public ObservableCollection<string> OversoldSymbols { get; }
+ 
+         public int OverboughtCount => OverboughtSymbols.Count;
+         public int OversoldCount => OversoldSymbols.Count;
+ 
+         public void SetSink(IAlertSink? sink)
+         {
+             _alertSink = sink;
+         }
+ 
+         public void Enqueue(string symbol, string triggerName, double value)
+         {
+             var alert = new ScannerAlert(symbol, triggerName, value);
+             _pendingAlerts.Enqueue(alert);
+ 
+             var formatted = $"{symbol} {triggerName} ({value:F2})";
+-            _logger.Info($"[AlertManager] Queued alert: {formatted}");
+-            _logger.Info($"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
++            _logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
++            _logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
+ 
+             _alertSink?.AddAlert(formatted);
+         }
+ 
+         public async Task FlushAsync(CancellationToken cancellationToken)
+         {
+             if (_pendingAlerts.IsEmpty)
+             {
+                 return;
+             }
+ 
+             cancellationToken.ThrowIfCancellationRequested();
+ 
+             var drained = new List<ScannerAlert>();
+             while (_pendingAlerts.TryDequeue(out var alert))
+             {
+                 drained.Add(alert);
+             }
+ 
+             if (drained.Count == 0)
+             {
+                 return;
+             }
+ 
+             await Application.Current.Dispatcher.InvokeAsync(() =>
+
+diff --git a/MarketScanner.Data/Services/Analysis/DataCleaner.cs b/MarketScanner.Data/Services/Analysis/DataCleaner.cs
+index 400bb8dbbbdbec46efbfc4259655b8769f82f1fd..e446625264441145501d1fc1664d235478ff882c 100644
+--- a/MarketScanner.Data/Services/Analysis/DataCleaner.cs
++++ b/MarketScanner.Data/Services/Analysis/DataCleaner.cs
+@@ -1,83 +1,85 @@
++using MarketScanner.Core.Abstractions;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Diagnostics;
+ using MarketScanner.Data.Models;
+ using MarketScanner.Data.Providers;
+ using System;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services.Analysis
+ {
+     public class DataCleaner : IDataCleaner
+     {
+         private readonly IMarketDataProvider _provider;
+-        private readonly ILogger _logger;
++        private readonly IAppLogger _logger;
+ 
+-        public DataCleaner(IMarketDataProvider provider, ILogger logger)
++        public DataCleaner(IMarketDataProvider provider, IAppLogger logger)
+         {
+             _provider = provider;
+             _logger = logger;
+         }
+ 
+         public async Task<IReadOnlyList<Bar>> CleanAsync(string symbol, IReadOnlyList<Bar> bars, CancellationToken cancellationToken)
+         {
+             if (bars == null || bars.Count == 0)
+             {
+                 return Array.Empty<Bar>();
+             }
+ 
+             cancellationToken.ThrowIfCancellationRequested();
+ 
+             var ordered = bars
+                 .Where(b => b != null && !double.IsNaN(b.Close))
+                 .Select(b => new Bar
+                 {
+                     Close = b.Close,
+                     Volume = b.Volume,
+                     Timestamp = b.Timestamp
+                 })
+                 .OrderBy(b => b.Timestamp)
+                 .ToList();
+ 
+             if (ordered.Count == 0)
+             {
+                 return ordered;
+             }
+ 
+             RemoveDuplicatesByTimestamp(ordered);
+ 
+             var adjustments = await _provider
+                 .GetSplitAdjustmentsAsync(symbol, cancellationToken)
+                 .ConfigureAwait(false);
+ 
+             if (adjustments != null && adjustments.Count > 0)
+             {
+                 ApplySplitAdjustments(ordered, adjustments);
+-                _logger.Debug($"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
++                _logger.Log(LogSeverity.Debug, $"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
+             }
+ 
+             return ordered;
+         }
+ 
+         private static void RemoveDuplicatesByTimestamp(IList<Bar> bars)
+         {
+             if (bars.Count <= 1)
+             {
+                 return;
+             }
+ 
+             var unique = new Collection<Bar>();
+             foreach (var bar in bars)
+             {
+                 if (unique.Count == 0 || unique[^1].Timestamp != bar.Timestamp)
+                 {
+                     unique.Add(bar);
+                 }
+                 else
+                 {
+                     unique[^1] = bar;
+                 }
+             }
+ 
+diff --git a/MarketScanner.Data/Services/Analysis/IDataCleaner.cs b/MarketScanner.Data/Services/Analysis/IDataCleaner.cs
+index 581cbd721ed1bbdfbab754a53666cea1c8e9d06f..0bc2055f088611bb7638a33de5dc785ffdaa9a88 100644
+--- a/MarketScanner.Data/Services/Analysis/IDataCleaner.cs
++++ b/MarketScanner.Data/Services/Analysis/IDataCleaner.cs
+@@ -1,12 +1,12 @@
+-using MarketScanner.Data.Models;
++using MarketScanner.Core.Models;
+ using System.Collections.Generic;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services.Analysis
+ {
+     public interface IDataCleaner
+     {
+         Task<IReadOnlyList<Bar>> CleanAsync(string symbol, IReadOnlyList<Bar> bars, CancellationToken cancellationToken);
+     }
+ }
+
+ diff --git a/MarketScanner.Data/Services/Data/HistoricalPriceCache.cs b/MarketScanner.Data/Services/Data/HistoricalPriceCache.cs
+index b8e930e49bcb03830df14888efb9b12fc76fb3b6..d9fc65091f009ff276802787001919637e1a1690 100644
+--- a/MarketScanner.Data/Services/Data/HistoricalPriceCache.cs
++++ b/MarketScanner.Data/Services/Data/HistoricalPriceCache.cs
+@@ -1,52 +1,53 @@
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Services.Analysis;
+ using System;
+ using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services.Data
+ {
+     internal class HistoricalPriceCache
+     {
+         private readonly IMarketDataProvider _provider;
+         private readonly IDataCleaner _dataCleaner;
+         private readonly ConcurrentDictionary<string, CachedSeries> _cache = new();
+ 
+         public HistoricalPriceCache(IMarketDataProvider provider, IDataCleaner dataCleaner)
+         {
+             _provider = provider;
+             _dataCleaner = dataCleaner;
+         }
+ 
+         public async Task<IReadOnlyList<double>> GetClosingPricesAsync(string symbol, int minimumCount, CancellationToken cancellationToken)
+         {
+             var cachedSeries = GetCachedSeries(symbol);
+             if (cachedSeries != null && cachedSeries.Closes.Count >= minimumCount && DateTime.UtcNow - cachedSeries.Timestamp < TimeSpan.FromHours(2))
+             {
+                 return cachedSeries.Closes.TakeLast(minimumCount).ToList();
+             }
+ 
+             DateTime end = DateTime.UtcNow;
+             DateTime start = end.AddDays(-(minimumCount + 50));
+             var bars = await _provider.GetHistoricalBarsAsync(symbol, start, end, cancellationToken).ConfigureAwait(false)
+-                       ?? Array.Empty<Models.Bar>();
++                       ?? Array.Empty<Bar>();
+             var cleanedBars = await _dataCleaner.CleanAsync(symbol, bars, cancellationToken).ConfigureAwait(false);
+             var closes = cleanedBars.Select(b => b.Close).ToList();
+ 
+             _cache[symbol] = new CachedSeries(DateTime.UtcNow, closes);
+             return closes.TakeLast(minimumCount).ToList();
+         }
+ 
+         public void Clear() => _cache.Clear();
+ 
+         private CachedSeries? GetCachedSeries(string symbol)
+         {
+             return _cache.TryGetValue(symbol, out var series) ? series : null;
+         }
+ 
+         private record CachedSeries(DateTime Timestamp, IReadOnlyList<double> Closes);
+     }
+ }
+
+ diff --git a/MarketScanner.Data/Services/EquityScannerService.cs b/MarketScanner.Data/Services/EquityScannerService.cs
+index 2d9d496bc1886724bd5eac4ae92a32be0f514b8e..e55f257a0f96eaa043797683acad0cff3585dab2 100644
+--- a/MarketScanner.Data/Services/EquityScannerService.cs
++++ b/MarketScanner.Data/Services/EquityScannerService.cs
+@@ -1,205 +1,206 @@
++using MarketScanner.Core.Abstractions;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Diagnostics;
+-using MarketScanner.Data.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Services.Alerts;
+ using MarketScanner.Data.Services.Analysis;
+ using MarketScanner.Data.Services.Data;
+ using MarketScanner.Data.Services.Indicators;
+ using Polygon.Models;
+ using System;
+ using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services
+ {
+     public class EquityScannerService : IEquityScannerService
+     {
+         private const int MinimumCloseCount = 150;
+         private const int IndicatorWindow = 120;
+         private const int IndicatorPeriod = 14;
+         private const int BatchSize = 30;
+         private const int MaxConcurrency = 12;
+ 
+         private readonly IMarketDataProvider _provider;
+         private readonly HistoricalPriceCache _priceCache;
+         private readonly IAlertManager _alertManager;
+-        private readonly ILogger _logger;
++        private readonly IAppLogger _logger;
+         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
+ 
+         public EquityScannerService(
+             IMarketDataProvider provider,
+             IDataCleaner dataCleaner,
+             IAlertManager alertManager,
+-            ILogger logger)
++            IAppLogger logger)
+         {
+             _provider = provider;
+             _alertManager = alertManager;
+             _logger = logger;
+             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
+         }
+ 
+         public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink)
+             : this(
+                   provider,
+                   CreateDataCleaner(provider, out var logger),
+                   CreateAlertManager(logger, alertSink),
+                   logger)
+         {
+         }
+ 
+         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
+         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
+ 
+         public void SetAlertSink(IAlertSink alertSink)
+         {
+             _alertManager.SetSink(alertSink);
+         }
+ 
+         public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken cancellationToken)
+         {
+             await _alertManager.ResetAsync().ConfigureAwait(false);
+ 
+             var tickers = await _provider.GetAllTickersAsync(cancellationToken).ConfigureAwait(false);
+             if (tickers == null || tickers.Count == 0)
+             {
+-                _logger.Info("[Scanner] No tickers available from provider.");
++                _logger.Log(LogSeverity.Information, "[Scanner] No tickers available from provider.");
+                 return;
+             }
+ 
+-            _logger.Info($"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
++            _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
+ 
+             using var limiter = new SemaphoreSlim(MaxConcurrency);
+             var tracker = new ScanProgressTracker();
+ 
+             var tasks = tickers
+                 .Select(symbol => ProcessSymbolAsync(symbol, limiter, tickers.Count, tracker, progress, cancellationToken))
+                 .ToList();
+ 
+             try
+             {
+                 await Task.WhenAll(tasks).ConfigureAwait(false);
+             }
+             catch (OperationCanceledException)
+             {
+-                _logger.Info("[Scanner] Scan cancelled by user.");
++                _logger.Log(LogSeverity.Information, "[Scanner] Scan cancelled by user.");
+             }
+ 
+             try
+             {
+                 await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
+             }
+             catch (OperationCanceledException)
+             {
+                 await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+             }
+ 
+             if (!cancellationToken.IsCancellationRequested)
+             {
+                 progress?.Report(100);
+-                _logger.Info($"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
++                _logger.Log(LogSeverity.Information, $"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
+             }
+             else
+             {
+-                _logger.Info("[Scanner] Cancelled mid-run.");
++                _logger.Log(LogSeverity.Information, "[Scanner] Cancelled mid-run.");
+             }
+         }
+ 
+         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
+         {
+             return await ScanSingleSymbol(symbol, CancellationToken.None).ConfigureAwait(false);
+         }
+ 
+         public async Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken)
+         {
+             try
+             {
+                 var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                 _scanCache[symbol] = result;
+                 return result;
+             }
+             catch (OperationCanceledException)
+             {
+                 throw;
+             }
+             catch (Exception ex)
+             {
+-                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
++                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+                 return CreateEmptyResult(symbol);
+             }
+         }
+ 
+         public void ClearCache()
+         {
+             _priceCache.Clear();
+             _scanCache.Clear();
+         }
+ 
+         private async Task ProcessSymbolAsync(
+             string symbol,
+             SemaphoreSlim limiter,
+             int totalSymbols,
+             ScanProgressTracker tracker,
+             IProgress<int>? progress,
+             CancellationToken cancellationToken)
+         {
+             await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
+             try
+             {
+                 cancellationToken.ThrowIfCancellationRequested();
+ 
+                 var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                 _scanCache[symbol] = result;
+ 
+                 QueueAlerts(result);
+ 
+                 var processed = Interlocked.Increment(ref tracker.Processed);
+                 if (processed % BatchSize == 0 || processed == totalSymbols)
+                 {
+                     try
+                     {
+                         await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
+                     }
+                     catch (OperationCanceledException)
+                     {
+                         await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+                     }
+ 
+                     ReportProgress(totalSymbols, processed, tracker, progress);
+                 }
+             }
+             catch (OperationCanceledException)
+             {
+-                _logger.Info($"[Scanner] Scan cancelled for {symbol}.");
++                _logger.Log(LogSeverity.Information, $"[Scanner] Scan cancelled for {symbol}.");
+             }
+             catch (Exception ex)
+             {
+-                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
++                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+             }
+             finally
+             {
+                 limiter.Release();
+                 try
+                 {
+                     await Task.Delay(25, cancellationToken).ConfigureAwait(false);
+                 }
+                 catch
+                 {
+                     // ignored
+                 }
+             }
+         }
+ 
+         private static void ReportProgress(int totalSymbols, int processed, ScanProgressTracker tracker, IProgress<int>? progress)
+         {
+             if (totalSymbols == 0)
+             {
+                 return;
+             }
+ 
+             var percentage = (int)((double)processed / totalSymbols * 100);
+             var last = Volatile.Read(ref tracker.LastReported);
+             if (percentage > last)
+@@ -209,100 +210,100 @@ namespace MarketScanner.Data.Services
+             }
+         }
+ 
+         private void QueueAlerts(EquityScanResult result)
+         {
+             if (double.IsNaN(result.RSI))
+             {
+                 return;
+             }
+ 
+             if (result.RSI >= 70)
+             {
+                 _alertManager.Enqueue(result.Symbol, "overbought", result.RSI);
+             }
+             else if (result.RSI <= 30)
+             {
+                 _alertManager.Enqueue(result.Symbol, "oversold", result.RSI);
+             }
+         }
+ 
+         private async Task<EquityScanResult> ScanSymbolCoreAsync(string symbol, CancellationToken cancellationToken)
+         {
+             var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
+             if (closes == null || closes.Count < IndicatorPeriod)
+             {
+-                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
++                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
+                 return CreateEmptyResult(symbol);
+             }
+ 
+             var trimmed = closes.Skip(Math.Max(0, closes.Count - IndicatorWindow)).ToList();
+             if (trimmed.Count < IndicatorPeriod)
+             {
+-                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
++                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
+                 return CreateEmptyResult(symbol);
+             }
+ 
+             var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod);
+             var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
+             var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
+ 
+             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
+ 
+             if(rsi > 70)
+             {
+-                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+-                _logger.Debug($"{symbol} RSI is overbought at: {rsi}");
++                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
++                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is overbought at: {rsi}");
+             }
+             else if(rsi < 30)
+             {
+-                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+-                _logger.Debug($"{symbol} RSI is oversold at: {rsi}");
++                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
++                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is oversold at: {rsi}");
+             }
+                 return new EquityScanResult
+                 {
+                     Symbol = symbol,
+                     Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
+                     Volume = volume,
+                     RSI = rsi,
+                     SMA = sma,
+                     Upper = upper,
+                     Lower = lower,
+                     TimeStamp = DateTime.UtcNow
+                 };
+         }
+ 
+         private static EquityScanResult CreateEmptyResult(string symbol)
+         {
+             return new EquityScanResult
+             {
+                 Symbol = symbol,
+                 Price = double.NaN,
+                 Volume = double.NaN,
+                 RSI = double.NaN,
+                 SMA = double.NaN,
+                 Upper = double.NaN,
+                 Lower = double.NaN,
+                 TimeStamp = DateTime.UtcNow
+             };
+         }
+ 
+         private sealed class ScanProgressTracker
+         {
+             public int Processed;
+             public int LastReported;
+         }
+ 
+-        private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out ILogger logger)
++        private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out IAppLogger logger)
+         {
+             logger = new LoggerAdapter();
+             return new DataCleaner(provider, logger);
+         }
+ 
+-        private static IAlertManager CreateAlertManager(ILogger logger, IAlertSink alertSink)
++        private static IAlertManager CreateAlertManager(IAppLogger logger, IAlertSink alertSink)
+         {
+             var manager = new Alerts.AlertManager(logger);
+             manager.SetSink(alertSink);
+             return manager;
+         }
+     }
+ }
+
+ diff --git a/MarketScanner.Data/Services/IEquityScannerService.cs b/MarketScanner.Data/Services/IEquityScannerService.cs
+index 92f20f2c7286e7987dbb399932c709ca6d753b90..503cd04bf12a92aa905c68ab6e136ab63be066e3 100644
+--- a/MarketScanner.Data/Services/IEquityScannerService.cs
++++ b/MarketScanner.Data/Services/IEquityScannerService.cs
+@@ -1,19 +1,19 @@
+-using MarketScanner.Data.Models;
++using MarketScanner.Core.Models;
+ using System;
+ using System.Collections.ObjectModel;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services
+ {
+     public interface IEquityScannerService
+     {
+         ObservableCollection<string> OverboughtSymbols { get; }
+         ObservableCollection<string> OversoldSymbols { get; }
+ 
+         Task ScanAllAsync(IProgress<int>? progress, CancellationToken token);
+         Task<EquityScanResult> ScanSingleSymbol(string symbol);
+         Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken);
+         void ClearCache();
+     }
+ }
+
+diff --git a/MarketScanner.Data/Services/MarketDataEngine.cs b/MarketScanner.Data/Services/MarketDataEngine.cs
+index 7a5bdbae7266ee6601b0004a9f55ee89e9a3b444..819049cbca8540478b6640b245b1e93306a8ac31 100644
+--- a/MarketScanner.Data/Services/MarketDataEngine.cs
++++ b/MarketScanner.Data/Services/MarketDataEngine.cs
+@@ -1,27 +1,27 @@
+ ﻿using MarketScanner.Data.Diagnostics;
+-using MarketScanner.Data.Models;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Services.Indicators;
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ using System.Timers;
+ 
+ namespace MarketScanner.Data
+ {
+     public class MarketDataEngine
+     {
+         private readonly IMarketDataProvider _provider;
+         private System.Timers.Timer _timer;
+ 
+         public List<string> Symbols { get; }
+ 
+         // 🔹 Event hooks
+         public event Action<string, double>? OnNewPrice;
+         public event Action<string, double>? OnNewRSI;
+         public event Action<string, double, double, double>? OnNewSMA;
+         public event Action<string, double>? OnNewVolume;
+         public event Action<EquityScanResult>? OnEquityScanned;
+ 
+
+diff --git a/MarketScanner.UI.Wpf2/MarketScanner.UI.Wpf.csproj b/MarketScanner.UI.Wpf2/MarketScanner.UI.Wpf.csproj
+index 982b464ac1b3cbf66dd9f4cfdabd7e181ba07499..6e8a32be18850a0554890f3bfa7f2393cb0e740f 100644
+--- a/MarketScanner.UI.Wpf2/MarketScanner.UI.Wpf.csproj
++++ b/MarketScanner.UI.Wpf2/MarketScanner.UI.Wpf.csproj
+@@ -1,25 +1,26 @@
+ ﻿<Project Sdk="Microsoft.NET.Sdk">
+ 
+ 	<PropertyGroup>
+ 		<OutputType>WinExe</OutputType>
+ 		<TargetFramework>net8.0-windows</TargetFramework>
+ 		<UseWPF>true</UseWPF>
+ 	</PropertyGroup>
+ 
+-	<ItemGroup>
+-	  <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
+-	  <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+-	  <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
+-	</ItemGroup>
++        <ItemGroup>
++          <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
++          <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
++          <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
++        </ItemGroup>
+ 
+-	<ItemGroup>
+-	  <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
+-	</ItemGroup>
++        <ItemGroup>
++          <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
++          <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
++        </ItemGroup>
+ 
+ 	<ItemGroup>
+ 	  <Page Update="Views\MainWindow.xaml">
+ 	    <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+ 	  </Page>
+ 	</ItemGroup>
+ 
+ </Project>
+
+ diff --git a/MarketScanner.UI.Wpf2/Services/AlertManager.cs b/MarketScanner.UI.Wpf2/Services/AlertManager.cs
+index 71850662a3fd1200bfe4b05a6d86668fbbe7c51a..8de992427354d66e9d6ae75b9e089120ba04538b 100644
+--- a/MarketScanner.UI.Wpf2/Services/AlertManager.cs
++++ b/MarketScanner.UI.Wpf2/Services/AlertManager.cs
+@@ -1,26 +1,27 @@
+ ﻿using MarketScanner.Data.Diagnostics;
++using MarketScanner.Core.Models;
+ using MarketScanner.Data.Models;
+ using MarketScanner.Data.Services;
+ using System;
+ using System.Collections.Generic;
+ using System.Diagnostics;
+ 
+ namespace MarketScanner.UI.Wpf.Services
+ {
+     public class AlertManager : IAlertSink
+     {
+         private readonly AlertService _alertService;
+         private readonly EmailService _emailService;
+ 
+         private readonly List<string> _pendingMessages = new();
+         private readonly object _lock = new();
+         private DateTime _lastDigestSent = DateTime.MinValue;
+ 
+         public List<Alert> Alerts { get; } = new();
+ 
+         public AlertManager(AlertService alertService, EmailService emailService)
+         {
+             _alertService = alertService;
+             _emailService = emailService;
+         }
+         public void ProcessScanResult(EquityScanResult result)
+diff --git a/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs b/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
+index 2c476b8cb0dbaa291897cd0c3f066e3047ca440a..d81a20f6ded722841a01e034d961d73231d7a72c 100644
+--- a/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
++++ b/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
+@@ -1,26 +1,26 @@
+-﻿using MarketScanner.Data.Models;
++﻿using MarketScanner.Core.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Services.Indicators;
+ using MarketScanner.Data.Diagnostics;
+ using MarketScanner.UI.Wpf.Services;
+ using OxyPlot;
+ using OxyPlot.Axes;
+ using OxyPlot.Series;
+ using System;
+ using System.Collections.Generic;
+ using System.ComponentModel;
+ using System.Linq;
+ using System.Runtime.CompilerServices;
+ using System.Threading;
+ using System.Threading.Tasks;
+ using System.Windows.Threading;
+ 
+ namespace MarketScanner.UI.Wpf.ViewModels
+ {
+     public class ChartViewModel : INotifyPropertyChanged
+     {
+         private readonly IMarketDataProvider _provider;
+         private readonly IChartService _chartService;
+         private readonly Dispatcher _dispatcher;
+         private CancellationTokenSource? _loadCts;
+ 

@@ -1,4 +1,4 @@
-﻿using MarketScanner.Data.Models;
+﻿using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.Data.Diagnostics;

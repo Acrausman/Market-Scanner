@@ -1,5 +1,6 @@
-using Flurl;
+﻿using Flurl;
 using Flurl.Http;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Polygon;

@@ -1,3 +1,5 @@
+using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
@@ -13,9 +15,9 @@ namespace MarketScanner.Data.Services.Analysis
     public class DataCleaner : IDataCleaner
     {
         private readonly IMarketDataProvider _provider;
-        private readonly ILogger _logger;
+        private readonly IAppLogger _logger;
 
-        public DataCleaner(IMarketDataProvider provider, ILogger logger)
+        public DataCleaner(IMarketDataProvider provider, IAppLogger logger)
         {
             _provider = provider;
             _logger = logger;
@@ -55,7 +57,7 @@ namespace MarketScanner.Data.Services.Analysis
             if (adjustments != null && adjustments.Count > 0)
             {
                 ApplySplitAdjustments(ordered, adjustments);
-                _logger.Debug($"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
+                _logger.Log(LogSeverity.Debug, $"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
             }
 
             return ordered;

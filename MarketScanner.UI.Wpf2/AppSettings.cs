@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Core.Enums;
 
 namespace MarketScanner.UI.Wpf
 {

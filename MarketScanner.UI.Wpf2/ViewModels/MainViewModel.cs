@@ -3,6 +3,7 @@ using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
+using MarketScanner.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -74,8 +75,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string _selectedTimespan = "3M";
         public IEnumerable<double> IntervalOptions => _intervalOptions;
         public ICommand SendDigestNow { get; }
-        public IEnumerable<RsiSmoothingMethod> RsiMethods =>
-            Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>();
+        public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
+            = new ObservableCollection<RsiSmoothingMethod>(
+                Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
         public int SelectedInterval
         {
             get => _selectedInterval;

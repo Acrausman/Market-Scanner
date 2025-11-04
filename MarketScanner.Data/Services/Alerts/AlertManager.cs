@@ -1,4 +1,4 @@
-using MarketScanner.Data.Diagnostics;
+﻿using MarketScanner.Core.Abstractions;
 using MarketScanner.Data.Services;
 using System;
 using System.Collections.Concurrent;
@@ -12,11 +12,11 @@ namespace MarketScanner.Data.Services.Alerts
 {
     public class AlertManager : IAlertManager
     {
-        private readonly ILogger _logger;
+        private readonly IAppLogger _logger;
         private readonly ConcurrentQueue<ScannerAlert> _pendingAlerts = new();
         private IAlertSink? _alertSink;
 
-        public AlertManager(ILogger logger)
+        public AlertManager(IAppLogger logger)
         {
             _logger = logger;
             OverboughtSymbols = new ObservableCollection<string>();
@@ -40,8 +40,8 @@ namespace MarketScanner.Data.Services.Alerts
             _pendingAlerts.Enqueue(alert);
 
             var formatted = $"{symbol} {triggerName} ({value:F2})";
-            _logger.Info($"[AlertManager] Queued alert: {formatted}");
-            _logger.Info($"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
+            _logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
+            _logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
 
             _alertSink?.AddAlert(formatted);
         }

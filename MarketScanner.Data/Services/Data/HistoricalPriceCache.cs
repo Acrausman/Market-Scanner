@@ -1,3 +1,4 @@
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Analysis;
 using System;
@@ -32,7 +33,7 @@ namespace MarketScanner.Data.Services.Data
             DateTime end = DateTime.UtcNow;
             DateTime start = end.AddDays(-(minimumCount + 50));
             var bars = await _provider.GetHistoricalBarsAsync(symbol, start, end, cancellationToken).ConfigureAwait(false)
-                       ?? Array.Empty<Models.Bar>();
+                       ?? Array.Empty<Bar>();
             var cleanedBars = await _dataCleaner.CleanAsync(symbol, bars, cancellationToken).ConfigureAwait(false);
             var closes = cleanedBars.Select(b => b.Close).ToList();
 

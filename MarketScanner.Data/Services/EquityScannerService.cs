@@ -1,5 +1,6 @@
+using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
-using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
@@ -27,14 +28,14 @@ namespace MarketScanner.Data.Services
         private readonly IMarketDataProvider _provider;
         private readonly HistoricalPriceCache _priceCache;
         private readonly IAlertManager _alertManager;
-        private readonly ILogger _logger;
+        private readonly IAppLogger _logger;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
 
         public EquityScannerService(
             IMarketDataProvider provider,
             IDataCleaner dataCleaner,
             IAlertManager alertManager,
-            ILogger logger)
+            IAppLogger logger)
         {
             _provider = provider;
             _alertManager = alertManager;
@@ -66,11 +67,11 @@ namespace MarketScanner.Data.Services
             var tickers = await _provider.GetAllTickersAsync(cancellationToken).ConfigureAwait(false);
             if (tickers == null || tickers.Count == 0)
             {
-                _logger.Info("[Scanner] No tickers available from provider.");
+                _logger.Log(LogSeverity.Information, "[Scanner] No tickers available from provider.");
                 return;
             }
 
-            _logger.Info($"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
+            _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
 
             using var limiter = new SemaphoreSlim(MaxConcurrency);
             var tracker = new ScanProgressTracker();
@@ -85,7 +86,7 @@ namespace MarketScanner.Data.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.Info("[Scanner] Scan cancelled by user.");
+                _logger.Log(LogSeverity.Information, "[Scanner] Scan cancelled by user.");
             }
 
             try
@@ -100,11 +101,11 @@ namespace MarketScanner.Data.Services
             if (!cancellationToken.IsCancellationRequested)
             {
                 progress?.Report(100);
-                _logger.Info($"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
+                _logger.Log(LogSeverity.Information, $"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
             }
             else
             {
-                _logger.Info("[Scanner] Cancelled mid-run.");
+                _logger.Log(LogSeverity.Information, "[Scanner] Cancelled mid-run.");
             }
         }
 
@@ -127,7 +128,7 @@ namespace MarketScanner.Data.Services
             }
             catch (Exception ex)
             {
-                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
+                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
                 return CreateEmptyResult(symbol);
             }
         }
@@ -173,11 +174,11 @@ namespace MarketScanner.Data.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.Info($"[Scanner] Scan cancelled for {symbol}.");
+                _logger.Log(LogSeverity.Information, $"[Scanner] Scan cancelled for {symbol}.");
             }
             catch (Exception ex)
             {
-                _logger.Error($"[Scanner] Failed to fetch {symbol}: {ex.Message}");
+                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
             }
             finally
             {
@@ -231,14 +232,14 @@ namespace MarketScanner.Data.Services
             var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
             if (closes == null || closes.Count < IndicatorPeriod)
             {
-                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
+                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
 
             var trimmed = closes.Skip(Math.Max(0, closes.Count - IndicatorWindow)).ToList();
             if (trimmed.Count < IndicatorPeriod)
             {
-                _logger.Warn($"[Scanner] Skipping {symbol} due to missing data.");
+                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
 
@@ -250,13 +251,13 @@ namespace MarketScanner.Data.Services
 
             if(rsi > 70)
             {
-                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
-                _logger.Debug($"{symbol} RSI is overbought at: {rsi}");
+                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is overbought at: {rsi}");
             }
             else if(rsi < 30)
             {
-                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
-                _logger.Debug($"{symbol} RSI is oversold at: {rsi}");
+                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is oversold at: {rsi}");
             }
                 return new EquityScanResult
                 {
@@ -292,13 +293,13 @@ namespace MarketScanner.Data.Services
             public int LastReported;
         }
 
-        private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out ILogger logger)
+        private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out IAppLogger logger)
         {
             logger = new LoggerAdapter();
             return new DataCleaner(provider, logger);
         }
 
-        private static IAlertManager CreateAlertManager(ILogger logger, IAlertSink alertSink)
+        private static IAlertManager CreateAlertManager(IAppLogger logger, IAlertSink alertSink)
         {
             var manager = new Alerts.AlertManager(logger);
             manager.SetSink(alertSink);
