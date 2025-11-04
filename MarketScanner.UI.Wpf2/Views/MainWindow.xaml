@@ -74,6 +74,18 @@
         Foreground="White"
         BorderBrush="#555"
         FontWeight="Bold"/>
+                
+                <!-- Data Settings-->
+                <StackPanel Orientation="Horizontal" Margin="8">
+                    <TextBlock Text="RSI Method:" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                  Foreground="#CCCCCC"/>
+                    <ComboBox ItemsSource="{Binding RsiMethods}"
+              SelectedItem="{Binding Chart.SelectedRsiMethod, Mode=TwoWay}"
+                    Background="#2D2D30"
+                    BorderBrush="#444"
+                    FontSize="13"
+                    Width="120"/>
+                </StackPanel>
 
 
                 <!-- Chart Timespan Selection -->

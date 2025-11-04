@@ -2,12 +2,15 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using MarketScanner.Data.Services.Indicators;
 
 namespace MarketScanner.UI.Wpf
 {
     public class AppSettings
     {
         public string NotificationEmail { get; set; } = "";
+        public int IndicatorPeriod { get; set; } = 14;
+        public RsiSmoothingMethod RsiMethod { get; set; } = RsiSmoothingMethod.Simple;
         public string SelectedTimespan { get; set; } = "3M";
         public int AlertIntervalMinutes { get; set; } = 15;
 

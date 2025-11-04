@@ -1,6 +1,7 @@
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Indicators;
 using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.Generic;
@@ -28,6 +29,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly AlertManager _alertManager;
         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
+        private RsiSmoothingMethod _selectedRsiMethod;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
@@ -68,10 +70,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
         // persisted / options fields
         private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\r\n";
         private string _notificationEmail = string.Empty;
+        private RsiSmoothingMethod _rsiMethod;
         private string _selectedTimespan = "3M";
         public IEnumerable<double> IntervalOptions => _intervalOptions;
         public ICommand SendDigestNow { get; }
-
+        public IEnumerable<RsiSmoothingMethod> RsiMethods =>
+            Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>();
         public int SelectedInterval
         {
             get => _selectedInterval;
@@ -119,6 +123,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
                 ? "3M"
                 : _appSettings.SelectedTimespan;
+            _selectedRsiMethod = _appSettings.RsiMethod;
             _selectedInterval = _appSettings.AlertIntervalMinutes > 0
                 ? _appSettings.AlertIntervalMinutes
                 : 15;
@@ -331,6 +336,26 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 }
             }
         }
+
+        public RsiSmoothingMethod SelectedRsiMethod
+        {
+            get => _selectedRsiMethod;
+            set
+            {
+                if(_selectedRsiMethod != value)
+                {
+                    _selectedRsiMethod = value;
+                    OnPropertyChanged(nameof(_rsiMethod));
+
+                    _appSettings.RsiMethod = _selectedRsiMethod;
+                    _appSettings.Save();
+                    Logger.Info($"[Settings] RSI Smoothing is now set to '{_selectedRsiMethod}'");
+                }
+
+            }
+        }
+
+
 
         public string SelectedTimespan
         {

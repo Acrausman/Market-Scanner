@@ -5,6 +5,7 @@ using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
 using MarketScanner.Data.Services.Indicators;
+using Polygon.Models;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -247,17 +248,27 @@ namespace MarketScanner.Data.Services
 
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
 
-            return new EquityScanResult
+            if(rsi > 70)
             {
-                Symbol = symbol,
-                Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
-                Volume = volume,
-                RSI = rsi,
-                SMA = sma,
-                Upper = upper,
-                Lower = lower,
-                TimeStamp = DateTime.UtcNow
-            };
+                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+                _logger.Debug($"{symbol} RSI is overbought at: {rsi}");
+            }
+            else if(rsi < 30)
+            {
+                _logger.Debug($"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+                _logger.Debug($"{symbol} RSI is oversold at: {rsi}");
+            }
+                return new EquityScanResult
+                {
+                    Symbol = symbol,
+                    Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
+                    Volume = volume,
+                    RSI = rsi,
+                    SMA = sma,
+                    Upper = upper,
+                    Lower = lower,
+                    TimeStamp = DateTime.UtcNow
+                };
         }
 
         private static EquityScanResult CreateEmptyResult(string symbol)
