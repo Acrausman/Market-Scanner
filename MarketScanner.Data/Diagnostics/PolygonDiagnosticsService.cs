@@ -1,11 +1,12 @@
-﻿using Flurl;
+// Normalized after refactor: updated namespace and using references
+using Flurl;
 using Flurl.Http;
 using MarketScanner.Core.Models;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Polygon;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Indicators;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;

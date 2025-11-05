@@ -1,3 +1,4 @@
+// Normalized after refactor: updated namespace and using references
 using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Models;
@@ -6,7 +7,7 @@ using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Indicators;
 using Polygon.Models;
 using System;
 using System.Collections.Concurrent;
@@ -26,6 +27,7 @@ namespace MarketScanner.Data.Services
         private const int BatchSize = 30;
         private const int MaxConcurrency = 12;
 
+        private readonly ManualResetEventSlim _pauseEvent = new(true);
         private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private readonly HistoricalPriceCache _priceCache;
@@ -59,6 +61,15 @@ namespace MarketScanner.Data.Services
         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
 
+        public void Pause()
+        {
+            _pauseEvent.Reset();
+        }
+
+        public void Resume()
+        {
+            _pauseEvent.Set();
+        }
         public void SetAlertSink(IAlertSink alertSink)
         {
             _alertManager.SetSink(alertSink);
@@ -151,6 +162,7 @@ namespace MarketScanner.Data.Services
             IProgress<int>? progress,
             CancellationToken cancellationToken)
         {
+            _pauseEvent.Wait(cancellationToken);
             await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
@@ -246,7 +258,7 @@ namespace MarketScanner.Data.Services
                 _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
-            _logger.Log(LogSeverity.Debug, $"[Settings] Using RSI method: {_settings.RsiMethod}");
+            //_logger.Log(LogSeverity.Debug, $"[Settings] Using RSI method: {_settings.RsiMethod}");
             var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, _settings.RsiMethod);
             var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
             var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
@@ -305,7 +317,7 @@ namespace MarketScanner.Data.Services
 
         private static IAlertManager CreateAlertManager(IAppLogger logger, IAlertSink alertSink)
         {
-            var manager = new Alerts.AlertManager(logger);
+            var manager = new Alerts.AlertManager(logger, SynchronizationContext.Current);
             manager.SetSink(alertSink);
             return manager;
         }

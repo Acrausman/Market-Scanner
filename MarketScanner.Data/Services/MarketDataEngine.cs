@@ -1,8 +1,9 @@
-﻿using MarketScanner.Data.Diagnostics;
+// Normalized after refactor: updated namespace and using references
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.Core.Models;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;

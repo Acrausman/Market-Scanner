@@ -1,7 +1,8 @@
-﻿using MarketScanner.Core.Models;
+// Normalized after refactor: updated namespace and using references
+using MarketScanner.Core.Models;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Indicators;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;
@@ -15,7 +16,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
-using System.Security.AccessControl;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {

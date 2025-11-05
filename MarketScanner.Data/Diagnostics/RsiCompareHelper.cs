@@ -1,6 +1,7 @@
-﻿#if DEBUG
+// Normalized after refactor: updated namespace and using references
+#if DEBUG
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Data.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Globalization;

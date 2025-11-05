@@ -1,8 +1,9 @@
+// Normalized after refactor: updated namespace and using references
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MarketScanner.Data.Services.Indicators
+namespace MarketScanner.Data.Indicators
 {
     public static class SmaCalculator
     {

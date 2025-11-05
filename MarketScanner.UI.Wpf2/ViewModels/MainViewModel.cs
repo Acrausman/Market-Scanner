@@ -58,6 +58,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         // commands
         private readonly RelayCommand _startScanCommand;
         private readonly RelayCommand _stopScanCommand;
+        private readonly RelayCommand _pauseScanCommand;
+        private readonly RelayCommand _resumeScanCommand;
 
         // cancellation tokens for long-running ops
         private CancellationTokenSource? _scanCts;
@@ -76,6 +78,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string _selectedTimespan = "3M";
         public IEnumerable<double> IntervalOptions => _intervalOptions;
         public ICommand SendDigestNow { get; }
+        public ICommand PauseScanCommand => _pauseScanCommand;
+        public ICommand ResumeScanCommand => _resumeScanCommand;
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
                 Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
@@ -120,6 +124,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
+            _pauseScanCommand = new RelayCommand(_ => PauseScan(), _ => IsScanning);
+            _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
 
             // Load persisted settings
             _appSettings = settings;
@@ -278,6 +284,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scanCts?.Cancel();
         }
 
+        private void PauseScan()
+        {
+            _scannerService.Pause();
+            StatusText = "Scan paused";
+            Log("Scan paused");
+        }
+
+        private void ResumeScan()
+        {
+            _scannerService.Resume();
+            StatusText = "Scan resumed";
+            Log("Scan resumed");
+        }
+
         // -------- Chart loading for selected symbol --------
 
         private async Task LoadSelectedSymbolAsync(string? symbol)
@@ -356,6 +376,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _appSettings.RsiMethod = _selectedRsiMethod;
                     _appSettings.Save();
                     Logger.Info($"[Settings] RSI Smoothing is now set to '{_selectedRsiMethod}'");
+
+                    _scannerService.ClearCache();
+                    _scannerService.OverboughtSymbols.Clear();
+                    _scannerService.OversoldSymbols.Clear();
+
+                    if(IsScanning)
+                    {
+                        StopScan();
+                        _ = StartScanAsync();
+                    }
                 }
 
             }

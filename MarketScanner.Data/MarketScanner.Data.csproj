@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
@@ -7,19 +7,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Services\SmsService.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
-    <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
     <PackageReference Include="Polygon" Version="1.0.1" />
-    <PackageReference Include="Twilio" Version="7.13.3" />
     <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Services\Indicators\" />
   </ItemGroup>
 
 </Project>

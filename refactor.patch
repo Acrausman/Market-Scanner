@@ -1,213 +1,1325 @@
-﻿diff --git a/MarketScanner.Core/Configuration/AppSettings.cs b/MarketScanner.Core/Configuration/AppSettings.cs
+﻿diff --git a/MarketScanner.Core/Abstractions/IAlertManager.cs b/MarketScanner.Core/Abstractions/IAlertManager.cs
 new file mode 100644
-index 0000000000000000000000000000000000000000..93629cc2f56d1b44a569d3a99a8c10dd6afde785
+index 0000000000000000000000000000000000000000..114bd81e2d43face7fd5a29cc95c0bfd5f3fce3b
 --- /dev/null
-+++ b/MarketScanner.Core/Configuration/AppSettings.cs
-@@ -0,0 +1,92 @@
-+using System;
-+using System.IO;
-+using MarketScanner.Core.Abstractions;
-+using MarketScanner.Core.Enums;
-+using Newtonsoft.Json;
++++ b/MarketScanner.Core/Abstractions/IAlertManager.cs
+@@ -0,0 +1,56 @@
++using System.Collections.ObjectModel;
++using System.Threading;
++using System.Threading.Tasks;
 +
-+namespace MarketScanner.Core.Configuration;
++namespace MarketScanner.Core.Abstractions;
 +
 +/// <summary>
-+/// Provides strongly-typed access to persisted application configuration shared across Market Scanner projects.
++/// Coordinates alert generation during market scans and tracks triggered symbols.
 +/// </summary>
-+/// <remarks>
-+/// UI layers should call <see cref="Load"/> during startup to obtain a mutable instance and, after applying user changes,
-+/// invoke <see cref="Save(IAppLogger?)"/> (optionally off the UI thread) to persist updates while passing an
-+/// <see cref="IAppLogger"/> implementation when available to capture serialization errors.
-+/// </remarks>
-+public class AppSettings
++public interface IAlertManager
 +{
 +    /// <summary>
-+    /// Gets or sets the notification email address used for scheduled alerts.
++    /// Gets the collection of symbols that have triggered overbought conditions.
 +    /// </summary>
-+    public string NotificationEmail { get; set; } = string.Empty;
++    ObservableCollection<string> OverboughtSymbols { get; }
 +
 +    /// <summary>
-+    /// Gets or sets the number of periods applied when calculating RSI-based indicators.
++    /// Gets the collection of symbols that have triggered oversold conditions.
 +    /// </summary>
-+    public int IndicatorPeriod { get; set; } = 14;
++    ObservableCollection<string> OversoldSymbols { get; }
 +
 +    /// <summary>
-+    /// Gets or sets the smoothing method used when computing RSI values.
++    /// Gets the current count of overbought symbols.
 +    /// </summary>
-+    public RsiSmoothingMethod RsiMethod { get; set; } = RsiSmoothingMethod.Simple;
++    int OverboughtCount { get; }
 +
 +    /// <summary>
-+    /// Gets or sets the preferred chart timespan selection, expressed using Polygon's range tokens (e.g. "3M").
++    /// Gets the current count of oversold symbols.
 +    /// </summary>
-+    public string SelectedTimespan { get; set; } = "3M";
++    int OversoldCount { get; }
 +
 +    /// <summary>
-+    /// Gets or sets the desired interval, in minutes, between alert notifications.
++    /// Registers the sink that receives formatted alert messages.
 +    /// </summary>
-+    public int AlertIntervalMinutes { get; set; } = 15;
-+
-+    private static readonly string SettingsPath = Path.Combine(
-+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-+        "MarketScanner",
-+        "settings.json");
++    /// <param name="sink">The sink implementation to receive messages.</param>
++    void SetSink(IAlertSink? sink);
 +
 +    /// <summary>
-+    /// Loads persisted configuration from disk, returning defaults when the stored file is missing or unreadable.
++    /// Queues an alert for the specified symbol and trigger.
 +    /// </summary>
-+    /// <returns>An <see cref="AppSettings"/> instance populated from disk or with default values.</returns>
-+    public static AppSettings Load()
++    /// <param name="symbol">The ticker symbol that generated the alert.</param>
++    /// <param name="triggerName">The name of the trigger that fired.</param>
++    /// <param name="value">The indicator value that caused the alert.</param>
++    void Enqueue(string symbol, string triggerName, double value);
++
++    /// <summary>
++    /// Flushes pending alerts and updates observable collections.
++    /// </summary>
++    /// <param name="cancellationToken">The cancellation token to observe.</param>
++    Task FlushAsync(CancellationToken cancellationToken);
++
++    /// <summary>
++    /// Clears pending alerts and tracked symbol collections.
++    /// </summary>
++    Task ResetAsync();
++}
+diff --git a/MarketScanner.Core/Abstractions/IAlertSink.cs b/MarketScanner.Core/Abstractions/IAlertSink.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..83af24a765c323e969417971fe2610e71fa779be
+--- /dev/null
++++ b/MarketScanner.Core/Abstractions/IAlertSink.cs
+@@ -0,0 +1,14 @@
++namespace MarketScanner.Core.Abstractions;
++
++/// <summary>
++/// Represents a consumer of alert messages produced during market scans.
++/// Implementations typically surface the notifications to users or logs.
++/// </summary>
++public interface IAlertSink
++{
++    /// <summary>
++    /// Records a formatted alert message for later presentation.
++    /// </summary>
++    /// <param name="message">The formatted alert text to record.</param>
++    void AddAlert(string message);
++}
+diff --git a/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs b/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
+index d55f7c038a0a1f949698b61688dfb810191dff28..93df7da735bf68a723f12038f851833d6e1bf5a5 100644
+--- a/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
++++ b/MarketScanner.Data/Diagnostics/PolygonDiagnosticsService.cs
+@@ -1,33 +1,34 @@
+-﻿using Flurl;
++// Normalized after refactor: updated namespace and using references
++using Flurl;
+ using Flurl.Http;
+ using MarketScanner.Core.Models;
+ using MarketScanner.Core.Configuration;
+ using MarketScanner.Data.Models;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Providers.Polygon;
+-using MarketScanner.Data.Services.Indicators;
++using MarketScanner.Data.Indicators;
+ using Newtonsoft.Json.Linq;
+ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.Linq;
+ using System.Net.Http;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Diagnostics
+ {
+     public class PolygonDiagnosticsService
+     {
+         private readonly AppSettings _settings;
+         private readonly PolygonMarketDataProvider _provider;
+         private readonly string _apiKey;
+         private readonly HttpClient _httpClient;
+ 
+         public PolygonDiagnosticsService(PolygonMarketDataProvider provider, string apiKey, AppSettings settings)
+         {
+             _settings = settings;
+             _provider = provider;
+             _apiKey = apiKey;
+             _httpClient = new HttpClient();
+         }
+diff --git a/MarketScanner.Data/Diagnostics/RsiCompareHelper.cs b/MarketScanner.Data/Diagnostics/RsiCompareHelper.cs
+index 4add05fe21c3711d6556c9b448135dfc0f300325..7d2cd3d245e5a31f7ef6c68a6dcfa7c407fdc7eb 100644
+--- a/MarketScanner.Data/Diagnostics/RsiCompareHelper.cs
++++ b/MarketScanner.Data/Diagnostics/RsiCompareHelper.cs
+@@ -1,28 +1,29 @@
+-﻿#if DEBUG
++// Normalized after refactor: updated namespace and using references
++#if DEBUG
+ using MarketScanner.Data.Providers;
+-using MarketScanner.Data.Services.Indicators;
++using MarketScanner.Data.Indicators;
+ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.IO;
+ using System.Linq;
+ using System.Net.Http;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Diagnostics
+ {
+     public static class RsiCompareStooqHelper
+     {
+         private static readonly HttpClient _http = new HttpClient();
+         private static readonly string _cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "StooqCache");
+ 
+         static RsiCompareStooqHelper()
+         {
+             Directory.CreateDirectory(_cacheDir);
+             _http.DefaultRequestHeaders.UserAgent.ParseAdd("MarketScanner-Debug/1.0");
+         }
+ 
+         public static async Task CompareAllAsync(PolygonMarketDataProvider provider, params string[] symbols)
+         {
+             Logger.Info($"\n==== RSI COMPARISON TEST (Stooq) {DateTime.UtcNow:yyyy-MM-dd} ====\n");
+             foreach (var sym in symbols)
+diff --git a/MarketScanner.Data/Diagnostics/RsiVariantsTest.cs b/MarketScanner.Data/Diagnostics/RsiVariantsTest.cs
+index cc7c8438fd8527c2e5bb5b80d5c82c26532f0286..79b862d787e7ff7a497bf03ff81d2123efe72be7 100644
+--- a/MarketScanner.Data/Diagnostics/RsiVariantsTest.cs
++++ b/MarketScanner.Data/Diagnostics/RsiVariantsTest.cs
+@@ -1,31 +1,32 @@
+-﻿using System;
++// Normalized after refactor: updated namespace and using references
++using System;
+ using System.Collections.Generic;
+ using System.Globalization;
+ using System.Linq;
+ 
+-namespace MarketScanner.Data.Services.Indicators
++namespace MarketScanner.Data.Diagnostics
+ {
+     public static class RsiVariantsTest
+     {
+         public static void Run()
+         {
+             // Example data from Wilder's original book
+             var closes = new List<double>
+             {
+                 44.34, 44.09, 44.15, 43.61, 44.33, 44.83, 45.10,
+                 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28
+             };
+             int period = 14;
+ 
+             Console.WriteLine("=== RSI Variant Comparison ===");
+             Console.WriteLine($"Period: {period}");
+             Console.WriteLine($"Closes: {string.Join(", ", closes.Select(c => c.ToString("F2", CultureInfo.InvariantCulture)))}");
+             Console.WriteLine();
+ 
+             double rsiWilder = CalculateWilder(closes, period);
+             double rsiSimple = CalculateSimple(closes, period);
+             double rsiEMA = CalculateEMA(closes, period);
+ 
+             Console.WriteLine($"Wilder RSI: {rsiWilder:F2}  ← (expected ≈ 70.46)");
+             Console.WriteLine($"Simple RSI: {rsiSimple:F2}");
+             Console.WriteLine($"EMA RSI:    {rsiEMA:F2}");
+
+diff --git a/MarketScanner.Data/Indicators/RsiCalculator.cs b/MarketScanner.Data/Indicators/RsiCalculator.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..730ad001c885318aabbe1fb138c97f28cf639732
+--- /dev/null
++++ b/MarketScanner.Data/Indicators/RsiCalculator.cs
+@@ -0,0 +1,162 @@
++// Normalized after refactor: updated namespace and using references
++using System;
++using System.Collections.Generic;
++using System.Linq;
++using MarketScanner.Core.Enums;
++
++namespace MarketScanner.Data.Indicators;
++
++public static class RsiCalculator
++{
++    public static double Calculate(
++        IReadOnlyList<double> closes,
++        int period = 14,
++        RsiSmoothingMethod method = RsiSmoothingMethod.Wilder)
 +    {
-+        try
++        if (closes == null || closes.Count <= period)
 +        {
-+            if (File.Exists(SettingsPath))
-+            {
-+                var json = File.ReadAllText(SettingsPath);
-+                return JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
-+            }
-+        }
-+        catch
-+        {
-+            // Swallow deserialization errors and fall back to defaults to keep the application running.
++            return double.NaN;
 +        }
 +
-+        return new AppSettings();
++        return method switch
++        {
++            RsiSmoothingMethod.Simple => CalculateSimple(closes, period),
++            RsiSmoothingMethod.Ema => CalculateEma(closes, period),
++            _ => CalculateWilder(closes, period)
++        };
 +    }
 +
-+    /// <summary>
-+    /// Persists the current settings to disk for reuse in future sessions.
-+    /// </summary>
-+    /// <param name="logger">Optional application logger for recording persistence errors.</param>
-+    public void Save(IAppLogger? logger = null)
++    private static double CalculateWilder(IReadOnlyList<double> closes, int period = 14)
 +    {
-+        try
++        if (closes == null || closes.Count <= period)
 +        {
-+            var directory = Path.GetDirectoryName(SettingsPath);
-+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-+            {
-+                Directory.CreateDirectory(directory);
-+            }
++            return double.NaN;
++        }
 +
-+            File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(this, Formatting.Indented));
-+        }
-+        catch (Exception ex)
++        double gain = 0, loss = 0;
++        for (int i = 1; i <= period; i++)
 +        {
-+            logger?.Log(LogSeverity.Error, $"[Settings] Failed to save settings: {ex.Message}", ex);
++            double diff = closes[i] - closes[i - 1];
++            if (diff > 0)
++            {
++                gain += diff;
++            }
++            else
++            {
++                loss -= diff;
++            }
 +        }
++
++        double avgGain = gain / period;
++        double avgLoss = loss / period;
++
++        for (int i = period + 1; i < closes.Count; i++)
++        {
++            double diff = closes[i] - closes[i - 1];
++            double up = diff > 0 ? diff : 0;
++            double down = diff < 0 ? -diff : 0;
++
++            avgGain = ((avgGain * (period - 1)) + up) / period;
++            avgLoss = ((avgLoss * (period - 1)) + down) / period;
++        }
++
++        if (avgLoss == 0)
++        {
++            return 100;
++        }
++
++        double rs = avgGain / avgLoss;
++        return Math.Round(100 - (100 / (1 + rs)), 2);
++    }
++
++    private static double CalculateSimple(IReadOnlyList<double> closes, int period = 14)
++    {
++        if (closes.Count < period + 1)
++        {
++            return double.NaN;
++        }
++
++        var diffs = closes.Skip(1).Zip(closes, (curr, prev) => curr - prev).ToList();
++        double avgGain = diffs.Where(d => d > 0).TakeLast(period).DefaultIfEmpty(0).Average();
++        double avgLoss = diffs.Where(d => d < 0).Select(d => -d).TakeLast(period).DefaultIfEmpty(0).Average();
++
++        double rs = avgLoss == 0 ? double.PositiveInfinity : avgGain / avgLoss;
++        return 100 - (100 / (1 + rs));
++    }
++
++    private static double CalculateEma(IReadOnlyList<double> closes, int period = 14)
++    {
++        if (closes.Count < period + 1)
++        {
++            return double.NaN;
++        }
++
++        var gains = new List<double>();
++        var losses = new List<double>();
++
++        for (int i = 1; i < closes.Count; i++)
++        {
++            double diff = closes[i] - closes[i - 1];
++            gains.Add(Math.Max(diff, 0));
++            losses.Add(Math.Max(-diff, 0));
++        }
++
++        double alpha = 2.0 / (period + 1);
++        double avgGain = gains.Take(period).Average();
++        double avgLoss = losses.Take(period).Average();
++
++        for (int i = period; i < gains.Count; i++)
++        {
++            avgGain = alpha * gains[i] + (1 - alpha) * avgGain;
++            avgLoss = alpha * losses[i] + (1 - alpha) * avgLoss;
++        }
++
++        double rs = avgLoss == 0 ? double.PositiveInfinity : avgGain / avgLoss;
++        return 100 - (100 / (1 + rs));
++    }
++
++    public static List<double> CalculateSeries(List<double> closes, int period)
++    {
++        var rsiValues = new List<double>();
++        if (closes.Count < period + 1)
++        {
++            return rsiValues;
++        }
++
++        double gain = 0, loss = 0;
++        for (int i = 1; i <= period; i++)
++        {
++            double change = closes[i] - closes[i - 1];
++            if (change > 0)
++            {
++                gain += change;
++            }
++            else
++            {
++                loss -= change;
++            }
++        }
++
++        double avgGain = gain / period;
++        double avgLoss = loss / period;
++
++        double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
++        rsiValues.Add(100 - (100 / (1 + rs)));
++
++        for (int i = period + 1; i < closes.Count; i++)
++        {
++            double change = closes[i] - closes[i - 1];
++            double gainVal = change > 0 ? change : 0;
++            double lossVal = change < 0 ? -change : 0;
++
++            avgGain = ((avgGain * (period - 1)) + gainVal) / period;
++            avgLoss = ((avgLoss * (period - 1)) + lossVal) / period;
++
++            rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
++            double rsi = 100 - (100 / (1 + rs));
++            rsiValues.Add(rsi);
++        }
++
++        return rsiValues;
 +    }
 +}
-
-diff --git a/MarketScanner.Core/MarketScanner.Core.csproj b/MarketScanner.Core/MarketScanner.Core.csproj
-index b12bdb55791bfa7d098aab99bd0c8ba08bb113dc..dea3aac5cafeebdaa64de4e49b9857053aebec11 100644
---- a/MarketScanner.Core/MarketScanner.Core.csproj
-+++ b/MarketScanner.Core/MarketScanner.Core.csproj
-@@ -1,9 +1,13 @@
- <Project Sdk="Microsoft.NET.Sdk">
+diff --git a/MarketScanner.Data/Services/Indicators/SmaCalculator.cs b/MarketScanner.Data/Indicators/SmaCalculator.cs
+similarity index 89%
+rename from MarketScanner.Data/Services/Indicators/SmaCalculator.cs
+rename to MarketScanner.Data/Indicators/SmaCalculator.cs
+index 529ff7e78bbba543f8917bc82fe1658e27c51259..b2cb2cc719e58eacac87b1e1e879e6755404e1ba 100644
+--- a/MarketScanner.Data/Services/Indicators/SmaCalculator.cs
++++ b/MarketScanner.Data/Indicators/SmaCalculator.cs
+@@ -1,30 +1,31 @@
++// Normalized after refactor: updated namespace and using references
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ 
+-namespace MarketScanner.Data.Services.Indicators
++namespace MarketScanner.Data.Indicators
+ {
+     public static class SmaCalculator
+     {
+         public static double Calculate(IReadOnlyList<double> values, int period)
+         {
+             if (values == null || values.Count < period)
+             {
+                 return double.NaN;
+             }
+ 
+             return values.Skip(values.Count - period).Average();
+         }
+ 
+         public static IReadOnlyList<double> CalculateSeries(IReadOnlyList<double> values, int period)
+         {
+             var result = new List<double>();
+             if (values == null || values.Count < period)
+             {
+                 return result;
+             }
+ 
+             for (int i = period; i <= values.Count; i++)
+             {
+                 result.Add(values.Skip(i - period).Take(period).Average());
+             }
+diff --git a/MarketScanner.Data/MarketScanner.Data.csproj b/MarketScanner.Data/MarketScanner.Data.csproj
+index 294c2c0108fe68daeb71673bcff1585ef4688ee7..7ffd40517140d85e40b529b624ad206d2cb8d55b 100644
+--- a/MarketScanner.Data/MarketScanner.Data.csproj
++++ b/MarketScanner.Data/MarketScanner.Data.csproj
+@@ -1,25 +1,18 @@
+-﻿<Project Sdk="Microsoft.NET.Sdk">
++<Project Sdk="Microsoft.NET.Sdk">
+ 
    <PropertyGroup>
-     <TargetFramework>net8.0</TargetFramework>
+     <TargetFramework>net8.0-windows</TargetFramework>
      <ImplicitUsings>enable</ImplicitUsings>
      <Nullable>enable</Nullable>
-     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
    </PropertyGroup>
-+
-+  <ItemGroup>
-+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-+  </ItemGroup>
+ 
+   <ItemGroup>
+-    <Compile Remove="Services\SmsService.cs" />
+-  </ItemGroup>
+-
+-  <ItemGroup>
+-    <PackageReference Include="OxyPlot.Core" Version="2.2.0" />
+-    <PackageReference Include="OxyPlot.Wpf" Version="2.2.0" />
+     <PackageReference Include="Polygon" Version="1.0.1" />
+-    <PackageReference Include="Twilio" Version="7.13.3" />
+     <PackageReference Include="YahooFinanceApi" Version="2.3.3" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
+   </ItemGroup>
+ 
  </Project>
-
- diff --git a/MarketScanner.UI.Wpf2/AppSettings.cs b/MarketScanner.UI.Wpf2/AppSettings.cs
+ diff --git a/MarketScanner.Data/Models/EquityDataPoint.cs b/MarketScanner.Data/Models/EquityDataPoint.cs
 deleted file mode 100644
-index 4075e285e59d57c4a57418cd0c18de597565a678..0000000000000000000000000000000000000000
---- a/MarketScanner.UI.Wpf2/AppSettings.cs
+index 0e2e58cda5aab7b3d79e4028421ac004331f680b..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Models/EquityDataPoint.cs
 +++ /dev/null
-@@ -1,50 +0,0 @@
--﻿using MarketScanner.Data.Diagnostics;
--using System;
--using System.IO;
--using Newtonsoft.Json;
+@@ -1,19 +0,0 @@
+-﻿using System;
+-
+-namespace MarketScanner.Data.Models
+-{
+-    namespace MarketScanner.Data.Models
+-    {
+-        public class  EquityDataPoint
+-        {
+-            public DateTime Timestamp { get; set; }
+-            public double Price { get; set; }
+-            public double RSI { get; set; }
+-            public double SMA { get; set; }
+-            public double UpperBand { get; set; }
+-            public double LowerBand { get; set; }
+-            public double Volume { get; set; }
+-        }
+-    }
+-
+-}
+diff --git a/MarketScanner.Data/Models/SymbolData.cs b/MarketScanner.Data/Models/SymbolData.cs
+deleted file mode 100644
+index 20d9d01a8608c8601ea7a64d904054b6f0c301de..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Models/SymbolData.cs
++++ /dev/null
+@@ -1,19 +0,0 @@
+-﻿using System;
+-using System.Collections.Generic;
+-using System.Linq;
+-using System.Text;
+-using System.Threading.Tasks;
+-using OxyPlot;
+-
+-namespace MarketScanner.Data.Models
+-{
+-    public class SymbolData
+-    {
+-        public List<DataPoint> PricePoints { get; set; } = new();
+-        public List<DataPoint> SmaPoints { get; set; } = new();
+-        public List<(DataPoint upper, DataPoint lower)> BollingerBands { get; set; } = new();
+-        public List<DataPoint> RsiPoints { get; set; } = new();
+-        public List<DataPoint> VolumePoints { get; set; } = new();
+-    }
+-}
+-
+diff --git a/MarketScanner.Data/Services/Alerts/AlertManager.cs b/MarketScanner.Data/Services/Alerts/AlertManager.cs
+index f293ef663356c1b6e7773e3dde38223ec8e8a042..46ee124aa09240fe51c475fd24d4ce34b582e044 100644
+--- a/MarketScanner.Data/Services/Alerts/AlertManager.cs
++++ b/MarketScanner.Data/Services/Alerts/AlertManager.cs
+@@ -1,117 +1,141 @@
+-﻿using MarketScanner.Core.Abstractions;
+-using MarketScanner.Data.Services;
+ using System;
+ using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+ using System.Threading;
+ using System.Threading.Tasks;
+-using System.Windows;
++using MarketScanner.Core.Abstractions;
+ 
+-namespace MarketScanner.Data.Services.Alerts
++namespace MarketScanner.Data.Services.Alerts;
++
++public class AlertManager : IAlertManager
+ {
+-    public class AlertManager : IAlertManager
+-    {
+-        private readonly IAppLogger _logger;
+-        private readonly ConcurrentQueue<ScannerAlert> _pendingAlerts = new();
+-        private IAlertSink? _alertSink;
++    private readonly IAppLogger _logger;
++    private readonly ConcurrentQueue<ScannerAlert> _pendingAlerts = new();
++    private readonly SynchronizationContext? _synchronizationContext;
++    private IAlertSink? _alertSink;
+ 
+-        public AlertManager(IAppLogger logger)
+-        {
+-            _logger = logger;
+-            OverboughtSymbols = new ObservableCollection<string>();
+-            OversoldSymbols = new ObservableCollection<string>();
+-        }
++    public AlertManager(IAppLogger logger, SynchronizationContext? synchronizationContext = null)
++    {
++        _logger = logger;
++        _synchronizationContext = synchronizationContext ?? SynchronizationContext.Current;
++        OverboughtSymbols = new ObservableCollection<string>();
++        OversoldSymbols = new ObservableCollection<string>();
++    }
+ 
+-        public ObservableCollection<string> OverboughtSymbols { get; }
+-        public ObservableCollection<string> OversoldSymbols { get; }
++    public ObservableCollection<string> OverboughtSymbols { get; }
++    public ObservableCollection<string> OversoldSymbols { get; }
+ 
+-        public int OverboughtCount => OverboughtSymbols.Count;
+-        public int OversoldCount => OversoldSymbols.Count;
++    public int OverboughtCount => OverboughtSymbols.Count;
++    public int OversoldCount => OversoldSymbols.Count;
+ 
+-        public void SetSink(IAlertSink? sink)
+-        {
+-            _alertSink = sink;
+-        }
++    public void SetSink(IAlertSink? sink)
++    {
++        _alertSink = sink;
++    }
+ 
+-        public void Enqueue(string symbol, string triggerName, double value)
+-        {
+-            var alert = new ScannerAlert(symbol, triggerName, value);
+-            _pendingAlerts.Enqueue(alert);
++    public void Enqueue(string symbol, string triggerName, double value)
++    {
++        var alert = new ScannerAlert(symbol, triggerName, value);
++        _pendingAlerts.Enqueue(alert);
+ 
+-            var formatted = $"{symbol} {triggerName} ({value:F2})";
+-            _logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
+-            _logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
++        var formatted = $"{symbol} {triggerName} ({value:F2})";
++        _logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
++        _logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
+ 
+-            _alertSink?.AddAlert(formatted);
+-        }
++        _alertSink?.AddAlert(formatted);
++    }
+ 
+-        public async Task FlushAsync(CancellationToken cancellationToken)
++    public async Task FlushAsync(CancellationToken cancellationToken)
++    {
++        if (_pendingAlerts.IsEmpty)
+         {
+-            if (_pendingAlerts.IsEmpty)
+-            {
+-                return;
+-            }
++            return;
++        }
+ 
+-            cancellationToken.ThrowIfCancellationRequested();
++        cancellationToken.ThrowIfCancellationRequested();
+ 
+-            var drained = new List<ScannerAlert>();
+-            while (_pendingAlerts.TryDequeue(out var alert))
+-            {
+-                drained.Add(alert);
+-            }
++        var drained = new List<ScannerAlert>();
++        while (_pendingAlerts.TryDequeue(out var alert))
++        {
++            drained.Add(alert);
++        }
+ 
+-            if (drained.Count == 0)
+-            {
+-                return;
+-            }
++        if (drained.Count == 0)
++        {
++            return;
++        }
+ 
+-            await Application.Current.Dispatcher.InvokeAsync(() =>
++        await InvokeOnContextAsync(() =>
++        {
++            foreach (var alert in drained)
+             {
+-                foreach (var alert in drained)
++                if (IsOverbought(alert.TriggerName))
+                 {
+-                    if (IsOverbought(alert.TriggerName))
++                    if (!OverboughtSymbols.Contains(alert.Symbol))
+                     {
+-                        if (!OverboughtSymbols.Contains(alert.Symbol))
+-                        {
+-                            OverboughtSymbols.Add(alert.Symbol);
+-                        }
++                        OverboughtSymbols.Add(alert.Symbol);
+                     }
+-                    else if (IsOversold(alert.TriggerName))
++                }
++                else if (IsOversold(alert.TriggerName))
++                {
++                    if (!OversoldSymbols.Contains(alert.Symbol))
+                     {
+-                        if (!OversoldSymbols.Contains(alert.Symbol))
+-                        {
+-                            OversoldSymbols.Add(alert.Symbol);
+-                        }
++                        OversoldSymbols.Add(alert.Symbol);
+                     }
+                 }
+-            });
++            }
++        }).ConfigureAwait(false);
++    }
++
++    public async Task ResetAsync()
++    {
++        while (_pendingAlerts.TryDequeue(out _))
++        {
++            // drain any remaining alerts
+         }
+ 
+-        public async Task ResetAsync()
++        await InvokeOnContextAsync(() =>
+         {
+-            while (_pendingAlerts.TryDequeue(out _))
+-            {
+-                // drain any remaining alerts
+-            }
++            OverboughtSymbols.Clear();
++            OversoldSymbols.Clear();
++        }).ConfigureAwait(false);
++    }
+ 
+-            await Application.Current.Dispatcher.InvokeAsync(() =>
+-            {
+-                OverboughtSymbols.Clear();
+-                OversoldSymbols.Clear();
+-            });
+-        }
++    private static bool IsOverbought(string triggerName)
++    {
++        return triggerName.IndexOf("overbought", StringComparison.OrdinalIgnoreCase) >= 0;
++    }
++
++    private static bool IsOversold(string triggerName)
++    {
++        return triggerName.IndexOf("oversold", StringComparison.OrdinalIgnoreCase) >= 0;
++    }
+ 
+-        private static bool IsOverbought(string triggerName)
++    private Task InvokeOnContextAsync(Action action)
++    {
++        if (_synchronizationContext is null)
+         {
+-            return triggerName.IndexOf("overbought", StringComparison.OrdinalIgnoreCase) >= 0;
++            action();
++            return Task.CompletedTask;
+         }
+ 
+-        private static bool IsOversold(string triggerName)
++        var completion = new TaskCompletionSource<object?>();
++        _synchronizationContext.Post(_ =>
+         {
+-            return triggerName.IndexOf("oversold", StringComparison.OrdinalIgnoreCase) >= 0;
+-        }
++            try
++            {
++                action();
++                completion.SetResult(null);
++            }
++            catch (Exception ex)
++            {
++                completion.SetException(ex);
++            }
++        }, null);
+ 
+-        private readonly record struct ScannerAlert(string Symbol, string TriggerName, double Value);
++        return completion.Task;
+     }
++
++    private readonly record struct ScannerAlert(string Symbol, string TriggerName, double Value);
+ }
+ diff --git a/MarketScanner.Data/Services/Alerts/IAlertManager.cs b/MarketScanner.Data/Services/Alerts/IAlertManager.cs
+deleted file mode 100644
+index c697d42a0c8f3554bb5d840fb1e9a7b9d6156c3e..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Services/Alerts/IAlertManager.cs
++++ /dev/null
+@@ -1,20 +0,0 @@
+-using MarketScanner.Data.Services;
+-using System.Collections.ObjectModel;
+-using System.Threading;
+-using System.Threading.Tasks;
+-
+-namespace MarketScanner.Data.Services.Alerts
+-{
+-    public interface IAlertManager
+-    {
+-        ObservableCollection<string> OverboughtSymbols { get; }
+-        ObservableCollection<string> OversoldSymbols { get; }
+-        int OverboughtCount { get; }
+-        int OversoldCount { get; }
+-
+-        void SetSink(IAlertSink? sink);
+-        void Enqueue(string symbol, string triggerName, double value);
+-        Task FlushAsync(CancellationToken cancellationToken);
+-        Task ResetAsync();
+-    }
+-}
+diff --git a/MarketScanner.Data/Services/EquityScannerService.cs b/MarketScanner.Data/Services/EquityScannerService.cs
+index b11ca48bf0f9e81e2c3a7e98a389c468ca39e4d0..e1b292ad0464bbc8052f5bd15a98488d36b4ad4f 100644
+--- a/MarketScanner.Data/Services/EquityScannerService.cs
++++ b/MarketScanner.Data/Services/EquityScannerService.cs
+@@ -1,34 +1,35 @@
++// Normalized after refactor: updated namespace and using references
+ using MarketScanner.Core.Abstractions;
+ using MarketScanner.Core.Configuration;
+ using MarketScanner.Core.Models;
+ using MarketScanner.Data.Diagnostics;
+ using MarketScanner.Data.Providers;
+ using MarketScanner.Data.Services.Alerts;
+ using MarketScanner.Data.Services.Analysis;
+ using MarketScanner.Data.Services.Data;
 -using MarketScanner.Data.Services.Indicators;
++using MarketScanner.Data.Indicators;
+ using Polygon.Models;
+ using System;
+ using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Collections.ObjectModel;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ 
+ namespace MarketScanner.Data.Services
+ {
+     public class EquityScannerService : IEquityScannerService
+     {
+         private const int MinimumCloseCount = 150;
+         private const int IndicatorWindow = 120;
+         private const int IndicatorPeriod = 14;
+         private const int BatchSize = 30;
+         private const int MaxConcurrency = 12;
+ 
+         private readonly AppSettings _settings;
+         private readonly IMarketDataProvider _provider;
+         private readonly HistoricalPriceCache _priceCache;
+         private readonly IAlertManager _alertManager;
+         private readonly IAppLogger _logger;
+         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
+@@ -283,31 +284,31 @@ namespace MarketScanner.Data.Services
+                 Symbol = symbol,
+                 Price = double.NaN,
+                 Volume = double.NaN,
+                 RSI = double.NaN,
+                 SMA = double.NaN,
+                 Upper = double.NaN,
+                 Lower = double.NaN,
+                 TimeStamp = DateTime.UtcNow
+             };
+         }
+ 
+         private sealed class ScanProgressTracker
+         {
+             public int Processed;
+             public int LastReported;
+         }
+ 
+         private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out IAppLogger logger)
+         {
+             logger = new LoggerAdapter();
+             return new DataCleaner(provider, logger);
+         }
+ 
+         private static IAlertManager CreateAlertManager(IAppLogger logger, IAlertSink alertSink)
+         {
+-            var manager = new Alerts.AlertManager(logger);
++            var manager = new Alerts.AlertManager(logger, SynchronizationContext.Current);
+             manager.SetSink(alertSink);
+             return manager;
+         }
+     }
+ }
+ diff --git a/MarketScanner.Data/Services/IAlertSink.cs b/MarketScanner.Data/Services/IAlertSink.cs
+deleted file mode 100644
+index 003423234d9dcb63fe162d95b8a12b4b61b0ce72..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Services/IAlertSink.cs
++++ /dev/null
+@@ -1,7 +0,0 @@
+-﻿namespace MarketScanner.Data.Services
+-{
+-    public interface IAlertSink
+-    {
+-        void AddAlert(string message);
+-    }
+-}
+diff --git a/MarketScanner.Data/Services/Indicators/RsiCalculator.cs b/MarketScanner.Data/Services/Indicators/RsiCalculator.cs
+deleted file mode 100644
+index 1381b7c4536ce9ef1f40bd6dff210ac82957d7ec..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Services/Indicators/RsiCalculator.cs
++++ /dev/null
+@@ -1,137 +0,0 @@
+-﻿using System;
+-using System.Collections.Generic;
+-using System.Linq;
+-using YahooFinanceApi;
 -using MarketScanner.Core.Enums;
 -
--namespace MarketScanner.UI.Wpf
+-namespace MarketScanner.Data.Services.Indicators
 -{
--    public class AppSettings
+-    public static class RsiCalculator
 -    {
--        public string NotificationEmail { get; set; } = "";
--        public int IndicatorPeriod { get; set; } = 14;
--        public RsiSmoothingMethod RsiMethod { get; set; } = RsiSmoothingMethod.Simple;
--        public string SelectedTimespan { get; set; } = "3M";
--        public int AlertIntervalMinutes { get; set; } = 15;
--
--        private static readonly string SettingsPath =
--            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
--                "MarketScanner", "settings.json");
--        public static AppSettings Load()
+-        public static double Calculate(IReadOnlyList<double> closes, int period = 14,
+-                                       RsiSmoothingMethod method = RsiSmoothingMethod.Wilder)
 -        {
--            try
--            {
--                if(File.Exists(SettingsPath))
--                {
--                    var json = File.ReadAllText(SettingsPath);
--                    return JsonConvert.DeserializeObject<AppSettings>(json) ?? new AppSettings();
--                }
--            }
--            catch { /* fallback to defaults */}
--            return new AppSettings();
+-            if (closes == null || closes.Count <= period)
+-                return double.NaN;
+-
+-            return method switch
+-            { RsiSmoothingMethod.Simple => CalculateSimple(closes,period),
+-              RsiSmoothingMethod.Ema => CalculateEma(closes,period),
+-              _ => CalculateWilder(closes,period)
+-            };
 -        }
 -
--        public void Save()
+-        private static double CalculateWilder(IReadOnlyList<double> closes, int period = 14)
+-        {
+-            for (int i = 1; i < closes.Count; i++)
+-            {
+-                var diff = closes[i] - closes[i - 1];
+-                //Console.WriteLine($"Delta={diff:F4}, close={closes[i]:F2}");
+-            }
+-
+-            if (closes == null || closes.Count <= period)
+-                return double.NaN;
+-
+-            double gain = 0, loss = 0;
+-            for (int i = 1; i <= period; i++)
+-            {
+-                double diff = closes[i] - closes[i - 1];
+-                if (diff > 0) gain += diff;
+-                else loss -= diff;
+-            }
+-
+-            double avgGain = gain / period;
+-            double avgLoss = loss / period;
+-
+-            for (int i = period + 1; i < closes.Count; i++)
+-            {
+-                double diff = closes[i] - closes[i - 1];
+-                double up = diff > 0 ? diff : 0;
+-                double down = diff < 0 ? -diff : 0;
+-
+-                avgGain = ((avgGain * (period - 1)) + up) / period;
+-                avgLoss = ((avgLoss * (period - 1)) + down) / period;
+-            }
+-
+-            if (avgLoss == 0) return 100;
+-            double rs = avgGain / avgLoss;
+-            return Math.Round(100 - (100 / (1 + rs)), 2);
+-        }
+-        private static double CalculateSimple(IReadOnlyList<double> closes, int period = 14)
+-        {
+-            if (closes.Count < period + 1) return double.NaN;
+-
+-            var diffs = closes.Skip(1).Zip(closes, (curr, prev) => curr - prev).ToList();
+-            double avgGain = diffs.Where(d => d > 0).TakeLast(period).DefaultIfEmpty(0).Average();
+-            double avgLoss = diffs.Where(d => d < 0).Select(d => -d).TakeLast(period).DefaultIfEmpty(0).Average();
+-
+-            double rs = avgLoss == 0 ? double.PositiveInfinity : avgGain / avgLoss;
+-            return 100 - (100 / (1 + rs));
+-        }
+-        private static double CalculateEma(IReadOnlyList<double> closes, int period = 14)
+-        {
+-            if (closes.Count < period + 1) return double.NaN;
+-
+-            var gains = new List<double>();
+-            var losses = new List<double>();
+-
+-            for (int i = 1; i < closes.Count; i++)
+-            {
+-                double diff = closes[i] - closes[i - 1];
+-                gains.Add(Math.Max(diff, 0));
+-                losses.Add(Math.Max(-diff, 0));
+-            }
+-
+-            double alpha = 2.0 / (period + 1);
+-            double avgGain = gains.Take(period).Average();
+-            double avgLoss = losses.Take(period).Average();
+-
+-            for (int i = period; i < gains.Count; i++)
+-            {
+-                avgGain = alpha * gains[i] + (1 - alpha) * avgGain;
+-                avgLoss = alpha * losses[i] + (1 - alpha) * avgLoss;
+-            }
+-
+-            double rs = avgLoss == 0 ? double.PositiveInfinity : avgGain / avgLoss;
+-            return 100 - (100 / (1 + rs));
+-        }
+-        
+-        public static List<double> CalculateSeries(List<double> closes, int period)
+-        {
+-            var rsiValues = new List<double>();
+-            if (closes.Count < period + 1)
+-                return rsiValues;
+-
+-            double gain = 0, loss = 0;
+-            for (int i = 1; i <= period; i++)
+-            {
+-                double change = closes[i] - closes[i - 1];
+-                if (change > 0) gain += change;
+-                else loss -= change;
+-            }
+-
+-            double avgGain = gain / period;
+-            double avgLoss = loss / period;
+-
+-            double rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
+-            rsiValues.Add(100 - (100 / (1 + rs)));
+-
+-            for (int i = period + 1; i < closes.Count; i++)
+-            {
+-                double change = closes[i] - closes[i - 1];
+-                double gainVal = change > 0 ? change : 0;
+-                double lossVal = change < 0 ? -change : 0;
+-
+-                avgGain = ((avgGain * (period - 1)) + gainVal) / period;
+-                avgLoss = ((avgLoss * (period - 1)) + lossVal) / period;
+-
+-                rs = avgLoss == 0 ? 100 : avgGain / avgLoss;
+-                double rsi = 100 - (100 / (1 + rs));
+-                rsiValues.Add(rsi);
+-            }
+-
+-            return rsiValues;
+-        }
+-
+-    }
+-}
+diff --git a/MarketScanner.Data/Services/MarketDataEngine.cs b/MarketScanner.Data/Services/MarketDataEngine.cs
+index aa077900d24ceddef0dc98f06932d275adc55914..e889a0057771809c71ee652b398d312d0e840658 100644
+--- a/MarketScanner.Data/Services/MarketDataEngine.cs
++++ b/MarketScanner.Data/Services/MarketDataEngine.cs
+@@ -1,30 +1,31 @@
+-﻿using MarketScanner.Data.Diagnostics;
++// Normalized after refactor: updated namespace and using references
++using MarketScanner.Data.Diagnostics;
+ using MarketScanner.Core.Models;
+ using MarketScanner.Core.Configuration;
+ using MarketScanner.Data.Providers;
+-using MarketScanner.Data.Services.Indicators;
++using MarketScanner.Data.Indicators;
+ using System;
+ using System.Collections.Generic;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+ using System.Timers;
+ 
+ namespace MarketScanner.Data
+ {
+     public class MarketDataEngine
+     {
+         private readonly AppSettings _settings;
+         private readonly IMarketDataProvider _provider;
+         private System.Timers.Timer _timer;
+ 
+         public List<string> Symbols { get; }
+ 
+         // 🔹 Event hooks
+         public event Action<string, double>? OnNewPrice;
+         public event Action<string, double>? OnNewRSI;
+         public event Action<string, double, double, double>? OnNewSMA;
+         public event Action<string, double>? OnNewVolume;
+         public event Action<EquityScanResult>? OnEquityScanned;
+ 
+         private readonly Dictionary<string, double> _lastPrices = new();
+diff --git a/MarketScanner.Data/Services/SmsService.cs b/MarketScanner.Data/Services/SmsService.cs
+deleted file mode 100644
+index 33be295585f3ebea7ed7a5a9f82ab10fbdfdb9c7..0000000000000000000000000000000000000000
+--- a/MarketScanner.Data/Services/SmsService.cs
++++ /dev/null
+@@ -1,48 +0,0 @@
+-﻿using MarketScanner.Data.Diagnostics;
+-using System;
+-using System.Diagnostics;
+-using System.Net.Http;
+-using System.Threading.Tasks;
+-using System.Collections.Generic;
+-
+-namespace MarketScanner.Data.Services
+-{
+-    public class SmsService
+-    {
+-        private readonly string _apiKey;
+-        private readonly HttpClient _httpClient;
+-
+-        public SmsService(string apiKey = "textbelt") // default: free test key
+-        {
+-            _apiKey = apiKey;
+-            _httpClient = new HttpClient();
+-        }
+-
+-        public async Task SendSmsAsync(string to, string message)
 -        {
 -            try
 -            {
--                var dir = Path.GetDirectoryName(SettingsPath);
--                if (!Directory.Exists(dir))
--                    Directory.CreateDirectory(dir);
--                File.WriteAllText(SettingsPath, JsonConvert.SerializeObject(this, Formatting.Indented));
+-                Logger.Info($"[SMS] Sending via Textbelt to {to}: {message}");
+-                Debug.WriteLine($"[SMS] Sending via Textbelt to {to}: {message}");
+-
+-                var content = new FormUrlEncodedContent(new Dictionary<string, string>
+-                {
+-                    { "phone", to },
+-                    { "message", message },
+-                    { "key", _apiKey }
+-                });
+-
+-                var response = await _httpClient.PostAsync("https://textbelt.com/text", content);
+-                var result = await response.Content.ReadAsStringAsync();
+-
+-                Logger.Info($"[SMS Response] {result}");
+-                Debug.WriteLine($"[SMS Response] {result}");
 -            }
 -            catch (Exception ex)
 -            {
--                Logger.Error($"[Settings] Failed to save settings: {ex.Message}");
+-                Logger.Error($"[SMS Error] {ex.Message}");
+-                Debug.WriteLine($"[SMS Error] {ex.Message}");
 -            }
 -        }
 -    }
 -}
-
-diff --git a/MarketScanner.UI.Wpf2/ViewModels/MainViewModel.cs b/MarketScanner.UI.Wpf2/ViewModels/MainViewModel.cs
-index c04d6f56d186ac1ba39cd4e77c433866f13d140d..3a4dac2ab2c9f4d5404879a5dcc2a1b9193ce895 100644
---- a/MarketScanner.UI.Wpf2/ViewModels/MainViewModel.cs
-+++ b/MarketScanner.UI.Wpf2/ViewModels/MainViewModel.cs
-@@ -1,31 +1,32 @@
- using MarketScanner.Data.Diagnostics;
- using MarketScanner.Data.Providers;
- using MarketScanner.Data.Services;
--using MarketScanner.Data.Services.Indicators;
-+using MarketScanner.Core.Configuration;
- using MarketScanner.UI.Wpf.Services;
- using MarketScanner.Core.Enums;
-+// Updated to use MarketScanner.Core.Configuration.AppSettings
+diff --git a/MarketScanner.UI.Wpf2/Services/AlertManager.cs b/MarketScanner.UI.Wpf2/Services/AlertManager.cs
+index 8de992427354d66e9d6ae75b9e089120ba04538b..4a656b15fe9d7b3dfee888dae02a5d7aaed036af 100644
+--- a/MarketScanner.UI.Wpf2/Services/AlertManager.cs
++++ b/MarketScanner.UI.Wpf2/Services/AlertManager.cs
+@@ -1,121 +1,128 @@
+-﻿using MarketScanner.Data.Diagnostics;
+-using MarketScanner.Core.Models;
+-using MarketScanner.Data.Models;
+-using MarketScanner.Data.Services;
  using System;
  using System.Collections.Generic;
- using System.Collections.ObjectModel;
+ using System.Diagnostics;
++using MarketScanner.Core.Abstractions;
++using MarketScanner.Core.Models;
++using MarketScanner.Data.Diagnostics;
++using MarketScanner.Data.Models;
++using MarketScanner.Data.Services;
+ 
+-namespace MarketScanner.UI.Wpf.Services
++namespace MarketScanner.UI.Wpf.Services;
++
++public class AlertManager : IAlertSink
+ {
+-    public class AlertManager : IAlertSink
+-    {
+-        private readonly AlertService _alertService;
+-        private readonly EmailService _emailService;
++    private readonly AlertService _alertService;
++    private readonly EmailService _emailService;
+ 
+-        private readonly List<string> _pendingMessages = new();
+-        private readonly object _lock = new();
+-        private DateTime _lastDigestSent = DateTime.MinValue;
++    private readonly List<string> _pendingMessages = new();
++    private readonly object _lock = new();
++    private DateTime _lastDigestSent = DateTime.MinValue;
+ 
+-        public List<Alert> Alerts { get; } = new();
++    public List<Alert> Alerts { get; } = new();
+ 
+-        public AlertManager(AlertService alertService, EmailService emailService)
+-        {
+-            _alertService = alertService;
+-            _emailService = emailService;
+-        }
+-        public void ProcessScanResult(EquityScanResult result)
++    public AlertManager(AlertService alertService, EmailService emailService)
++    {
++        _alertService = alertService;
++        _emailService = emailService;
++    }
++
++    public void ProcessScanResult(EquityScanResult result)
++    {
++        foreach (var alert in Alerts)
+         {
+-            foreach (var alert in Alerts)
++            if (alert.Symbol != result.Symbol)
+             {
+-                if (alert.Symbol != result.Symbol)
+-                    continue;
++                continue;
++            }
+ 
+-                if (_alertService.ShouldTrigger(alert, result))
+-                {
+-                    HandleAlert(alert, result);
+-                }
++            if (_alertService.ShouldTrigger(alert, result))
++            {
++                HandleAlert(alert, result);
+             }
+         }
++    }
+ 
+-        public void AddAlert(string message)
++    public void AddAlert(string message)
++    {
++        if (string.IsNullOrWhiteSpace(message))
+         {
+-            if (string.IsNullOrWhiteSpace(message))
+-                return;
+-            lock(_lock)
+-            {
+-                _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
+-            }
++            return;
++        }
+ 
+-            Logger.Info($"[AlertManager] Queued alert: {message}");
+-            Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
++        lock (_lock)
++        {
++            _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
+         }
+ 
+-        private void HandleAlert(Alert alert, EquityScanResult result)
++        Logger.Info($"[AlertManager] Queued alert: {message}");
++        Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
++    }
++
++    private void HandleAlert(Alert alert, EquityScanResult result)
++    {
++        if (alert.isTriggered && alert.LastTriggered.HasValue &&
++            (DateTime.Now - alert.LastTriggered.Value).TotalMinutes < 10)
+         {
+-            if (alert.isTriggered && alert.LastTriggered.HasValue &&
+-                (DateTime.Now - alert.LastTriggered.Value).TotalMinutes < 10)
+-                return; // avoid spam
++            return; // avoid spam
++        }
+ 
+-            alert.isTriggered = true;
+-            alert.LastTriggered = DateTime.Now;
++        alert.isTriggered = true;
++        alert.LastTriggered = DateTime.Now;
+ 
+-            string subject = $"Market Alert: {alert.Symbol}";
+-            string message = alert.Message ?? GenerateAlertMessage(alert, result);
++        string subject = $"Market Alert: {alert.Symbol}";
++        string message = alert.Message ?? GenerateAlertMessage(alert, result);
+ 
+-            Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
++        Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
+ 
+-            if (alert.NotifyEmail)
++        if (alert.NotifyEmail)
++        {
++            lock (_lock)
+             {
+-                lock(_lock)
+-                {
+-                    _pendingMessages.Add($"{alert.Symbol}: {message}");
+-                }
++                _pendingMessages.Add($"{alert.Symbol}: {message}");
+             }
+         }
++    }
+ 
+-        public void SendPendingDigest(string recipientEmail)
++    public void SendPendingDigest(string recipientEmail)
++    {
++        Logger.Debug($"Pending alerts: {_pendingMessages.Count}");
++
++        if (string.IsNullOrWhiteSpace(recipientEmail))
+         {
+-            Logger.Debug($"Pending alerts: {_pendingMessages.Count}");
++            Logger.Warn("[AlertManager] Digest skipped — no recipient email configured.");
++            return;
++        }
+ 
+-            if (string.IsNullOrWhiteSpace(recipientEmail))
++        List<string> snapshot;
++        lock (_lock)
++        {
++            if (_pendingMessages.Count == 0)
+             {
+-                Logger.Warn("[AlertManager] Digest skipped — no recipient email configured.");
++                Logger.Debug("[AlertManager] No pending alerts to send.");
+                 return;
+             }
+ 
+-            List<string> snapshot;
+-            lock (_lock)
+-            {
+-                if (_pendingMessages.Count == 0)
+-                {
+-                    Logger.Debug("[AlertManager] No pending alerts to send.");
+-                    return;
+-                }
+-
+-                snapshot = new List<string>(_pendingMessages);
+-                _pendingMessages.Clear();
+-            }
+-
+-            var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
+-            var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
+-
+-            Logger.Info($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
+-            _emailService.SendEmail(recipientEmail, subject, body);
+-            _lastDigestSent = DateTime.Now;
++            snapshot = new List<string>(_pendingMessages);
++            _pendingMessages.Clear();
+         }
+ 
++        var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
++        var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
+ 
+-        private string GenerateAlertMessage(Alert alert, EquityScanResult result)
++        Logger.Info($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
++        _emailService.SendEmail(recipientEmail, subject, body);
++        _lastDigestSent = DateTime.Now;
++    }
++
++    private string GenerateAlertMessage(Alert alert, EquityScanResult result)
++    {
++        return alert.Type switch
+         {
+-            return alert.Type switch
+-            {
+-                AlertType.RsiOverbought => $"{alert.Symbol} RSI is overbought ({result.RSI:F2}).",
+-                AlertType.RsiOversold => $"{alert.Symbol} RSI is oversold ({result.RSI:F2}).",
+-                AlertType.PriceAbove => $"{alert.Symbol} price rose above {alert.PriceAbove:F2} (current: {result.Price:F2}).",
+-                AlertType.PriceBelow => $"{alert.Symbol} price fell below {alert.PriceBelow:F2} (current: {result.Price:F2}).",
+-                _ => $"{alert.Symbol} triggered an alert."
+-            };
+-        }
++            AlertType.RsiOverbought => $"{alert.Symbol} RSI is overbought ({result.RSI:F2}).",
++            AlertType.RsiOversold => $"{alert.Symbol} RSI is oversold ({result.RSI:F2}).",
++            AlertType.PriceAbove => $"{alert.Symbol} price rose above {alert.PriceAbove:F2} (current: {result.Price:F2}).",
++            AlertType.PriceBelow => $"{alert.Symbol} price fell below {alert.PriceBelow:F2} (current: {result.Price:F2}).",
++            _ => $"{alert.Symbol} triggered an alert."
++        };
+     }
+ }
+ diff --git a/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs b/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
+index 733dd86783aa93a92f9471e221711d92b722facc..1bfbc2e57658560e93f3476238f3be791ec8acb8 100644
+--- a/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
++++ b/MarketScanner.UI.Wpf2/ViewModels/ChartViewModel.cs
+@@ -1,43 +1,43 @@
+-﻿using MarketScanner.Core.Models;
++// Normalized after refactor: updated namespace and using references
++using MarketScanner.Core.Models;
+ using MarketScanner.Core.Configuration;
+ using MarketScanner.Data.Providers;
+-using MarketScanner.Data.Services.Indicators;
++using MarketScanner.Data.Indicators;
+ using MarketScanner.Data.Diagnostics;
+ using MarketScanner.UI.Wpf.Services;
+ using OxyPlot;
+ using OxyPlot.Axes;
+ using OxyPlot.Series;
+ using System;
+ using System.Collections.Generic;
  using System.ComponentModel;
  using System.Linq;
  using System.Runtime.CompilerServices;
- using System.Text;
  using System.Threading;
  using System.Threading.Tasks;
- using System.Windows.Input;
  using System.Windows.Threading;
+-using System.Security.AccessControl;
  
  namespace MarketScanner.UI.Wpf.ViewModels
  {
-     public class MainViewModel : INotifyPropertyChanged
+     public class ChartViewModel : INotifyPropertyChanged
      {
+         private readonly AppSettings _settings;
          private readonly IMarketDataProvider _provider;
-         private readonly EquityScannerService _scannerService;
-         private readonly ScannerViewModel _scannerViewModel;
-         private readonly EquityScannerService _equityScannerService;
-         private readonly ChartViewModel _chartViewModel;
-         private readonly EmailService? _emailService;
-         private readonly System.Timers.Timer _alertTimer;
-         private readonly AlertManager _alertManager;
-         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
+         private readonly IChartService _chartService;
+         private readonly Dispatcher _dispatcher;
+         private CancellationTokenSource? _loadCts;
+ 
+         private string _currentSymbol;
+         public string CurrentSymbol
+         {
+             get => _currentSymbol;
+             private set => _currentSymbol = value;
+         }
+ 
+         public PlotModel PriceView => _chartService.PriceView;
+         public PlotModel RsiView => _chartService.RsiView;
+         public PlotModel VolumeView => _chartService.VolumeView;
+ 
+         private string _priceText = string.Empty;
+         public string PriceText
+         {

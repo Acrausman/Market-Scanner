@@ -1,121 +1,128 @@
-﻿using MarketScanner.Data.Diagnostics;
-using MarketScanner.Core.Models;
-using MarketScanner.Data.Models;
-using MarketScanner.Data.Services;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Models;
+using MarketScanner.Data.Services;
 
-namespace MarketScanner.UI.Wpf.Services
+namespace MarketScanner.UI.Wpf.Services;
+
+public class AlertManager : IAlertSink
 {
-    public class AlertManager : IAlertSink
+    private readonly AlertService _alertService;
+    private readonly EmailService _emailService;
+
+    private readonly List<string> _pendingMessages = new();
+    private readonly object _lock = new();
+    private DateTime _lastDigestSent = DateTime.MinValue;
+
+    public List<Alert> Alerts { get; } = new();
+
+    public AlertManager(AlertService alertService, EmailService emailService)
     {
-        private readonly AlertService _alertService;
-        private readonly EmailService _emailService;
+        _alertService = alertService;
+        _emailService = emailService;
+    }
 
-        private readonly List<string> _pendingMessages = new();
-        private readonly object _lock = new();
-        private DateTime _lastDigestSent = DateTime.MinValue;
-
-        public List<Alert> Alerts { get; } = new();
-
-        public AlertManager(AlertService alertService, EmailService emailService)
+    public void ProcessScanResult(EquityScanResult result)
+    {
+        foreach (var alert in Alerts)
         {
-            _alertService = alertService;
-            _emailService = emailService;
-        }
-        public void ProcessScanResult(EquityScanResult result)
-        {
-            foreach (var alert in Alerts)
+            if (alert.Symbol != result.Symbol)
             {
-                if (alert.Symbol != result.Symbol)
-                    continue;
-
-                if (_alertService.ShouldTrigger(alert, result))
-                {
-                    HandleAlert(alert, result);
-                }
-            }
-        }
-
-        public void AddAlert(string message)
-        {
-            if (string.IsNullOrWhiteSpace(message))
-                return;
-            lock(_lock)
-            {
-                _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
+                continue;
             }
 
-            Logger.Info($"[AlertManager] Queued alert: {message}");
-            Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
-        }
-
-        private void HandleAlert(Alert alert, EquityScanResult result)
-        {
-            if (alert.isTriggered && alert.LastTriggered.HasValue &&
-                (DateTime.Now - alert.LastTriggered.Value).TotalMinutes < 10)
-                return; // avoid spam
-
-            alert.isTriggered = true;
-            alert.LastTriggered = DateTime.Now;
-
-            string subject = $"Market Alert: {alert.Symbol}";
-            string message = alert.Message ?? GenerateAlertMessage(alert, result);
-
-            Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
-
-            if (alert.NotifyEmail)
+            if (_alertService.ShouldTrigger(alert, result))
             {
-                lock(_lock)
-                {
-                    _pendingMessages.Add($"{alert.Symbol}: {message}");
-                }
+                HandleAlert(alert, result);
             }
         }
+    }
 
-        public void SendPendingDigest(string recipientEmail)
+    public void AddAlert(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
         {
-            Logger.Debug($"Pending alerts: {_pendingMessages.Count}");
+            return;
+        }
 
-            if (string.IsNullOrWhiteSpace(recipientEmail))
-            {
-                Logger.Warn("[AlertManager] Digest skipped — no recipient email configured.");
-                return;
-            }
+        lock (_lock)
+        {
+            _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
+        }
 
-            List<string> snapshot;
+        Logger.Info($"[AlertManager] Queued alert: {message}");
+        Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
+    }
+
+    private void HandleAlert(Alert alert, EquityScanResult result)
+    {
+        if (alert.isTriggered && alert.LastTriggered.HasValue &&
+            (DateTime.Now - alert.LastTriggered.Value).TotalMinutes < 10)
+        {
+            return; // avoid spam
+        }
+
+        alert.isTriggered = true;
+        alert.LastTriggered = DateTime.Now;
+
+        string subject = $"Market Alert: {alert.Symbol}";
+        string message = alert.Message ?? GenerateAlertMessage(alert, result);
+
+        Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
+
+        if (alert.NotifyEmail)
+        {
             lock (_lock)
             {
-                if (_pendingMessages.Count == 0)
-                {
-                    Logger.Debug("[AlertManager] No pending alerts to send.");
-                    return;
-                }
+                _pendingMessages.Add($"{alert.Symbol}: {message}");
+            }
+        }
+    }
 
-                snapshot = new List<string>(_pendingMessages);
-                _pendingMessages.Clear();
+    public void SendPendingDigest(string recipientEmail)
+    {
+        Logger.Debug($"Pending alerts: {_pendingMessages.Count}");
+
+        if (string.IsNullOrWhiteSpace(recipientEmail))
+        {
+            Logger.Warn("[AlertManager] Digest skipped — no recipient email configured.");
+            return;
+        }
+
+        List<string> snapshot;
+        lock (_lock)
+        {
+            if (_pendingMessages.Count == 0)
+            {
+                Logger.Debug("[AlertManager] No pending alerts to send.");
+                return;
             }
 
-            var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
-            var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
-
-            Logger.Info($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
-            _emailService.SendEmail(recipientEmail, subject, body);
-            _lastDigestSent = DateTime.Now;
+            snapshot = new List<string>(_pendingMessages);
+            _pendingMessages.Clear();
         }
 
+        var subject = $"MarketScanner RSI Digest ({DateTime.Now:HH:mm})";
+        var body = "Recent Alerts:\n\n" + string.Join("\n", snapshot);
 
-        private string GenerateAlertMessage(Alert alert, EquityScanResult result)
+        Logger.Info($"[AlertManager] Sending digest to {recipientEmail} with {snapshot.Count} entries.");
+        _emailService.SendEmail(recipientEmail, subject, body);
+        _lastDigestSent = DateTime.Now;
+    }
+
+    private string GenerateAlertMessage(Alert alert, EquityScanResult result)
+    {
+        return alert.Type switch
         {
-            return alert.Type switch
-            {
-                AlertType.RsiOverbought => $"{alert.Symbol} RSI is overbought ({result.RSI:F2}).",
-                AlertType.RsiOversold => $"{alert.Symbol} RSI is oversold ({result.RSI:F2}).",
-                AlertType.PriceAbove => $"{alert.Symbol} price rose above {alert.PriceAbove:F2} (current: {result.Price:F2}).",
-                AlertType.PriceBelow => $"{alert.Symbol} price fell below {alert.PriceBelow:F2} (current: {result.Price:F2}).",
-                _ => $"{alert.Symbol} triggered an alert."
-            };
-        }
+            AlertType.RsiOverbought => $"{alert.Symbol} RSI is overbought ({result.RSI:F2}).",
+            AlertType.RsiOversold => $"{alert.Symbol} RSI is oversold ({result.RSI:F2}).",
+            AlertType.PriceAbove => $"{alert.Symbol} price rose above {alert.PriceAbove:F2} (current: {result.Price:F2}).",
+            AlertType.PriceBelow => $"{alert.Symbol} price fell below {alert.PriceBelow:F2} (current: {result.Price:F2}).",
+            _ => $"{alert.Symbol} triggered an alert."
+        };
     }
 }
