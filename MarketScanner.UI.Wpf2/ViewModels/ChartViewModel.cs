@@ -1,4 +1,5 @@
 ﻿using MarketScanner.Core.Models;
+using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using MarketScanner.Data.Diagnostics;
@@ -14,11 +15,13 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
+using System.Security.AccessControl;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class ChartViewModel : INotifyPropertyChanged
     {
+        private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private readonly IChartService _chartService;
         private readonly Dispatcher _dispatcher;
@@ -81,6 +84,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _provider = provider ?? throw new ArgumentNullException(nameof(provider));
             _chartService = chartService ?? throw new ArgumentNullException(nameof(chartService));
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            _settings = AppSettings.Load();
         }
 
         public void Clear()

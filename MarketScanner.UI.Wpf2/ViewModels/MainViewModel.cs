@@ -1,9 +1,10 @@
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
-using MarketScanner.Data.Services.Indicators;
+using MarketScanner.Core.Configuration;
 using MarketScanner.UI.Wpf.Services;
 using MarketScanner.Core.Enums;
+// Updated to use MarketScanner.Core.Configuration.AppSettings
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -106,7 +107,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             ChartViewModel chartViewModel,
             EmailService emailService,
             Dispatcher dispatcher,
-            AlertManager alertManager)
+            AlertManager alertManager,
+            AppSettings settings)
         {
             _provider = new PolygonMarketDataProvider(apiKey);
             _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
@@ -114,13 +116,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
-            _scannerService = new EquityScannerService(_provider, _alertManager);
+            _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
 
             // Load persisted settings
-            _appSettings = AppSettings.Load();
+            _appSettings = settings;
             _notificationEmail = _appSettings.NotificationEmail ?? string.Empty;
             _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
                 ? "3M"
@@ -147,6 +149,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 Logger.Info($"[Timer] Triggering digest at {DateTime.Now:T}");
                 if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
             };
+            
+            
             _digestTimer.Start();
 
         }

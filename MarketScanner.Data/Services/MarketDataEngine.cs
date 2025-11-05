@@ -1,5 +1,6 @@
 ﻿using MarketScanner.Data.Diagnostics;
 using MarketScanner.Core.Models;
+using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Indicators;
 using System;
@@ -13,6 +14,7 @@ namespace MarketScanner.Data
 {
     public class MarketDataEngine
     {
+        private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private System.Timers.Timer _timer;
 
@@ -39,8 +41,10 @@ namespace MarketScanner.Data
         private Task? _liveTask;
 
         // 🔹 Constructors
-        public MarketDataEngine(List<string> symbols, IMarketDataProvider provider)
+        public MarketDataEngine(List<string> symbols, IMarketDataProvider provider, AppSettings settings)
         {
+            _settings = settings;
+
             Symbols = symbols;
             _provider = provider;
 
@@ -49,8 +53,10 @@ namespace MarketScanner.Data
         }
 
         // 🔹 New: Single-symbol constructor
-        public MarketDataEngine(IMarketDataProvider provider)
+        public MarketDataEngine(IMarketDataProvider provider, AppSettings settings)
         {
+            _settings = settings;
+
             Symbols = new List<string>();
             _provider = provider;
 
@@ -83,7 +89,7 @@ namespace MarketScanner.Data
                         return;
                     }
 
-                    double rsi = RsiCalculator.Calculate(closes, rsiPeriod);
+                    double rsi = RsiCalculator.Calculate(closes, rsiPeriod, _settings.RsiMethod);
                     var (sma, upper, lower) = BollingerBandsCalculator.Calculate(closes, smaPeriod);
 
                     _lastPrices[symbol] = price;
@@ -147,7 +153,7 @@ namespace MarketScanner.Data
                         var closes = await LoadRecentClosesAsync(symbol, Math.Max(rsiPeriod, smaPeriod)).ConfigureAwait(false);
                         if (closes.Count >= rsiPeriod)
                         {
-                            double rsi = RsiCalculator.Calculate(closes, rsiPeriod);
+                            double rsi = RsiCalculator.Calculate(closes, rsiPeriod, _settings.RsiMethod);
                             OnNewRSI?.Invoke(symbol, rsi);
 
                             var (sma, upper, lower) = BollingerBandsCalculator.Calculate(closes, smaPeriod);

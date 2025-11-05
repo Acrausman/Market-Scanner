@@ -1,6 +1,7 @@
 ﻿using Flurl;
 using Flurl.Http;
 using MarketScanner.Core.Models;
+using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Polygon;
@@ -18,12 +19,14 @@ namespace MarketScanner.Data.Diagnostics
 {
     public class PolygonDiagnosticsService
     {
+        private readonly AppSettings _settings;
         private readonly PolygonMarketDataProvider _provider;
         private readonly string _apiKey;
         private readonly HttpClient _httpClient;
 
-        public PolygonDiagnosticsService(PolygonMarketDataProvider provider, string apiKey)
+        public PolygonDiagnosticsService(PolygonMarketDataProvider provider, string apiKey, AppSettings settings)
         {
+            _settings = settings;
             _provider = provider;
             _apiKey = apiKey;
             _httpClient = new HttpClient();
@@ -37,7 +40,7 @@ namespace MarketScanner.Data.Diagnostics
                 var start = end.AddDays(-200);
                 var myBars = await _provider.GetHistoricalBarsAsync(symbol, start, end, cancellationToken).ConfigureAwait(false);
                 var myCloses = myBars.OrderBy(b => b.Timestamp).Select(b => b.Close).ToList();
-                double myRsi = RsiCalculator.Calculate(myCloses, period);
+                double myRsi = RsiCalculator.Calculate(myCloses, period, _settings.RsiMethod);
 
                 var endUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                 var startUnix = endUnix - (180 * 24 * 3600);
@@ -54,7 +57,7 @@ namespace MarketScanner.Data.Diagnostics
                     }
                 }
 
-                double yahooRsi = RsiCalculator.Calculate(yahooCloses, period);
+                double yahooRsi = RsiCalculator.Calculate(yahooCloses, period, _settings.RsiMethod);
 
                 Logger.Info($"\n[RSI Compare] {symbol}");
                 Logger.Info($"  Polygon RSI = {myRsi:F2}");

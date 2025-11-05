@@ -1,4 +1,5 @@
 using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
@@ -25,6 +26,7 @@ namespace MarketScanner.Data.Services
         private const int BatchSize = 30;
         private const int MaxConcurrency = 12;
 
+        private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private readonly HistoricalPriceCache _priceCache;
         private readonly IAlertManager _alertManager;
@@ -35,20 +37,22 @@ namespace MarketScanner.Data.Services
             IMarketDataProvider provider,
             IDataCleaner dataCleaner,
             IAlertManager alertManager,
-            IAppLogger logger)
+            IAppLogger logger,
+            AppSettings settings)
         {
+            _settings = settings;
             _provider = provider;
             _alertManager = alertManager;
             _logger = logger;
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
         }
 
-        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink)
+        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink, AppSettings settings)
             : this(
                   provider,
                   CreateDataCleaner(provider, out var logger),
                   CreateAlertManager(logger, alertSink),
-                  logger)
+                  logger, settings)
         {
         }
 
@@ -242,8 +246,8 @@ namespace MarketScanner.Data.Services
                 _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
-
-            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod);
+            _logger.Log(LogSeverity.Debug, $"[Settings] Using RSI method: {_settings.RsiMethod}");
+            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, _settings.RsiMethod);
             var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
             var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
 

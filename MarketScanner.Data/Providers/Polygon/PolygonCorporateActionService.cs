@@ -73,7 +73,7 @@ namespace MarketScanner.Data.Providers.Polygon
 
             if (adjustments.Count > 0)
             {
-                Logger.Info($"[Polygon] {symbol}: applied {adjustments.Count} corporate actions");
+                //Logger.Info($"[Polygon] {symbol}: applied {adjustments.Count} corporate actions");
             }
         }
 

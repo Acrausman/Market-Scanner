@@ -57,7 +57,7 @@ namespace MarketScanner.Data.Services.Analysis
             if (adjustments != null && adjustments.Count > 0)
             {
                 ApplySplitAdjustments(ordered, adjustments);
-                _logger.Log(LogSeverity.Debug, $"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
+                //_logger.Log(LogSeverity.Debug, $"[DataCleaner] Applied {adjustments.Count} split adjustments for {symbol}.");
             }
 
             return ordered;
