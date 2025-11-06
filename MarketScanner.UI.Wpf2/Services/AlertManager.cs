@@ -83,6 +83,11 @@ public class AlertManager : IAlertSink
         }
     }
 
+    public void ClearAlerts()
+    {
+
+    }
+
     public void SendPendingDigest(string recipientEmail)
     {
         Logger.Debug($"Pending alerts: {_pendingMessages.Count}");

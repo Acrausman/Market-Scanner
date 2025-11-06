@@ -10,6 +10,10 @@ namespace MarketScanner.Core.Models;
 public record EquityScanResult
 {
     /// <summary>
+    /// Gets the symbol's country of origin
+    /// </summary>
+    public string Country { get; init; } = string.Empty;
+    /// <summary>
     /// Gets the ticker symbol that was evaluated.
     /// </summary>
     public string Symbol { get; init; } = string.Empty;

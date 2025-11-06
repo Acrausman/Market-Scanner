@@ -1,13 +1,14 @@
 // Normalized after refactor: updated namespace and using references
 using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Configuration;
+using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
+using MarketScanner.Data.Indicators;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
-using MarketScanner.Data.Indicators;
 using Polygon.Models;
 using System;
 using System.Collections.Concurrent;
@@ -26,6 +27,10 @@ namespace MarketScanner.Data.Services
         private const int IndicatorPeriod = 14;
         private const int BatchSize = 30;
         private const int MaxConcurrency = 12;
+        private CancellationTokenSource? _scanCts;
+        private Task? _scanTask;
+        private bool _isScanning;
+        public bool IsScanning => _isScanning;
 
         private readonly ManualResetEventSlim _pauseEvent = new(true);
         private readonly AppSettings _settings;
@@ -34,6 +39,9 @@ namespace MarketScanner.Data.Services
         private readonly IAlertManager _alertManager;
         private readonly IAppLogger _logger;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
+        private readonly List<IFilter> _filters = new();
+        public void AddFilter(IFilter filter) => _filters.Add(filter);
+        public void ClearFilters() => _filters.Clear();
 
         public EquityScannerService(
             IMarketDataProvider provider,
@@ -60,6 +68,60 @@ namespace MarketScanner.Data.Services
 
         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
+        public ObservableCollection<EquityScanResult> FilteredSymbols { get; } = new();
+
+        public async Task StartAsync(IProgress<int>? progress = null)
+        {
+            if (_isScanning)
+            {
+                _logger.Log(LogSeverity.Warning, "[Scanner] A scan is already running.");
+                return;
+            }
+
+            _isScanning = true;
+            _scanCts = new CancellationTokenSource();
+            var token = _scanCts.Token;
+
+            _logger.Log(LogSeverity.Information, "[Scanner] Starting scan...");
+            _scanTask = Task.Run(async () =>
+            {
+                try
+                {
+                    await ScanAllAsync(progress, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.Log(LogSeverity.Information, "[Scanner] Scan cancelled");
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogSeverity.Error, $"[Scanner] Scan failed: {ex.Message}");
+                }
+                finally
+                {
+                    _isScanning = false;
+                    _logger.Log(LogSeverity.Information, "[Scanner] Scan finished.");
+                }
+            });
+
+        }
+
+        public async Task StopAsync()
+        {
+            if (!_isScanning || _scanCts == null)
+                return;
+
+            _logger.Log(LogSeverity.Information, "[Scanner] Stopping scan...");
+            _scanCts.Cancel();
+
+            if (_scanTask != null)
+                await _scanTask;
+
+            _isScanning = false;
+            _scanCts.Dispose();
+            _scanCts = null;
+            
+        }
 
         public void Pause()
         {
@@ -117,12 +179,15 @@ namespace MarketScanner.Data.Services
             {
                 progress?.Report(100);
                 _logger.Log(LogSeverity.Information, $"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
+                ApplyFilters(_scanCache.Values);
+            
             }
             else
             {
                 _logger.Log(LogSeverity.Information, "[Scanner] Cancelled mid-run.");
             }
         }
+
 
         public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
         {
@@ -146,6 +211,18 @@ namespace MarketScanner.Data.Services
                 _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
                 return CreateEmptyResult(symbol);
             }
+        }
+
+        private void ApplyFilters(IEnumerable<EquityScanResult> allResults)
+        {
+            if (_filters.Count == 0)
+                return;
+            
+            var filtered = allResults.Where(r => _filters.All(f => f.Matches(r))).ToList();
+            _logger.Log(LogSeverity.Information, $"[Scanner] {filtered.Count} symbols matched filters.");
+            FilteredSymbols.Clear();
+            foreach (var result in filtered)
+                FilteredSymbols.Add(result);
         }
 
         public void ClearCache()
@@ -190,11 +267,11 @@ namespace MarketScanner.Data.Services
             }
             catch (OperationCanceledException)
             {
-                _logger.Log(LogSeverity.Information, $"[Scanner] Scan cancelled for {symbol}.");
+                //_logger.Log(LogSeverity.Information, $"[Scanner] Scan cancelled for {symbol}.");
             }
             catch (Exception ex)
             {
-                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+                //_logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
             }
             finally
             {

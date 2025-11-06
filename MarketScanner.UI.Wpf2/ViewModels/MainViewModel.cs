@@ -16,6 +16,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Threading;
+using MarketScanner.Core.Filtering;
+using MarketScanner.Core.Models;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
@@ -36,6 +38,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
         private double _alertIntervalMinutes = 30;
+        public ObservableCollection<EquityScanResult> FilteredSymbols => _scannerService.FilteredSymbols;
+
 
         private bool enableEmail = false;
         public double AlertIntervalMinutes
@@ -121,6 +125,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _emailService = emailService;
             _alertManager = alertManager;
             _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
+            _scannerService.ClearFilters();
+            _scannerService.AddFilter(new PriceFilter(5, 50));
+            _scannerService.AddFilter(new CountryFilter("US"));
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
@@ -237,12 +244,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
             Logger.Info($"[Timer] Digest interval updated to {_alertIntervalMinutes} minutes.");
         }
 
-
         private async Task StartScanAsync()
         {
             if (IsScanning)
                 return;
-
+            
             _scanCts = new CancellationTokenSource();
             IsScanning = true;
             StatusText = "Scanning...";
@@ -275,12 +281,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 IsScanning = false;
             }
         }
-
+        
         private void StopScan()
         {
             if (!IsScanning)
                 return;
-
             _scanCts?.Cancel();
         }
 
@@ -296,6 +301,26 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scannerService.Resume();
             StatusText = "Scan resumed";
             Log("Scan resumed");
+        }
+
+        private async Task RestartScanAsync()
+        {
+            try
+            {
+                if (_scannerService.IsScanning)
+                    await _scannerService.StopAsync();
+
+                _scannerViewModel.OverboughtSymbols.Clear();
+                _scannerViewModel.OversoldSymbols.Clear();
+                _scannerService.ClearCache();
+                await _scannerService.StopAsync();
+                await Task.Delay(250);
+                await _scannerService.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[Scanner] Failed to restart scan: {ex.Message}");
+            }
         }
 
         // -------- Chart loading for selected symbol --------
@@ -377,15 +402,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _appSettings.Save();
                     Logger.Info($"[Settings] RSI Smoothing is now set to '{_selectedRsiMethod}'");
 
-                    _scannerService.ClearCache();
-                    _scannerService.OverboughtSymbols.Clear();
-                    _scannerService.OversoldSymbols.Clear();
-
-                    if(IsScanning)
-                    {
-                        StopScan();
-                        _ = StartScanAsync();
-                    }
+                    _ = RestartScanAsync();
                 }
 
             }

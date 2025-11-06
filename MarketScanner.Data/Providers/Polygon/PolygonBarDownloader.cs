@@ -71,7 +71,7 @@ namespace MarketScanner.Data.Providers.Polygon
             }
             catch (Exception ex)
             {
-                Logger.Error($"[Polygon] {symbol} failed: {ex.Message}");
+                //Logger.Error($"[Polygon] {symbol} failed: {ex.Message}");
                 return new List<Bar>();
             }
         }

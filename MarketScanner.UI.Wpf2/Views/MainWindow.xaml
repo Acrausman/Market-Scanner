@@ -157,7 +157,10 @@
              Value="{Binding Scanner.ProgressValue, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
              Height="18" Margin="0,4,0,0"/>
 
-                <TextBlock Text="{Binding StatusText}" Foreground="White" Margin="0,4,0,10"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
+                    <TextBlock Text="{Binding StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+                </StackPanel>
 
                 <Separator Margin="0,10,0,10"/>
 
@@ -200,13 +203,14 @@
                         </Style>
                     </ListBox.ItemContainerStyle>
                 </ListBox>
-
-                <Separator Margin="0,10,0,10"/>
-
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
-                </StackPanel>
+                <GroupBox Header="Filtered" Margin="0,10,0,0">
+                    <ListBox Grid.Row="2"
+                         ItemsSource="{Binding FilteredSymbols}"
+                         DisplayMemberPath="Symbol"
+                         BorderBrush="#555"
+                         Margin="0,8,0,0">
+                    </ListBox>
+                </GroupBox>
             </StackPanel>
         </Border>
     </Grid>

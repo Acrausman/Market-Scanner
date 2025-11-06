@@ -45,7 +45,7 @@ namespace MarketScanner.Data.Providers.Polygon
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[Polygon] {symbol} adjustment failed: {ex.Message}");
+                //Logger.Warn($"[Polygon] {symbol} adjustment failed: {ex.Message}");
             }
 
             return adjustments;
@@ -116,7 +116,7 @@ namespace MarketScanner.Data.Providers.Polygon
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[Polygon] {symbol} adjustment failed: {ex.Message}");
+                //Logger.Warn($"[Polygon] {symbol} adjustment failed: {ex.Message}");
             }
 
             return adjustments;

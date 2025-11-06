@@ -87,7 +87,7 @@ namespace MarketScanner.Data.Providers
             }
             catch (Exception ex)
             {
-                Logger.Warn($"[Polygon] Failed to fetch tickers: {ex.Message}");
+                //Logger.Warn($"[Polygon] Failed to fetch tickers: {ex.Message}");
             }
 
             return tickers.Distinct().ToList();
