@@ -16,5 +16,11 @@ namespace MarketScanner.Core.Filtering
         /// <param name="result"></param>
         /// <returns></returns>
         bool Matches(EquityScanResult result);
+        /// <summary>
+        /// Whether or not the filter applies (ticker info)
+        /// </summary>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        bool MatchesTicker(TickerInfo info);
     }
 }

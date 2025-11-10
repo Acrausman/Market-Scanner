@@ -13,6 +13,7 @@ namespace MarketScanner.Data.Providers
         Task<IReadOnlyList<Bar>> GetHistoricalBarsAsync(string symbol, DateTime start, DateTime end, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<SplitAdjustment>> GetSplitAdjustmentsAsync(string symbol, CancellationToken cancellationToken = default);
         Task<IReadOnlyList<string>> GetAllTickersAsync(CancellationToken cancellationToken = default);
+        Task<IReadOnlyList<TickerInfo>> GetAllTickerInfoAsync(CancellationToken cancellationToken = default);
     }
 
 }

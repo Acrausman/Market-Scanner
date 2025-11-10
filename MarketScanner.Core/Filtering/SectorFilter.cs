@@ -34,5 +34,13 @@ namespace MarketScanner.Core.Filtering
         public bool Matches(EquityScanResult result)
             => string.Equals(result.Sector, Sector, StringComparison.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// Whether or not the filter applies (ticker)
+        /// </summary>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        public bool MatchesTicker(TickerInfo info)
+            => string.Equals(info.Sector, Sector, StringComparison.OrdinalIgnoreCase);
+
     }
 }

@@ -356,19 +356,6 @@ namespace MarketScanner.Data.Services
 
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
 
-            /*
-            if(rsi > 70)
-            {
-                logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
-                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is overbought at: {rsi}");
-            }
-            
-            else if(rsi < 30)
-            {
-                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
-                _logger.Log(LogSeverity.Debug, $"{symbol} RSI is oversold at: {rsi}");
-            }
-            */
             EquityScanResult result = new EquityScanResult
             {
                 Symbol = symbol,

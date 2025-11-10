@@ -92,5 +92,57 @@ namespace MarketScanner.Data.Providers
 
             return tickers.Distinct().ToList();
         }
+
+        public async Task<IReadOnlyList<TickerInfo>> GetAllTickerInfoAsync(CancellationToken cancellationToken = default)
+        {
+            var tickers = new List<TickerInfo>();
+            string? nextUrl = "https://api.polygon.io/v3/reference/tickers?market=stocks&active=true&type=CS&limit=1000";
+
+            try
+            {
+                while (!string.IsNullOrEmpty(nextUrl))
+                {
+                    var response = await _client.GetJsonAsync(nextUrl, cancellationToken).ConfigureAwait(false);
+                    var results = response["results"]?.ToList();
+
+                    if (results != null)
+                    {
+                        foreach (var r in results)
+                        {
+                            string? ticker = r.Value<string>("ticker");
+                            string? type = r.Value<string>("type");
+                            string? exchange = r.Value<string>("primary_exchange");
+                            bool? active = r.Value<bool?>("active");
+                            bool? primary = r.Value<bool?>("primary_share");
+                            string? locale = r.Value<string>("locale");
+                            string? sector = r.Value<string>("sic_description") ?? r.Value<string>("sector");
+
+                            if (!string.IsNullOrWhiteSpace(ticker) &&
+                                type == "CS" &&
+                                (active ?? true) &&
+                                (primary == null || primary == true) &&
+                                (exchange != null && new[] { "XNYS", "XNAS", "XASE" }.Contains(exchange)))
+                            {
+                                tickers.Add(new TickerInfo
+                                {
+                                    Symbol = ticker,
+                                    Country = locale?.ToUpperInvariant() ?? "US",
+                                    Sector = sector ?? "Unknown"
+                                });
+                            }
+                        }
+                    }
+
+                    nextUrl = response["next_url"]?.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                //Logger.Warn($"[Polygon] Failed to fetch tickers: {ex.Message}");
+            }
+
+            return tickers;
+        }
+
     }
 }

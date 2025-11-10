@@ -35,5 +35,13 @@ namespace MarketScanner.Core.Filtering
         /// <returns></returns>
         public bool Matches(EquityScanResult result)
             => result.Price >= MinPrice && result.Price <= MaxPrice;
+        /// <summary>
+        /// Whether or not the filter applies
+        /// </summary>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        public bool MatchesTicker(TickerInfo info)
+            => info.Price >= MinPrice && info.Price <= MaxPrice;
+
     }
 }
