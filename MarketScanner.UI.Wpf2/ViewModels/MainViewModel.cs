@@ -76,7 +76,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private bool _isScanning;
 
         // persisted / options fields
-        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI\r\n";
+        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
         private string _notificationEmail = string.Empty;
         private RsiSmoothingMethod _rsiMethod;
         private string _selectedTimespan = "3M";
@@ -119,15 +119,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
             AppSettings settings)
         {
             _provider = new PolygonMarketDataProvider(apiKey);
-            _scannerViewModel = scannerViewModel ?? throw new ArgumentNullException(nameof(scannerViewModel));
             _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
             _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
-            _scannerService.ClearFilters();
-            _scannerService.AddFilter(new PriceFilter(5, 50));
-            _scannerService.AddFilter(new CountryFilter("US"));
+            //_scannerService.ClearFilters();
+            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
+            _scannerViewModel = new ScannerViewModel(_scannerService);
+
+
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);

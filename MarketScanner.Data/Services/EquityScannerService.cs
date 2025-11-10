@@ -1,6 +1,7 @@
 // Normalized after refactor: updated namespace and using references
 using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Configuration;
+using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
@@ -40,8 +41,17 @@ namespace MarketScanner.Data.Services
         private readonly IAppLogger _logger;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         private readonly List<IFilter> _filters = new();
-        public void AddFilter(IFilter filter) => _filters.Add(filter);
-        public void ClearFilters() => _filters.Clear();
+        public void AddFilter(IFilter filter)
+        {
+            _logger.Log(LogSeverity.Information, $"Adding {filter} to filters\n Active filters:");
+            _filters.Add(filter);
+            foreach (var f in _filters )_logger.Log(LogSeverity.Information, f.Name);
+        }
+        public void ClearFilters()
+            {
+            _logger.Log(LogSeverity.Information, "Filters cleared");
+            _filters.Clear();
+            }
 
         public EquityScannerService(
             IMarketDataProvider provider,
@@ -63,7 +73,7 @@ namespace MarketScanner.Data.Services
                   CreateDataCleaner(provider, out var logger),
                   CreateAlertManager(logger, alertSink),
                   logger, settings)
-        {
+        {  
         }
 
         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
@@ -147,8 +157,7 @@ namespace MarketScanner.Data.Services
                 _logger.Log(LogSeverity.Information, "[Scanner] No tickers available from provider.");
                 return;
             }
-
-            _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...");
+            _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...\nApplied filters: {_filters.Count}");
 
             using var limiter = new SemaphoreSlim(MaxConcurrency);
             var tracker = new ScanProgressTracker();
@@ -179,7 +188,7 @@ namespace MarketScanner.Data.Services
             {
                 progress?.Report(100);
                 _logger.Log(LogSeverity.Information, $"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
-                ApplyFilters(_scanCache.Values);
+                //ApplyFilters(_scanCache.Values);
             
             }
             else
@@ -213,16 +222,20 @@ namespace MarketScanner.Data.Services
             }
         }
 
-        private void ApplyFilters(IEnumerable<EquityScanResult> allResults)
+        private void ApplyFilters(EquityScanResult result)
         {
             if (_filters.Count == 0)
                 return;
-            
-            var filtered = allResults.Where(r => _filters.All(f => f.Matches(r))).ToList();
-            _logger.Log(LogSeverity.Information, $"[Scanner] {filtered.Count} symbols matched filters.");
-            FilteredSymbols.Clear();
-            foreach (var result in filtered)
-                FilteredSymbols.Add(result);
+
+            bool matchesAll = _filters.All(f => f.Matches(result));
+            if(matchesAll)
+            {
+                lock (FilteredSymbols)
+                {
+                    FilteredSymbols.Add(result);
+                }
+            }
+
         }
 
         public void ClearCache()
@@ -325,36 +338,40 @@ namespace MarketScanner.Data.Services
             var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
             if (closes == null || closes.Count < IndicatorPeriod)
             {
-                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
+                //_logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
 
             var trimmed = closes.Skip(Math.Max(0, closes.Count - IndicatorWindow)).ToList();
             if (trimmed.Count < IndicatorPeriod)
             {
-                _logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
+                //_logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
             //_logger.Log(LogSeverity.Debug, $"[Settings] Using RSI method: {_settings.RsiMethod}");
-            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, _settings.RsiMethod);
+            var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
+            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, rsiMethod);
             var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
             var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
 
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
 
+            /*
             if(rsi > 70)
             {
-                _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
+                logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
                 _logger.Log(LogSeverity.Debug, $"{symbol} RSI is overbought at: {rsi}");
             }
+            
             else if(rsi < 30)
             {
                 _logger.Log(LogSeverity.Debug, $"{symbol} last 30 closes: {string.Join(", ", trimmed.TakeLast(30))}");
                 _logger.Log(LogSeverity.Debug, $"{symbol} RSI is oversold at: {rsi}");
             }
-                return new EquityScanResult
-                {
-                    Symbol = symbol,
+            */
+            EquityScanResult result = new EquityScanResult
+            {
+                Symbol = symbol,
                     Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
                     Volume = volume,
                     RSI = rsi,
@@ -362,7 +379,10 @@ namespace MarketScanner.Data.Services
                     Upper = upper,
                     Lower = lower,
                     TimeStamp = DateTime.UtcNow
-                };
+            };
+            ApplyFilters(result);
+
+            return result;
         }
 
         private static EquityScanResult CreateEmptyResult(string symbol)

@@ -40,8 +40,8 @@ public class AlertManager : IAlertManager
         _pendingAlerts.Enqueue(alert);
 
         var formatted = $"{symbol} {triggerName} ({value:F2})";
-        _logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
-        _logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
+        //_logger.Log(LogSeverity.Information, $"[AlertManager] Queued alert: {formatted}");
+        //_logger.Log(LogSeverity.Information, $"[AlertManager] Total alerts are now {_pendingAlerts.Count}");
 
         _alertSink?.AddAlert(formatted);
     }

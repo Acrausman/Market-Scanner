@@ -1,4 +1,5 @@
 using MarketScanner.Core.Configuration;
+using MarketScanner.Core.Filtering;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
 using MarketScanner.UI.Views;

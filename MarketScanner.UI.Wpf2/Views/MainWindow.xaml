@@ -203,6 +203,11 @@
                         </Style>
                     </ListBox.ItemContainerStyle>
                 </ListBox>
+                <TextBlock Text="{Binding FilteredSymbols.Count, StringFormat='Filtered: {0} symbols'}"
+           Foreground="#AAAAAA"
+           FontSize="12"
+           Margin="4,2,0,8"/>
+
                 <GroupBox Header="Filtered" Margin="0,10,0,0">
                     <ListBox Grid.Row="2"
                          ItemsSource="{Binding FilteredSymbols}"

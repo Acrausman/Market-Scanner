@@ -16,6 +16,11 @@ public record EquityScanResult
     /// <summary>
     /// Gets the ticker symbol that was evaluated.
     /// </summary>
+    /// 
+    public string Sector { get; init; } = string.Empty;
+    /// <summary>
+    /// Gets the symbol's sector
+    /// </summary>
     public string Symbol { get; init; } = string.Empty;
 
     /// <summary>

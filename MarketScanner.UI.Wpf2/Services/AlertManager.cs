@@ -54,8 +54,8 @@ public class AlertManager : IAlertSink
             _pendingMessages.Add($"[{DateTime.Now:HH:mm}] {message}");
         }
 
-        Logger.Info($"[AlertManager] Queued alert: {message}");
-        Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
+        //Logger.Info($"[AlertManager] Queued alert: {message}");
+        //Logger.Info($"[AlertManager] Total alerts are now {_pendingMessages.Count}");
     }
 
     private void HandleAlert(Alert alert, EquityScanResult result)
@@ -72,7 +72,7 @@ public class AlertManager : IAlertSink
         string subject = $"Market Alert: {alert.Symbol}";
         string message = alert.Message ?? GenerateAlertMessage(alert, result);
 
-        Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
+        //Debug.WriteLine($"[AlertManager] Triggering {alert.Type} for {alert.Symbol}");
 
         if (alert.NotifyEmail)
         {
