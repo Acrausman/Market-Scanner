@@ -61,5 +61,7 @@ public record EquityScanResult
     /// <summary>
     /// Gets the triggers that fired as part of the scan evaluation.
     /// </summary>
+    /// 
+    public TickerInfo? MetaData { get; set; }
     public IReadOnlyList<TriggerHit> TriggerHits { get; init; } = Array.Empty<TriggerHit>();
 }

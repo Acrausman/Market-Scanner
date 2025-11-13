@@ -80,7 +80,7 @@ namespace MarketScanner.Data.Services
 
         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
-        public ObservableCollection<EquityScanResult> FilteredSymbols { get; } = new();
+        public ObservableCollection<TickerInfo> FilteredSymbols { get; } = new();
 
         public async Task StartAsync(IProgress<int>? progress = null)
         {
@@ -200,16 +200,17 @@ namespace MarketScanner.Data.Services
         }
 
 
-        public async Task<EquityScanResult> ScanSingleSymbol(string symbol)
+        public async Task<EquityScanResult> ScanSingleSymbol(TickerInfo info)
         {
-            return await ScanSingleSymbol(symbol, CancellationToken.None).ConfigureAwait(false);
+            return await ScanSingleSymbol(info, CancellationToken.None).ConfigureAwait(false);
         }
 
-        public async Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken)
+        public async Task<EquityScanResult> ScanSingleSymbol(TickerInfo info, CancellationToken cancellationToken)
         {
+            string symbol = info.Symbol;
             try
             {
-                var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
                 _scanCache[symbol] = result;
                 return result;
             }
@@ -224,17 +225,16 @@ namespace MarketScanner.Data.Services
             }
         }
 
-        private void ApplyFilters(EquityScanResult result)
+        private void ApplyFilters(TickerInfo info)
         {
             if (_filters.Count == 0)
                 return;
-
-            bool matchesAll = _filters.All(f => f.Matches(result));
+            bool matchesAll = _filters.All(f => f.Matches(info));
             if(matchesAll)
             {
                 lock (FilteredSymbols)
                 {
-                    FilteredSymbols.Add(result);
+                    FilteredSymbols.Add(info);
                 }
             }
 
@@ -247,7 +247,7 @@ namespace MarketScanner.Data.Services
         }
 
         private async Task ProcessSymbolAsync(
-            string symbol,
+            TickerInfo info,
             SemaphoreSlim limiter,
             int totalSymbols,
             ScanProgressTracker tracker,
@@ -256,13 +256,16 @@ namespace MarketScanner.Data.Services
         {
             _pauseEvent.Wait(cancellationToken);
             await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
+            string symbol = info.Symbol;
+            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken);
+            info.Price = price;
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
+                var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
                 QueueAlerts(result);
-                ApplyFilters(result);
+                ApplyFilters(info);
                 _scanCache[symbol] = result;
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
@@ -338,8 +341,9 @@ namespace MarketScanner.Data.Services
 
         }
 
-        private async Task<EquityScanResult> ScanSymbolCoreAsync(string symbol, CancellationToken cancellationToken)
+        private async Task<EquityScanResult> ScanSymbolCoreAsync(TickerInfo info, CancellationToken cancellationToken)
         {
+            string symbol = info.Symbol;
             var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
             if (closes == null || closes.Count < IndicatorPeriod)
             {
@@ -370,7 +374,8 @@ namespace MarketScanner.Data.Services
                     SMA = sma,
                     Upper = upper,
                     Lower = lower,
-                    TimeStamp = DateTime.UtcNow
+                    TimeStamp = DateTime.UtcNow,
+                    MetaData = info
             };
 
             return result;

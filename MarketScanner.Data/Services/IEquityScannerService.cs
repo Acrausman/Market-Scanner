@@ -12,8 +12,8 @@ namespace MarketScanner.Data.Services
         ObservableCollection<string> OversoldSymbols { get; }
 
         Task ScanAllAsync(IProgress<int>? progress, CancellationToken token);
-        Task<EquityScanResult> ScanSingleSymbol(string symbol);
-        Task<EquityScanResult> ScanSingleSymbol(string symbol, CancellationToken cancellationToken);
+        Task<EquityScanResult> ScanSingleSymbol(TickerInfo info);
+        Task<EquityScanResult> ScanSingleSymbol(TickerInfo info, CancellationToken cancellationToken);
         void ClearCache();
     }
 }

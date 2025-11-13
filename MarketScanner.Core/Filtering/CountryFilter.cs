@@ -21,29 +21,12 @@ namespace MarketScanner.Core.Filtering
         /// </summary>
         public string CountryCode { get; set; }
 
-        /// <summary>
-        /// Constructor
-        /// </summary>
-        /// <param name="countryCode"></param>
         public CountryFilter(string countryCode)
         {
             CountryCode = countryCode;
         }
 
-        /// <summary>
-        /// Whether or not the filter applies
-        /// </summary>
-        /// <param name="result"></param>
-        /// <returns></returns>
-
-        public bool Matches(EquityScanResult result)
-            => string.Equals(result.Country, CountryCode, StringComparison.OrdinalIgnoreCase);
-        /// <summary>
-        /// Whether or not the filter applies(ticker)
-        /// </summary>
-        /// <param name="info"></param>
-        /// <returns></returns>
-        public bool MatchesTicker(TickerInfo info)
+        public bool Matches(TickerInfo info)
             => string.Equals(info.Country, CountryCode, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -38,7 +38,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
         private double _alertIntervalMinutes = 30;
-        public ObservableCollection<EquityScanResult> FilteredSymbols => _scannerService.FilteredSymbols;
+        public ObservableCollection<TickerInfo> FilteredSymbols => _scannerService.FilteredSymbols;
 
 
         private bool enableEmail = false;
@@ -126,7 +126,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
             _scannerService.ScanResultClassified += OnScanResultClassified;
             //_scannerService.ClearFilters();
-            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
+            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(1, 1000000000000));
             _scannerViewModel = new ScannerViewModel(_scannerService);
 
 

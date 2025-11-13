@@ -50,10 +50,11 @@ namespace MarketScanner.Data.Providers
             return _corporateActionService.GetSplitAdjustmentsAsync(symbol, cancellationToken);
         }
 
-        public async Task<IReadOnlyList<string>> GetAllTickersAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<TickerInfo>> GetAllTickersAsync(CancellationToken cancellationToken = default)
         {
-            var tickers = new List<string>();
+            var tickers = new List<TickerInfo>();
             string? nextUrl = "https://api.polygon.io/v3/reference/tickers?market=stocks&active=true&type=CS&limit=1000";
+
 
             try
             {
@@ -77,7 +78,15 @@ namespace MarketScanner.Data.Providers
                                 (primary == null || primary == true) &&
                                 (exchange != null && new[] { "XNYS", "XNAS", "XASE" }.Contains(exchange)))
                             {
-                                tickers.Add(ticker);
+                                var info = new TickerInfo
+                                {
+                                    Symbol = ticker,
+                                    Country = r.Value<string>("locale") ?? "US",
+                                    Sector = r.Value<string>("sic_description") ?? "",
+                                    Exchange = exchange ?? ""
+                                };
+
+                                tickers.Add(info);
                             }
                         }
                     }
@@ -90,7 +99,7 @@ namespace MarketScanner.Data.Providers
                 //Logger.Warn($"[Polygon] Failed to fetch tickers: {ex.Message}");
             }
 
-            return tickers.Distinct().ToList();
+            return tickers;
         }
 
         public async Task<IReadOnlyList<TickerInfo>> GetAllTickerInfoAsync(CancellationToken cancellationToken = default)

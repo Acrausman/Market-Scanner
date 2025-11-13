@@ -28,19 +28,8 @@ namespace MarketScanner.Core.Filtering
             MinPrice = min;
             MaxPrice = max;
         }
-        /// <summary>
-        /// Whether or not the filter applies
-        /// </summary>
-        /// <param name="result"></param>
-        /// <returns></returns>
-        public bool Matches(EquityScanResult result)
-            => result.Price >= MinPrice && result.Price <= MaxPrice;
-        /// <summary>
-        /// Whether or not the filter applies
-        /// </summary>
-        /// <param name="info"></param>
-        /// <returns></returns>
-        public bool MatchesTicker(TickerInfo info)
+
+        public bool Matches(TickerInfo info)
             => info.Price >= MinPrice && info.Price <= MaxPrice;
 
     }
