@@ -124,6 +124,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _emailService = emailService;
             _alertManager = alertManager;
             _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
+            _scannerService.ScanResultClassified += OnScanResultClassified;
             //_scannerService.ClearFilters();
             if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
             _scannerViewModel = new ScannerViewModel(_scannerService);
@@ -322,6 +323,17 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 Logger.Error($"[Scanner] Failed to restart scan: {ex.Message}");
             }
+        }
+
+        private void OnScanResultClassified(EquityScanResult result)
+        {
+            App.Current.Dispatcher.Invoke(() =>
+            {
+                if (result.RSI >= 70)
+                    _scannerViewModel.OverboughtSymbols.Add(result.Symbol);
+                else if (result.RSI <= 30)
+                    _scannerViewModel.OversoldSymbols.Add(result.Symbol);
+            });
         }
 
         // -------- Chart loading for selected symbol --------

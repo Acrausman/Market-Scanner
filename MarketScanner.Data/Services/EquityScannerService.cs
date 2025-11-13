@@ -41,6 +41,8 @@ namespace MarketScanner.Data.Services
         private readonly IAppLogger _logger;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         private readonly List<IFilter> _filters = new();
+
+        public event Action<EquityScanResult>? ScanResultClassified;
         public void AddFilter(IFilter filter)
         {
             _logger.Log(LogSeverity.Information, $"Adding {filter} to filters\n Active filters:");
@@ -259,9 +261,9 @@ namespace MarketScanner.Data.Services
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var result = await ScanSymbolCoreAsync(symbol, cancellationToken).ConfigureAwait(false);
-                _scanCache[symbol] = result;
-
                 QueueAlerts(result);
+                ApplyFilters(result);
+                _scanCache[symbol] = result;
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
                 if (processed % BatchSize == 0 || processed == totalSymbols)
@@ -326,11 +328,14 @@ namespace MarketScanner.Data.Services
             if (result.RSI >= 70)
             {
                 _alertManager.Enqueue(result.Symbol, "overbought", result.RSI);
+                ScanResultClassified?.Invoke(result);
             }
             else if (result.RSI <= 30)
             {
                 _alertManager.Enqueue(result.Symbol, "oversold", result.RSI);
+                ScanResultClassified?.Invoke(result);
             }
+
         }
 
         private async Task<EquityScanResult> ScanSymbolCoreAsync(string symbol, CancellationToken cancellationToken)
@@ -367,7 +372,6 @@ namespace MarketScanner.Data.Services
                     Lower = lower,
                     TimeStamp = DateTime.UtcNow
             };
-            ApplyFilters(result);
 
             return result;
         }
