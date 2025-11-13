@@ -71,6 +71,9 @@ namespace MarketScanner.Data.Providers
                             bool? active = r.Value<bool?>("active");
                             bool? primary = r.Value<bool?>("primary_share");
                             string? ticker = r.Value<string>("ticker");
+                            string? locale = r.Value<string>("locale");
+                            string? sicDesc = r.Value<string>("sic_description");
+                            string? industry = r.Value<string>("industry");
 
                             if (!string.IsNullOrWhiteSpace(ticker) &&
                                 type == "CS" &&
@@ -81,8 +84,8 @@ namespace MarketScanner.Data.Providers
                                 var info = new TickerInfo
                                 {
                                     Symbol = ticker,
-                                    Country = r.Value<string>("locale") ?? "US",
-                                    Sector = r.Value<string>("sic_description") ?? "",
+                                    Country = locale ?? "US",
+                                    Sector = industry ?? sicDesc ?? "",
                                     Exchange = exchange ?? ""
                                 };
 

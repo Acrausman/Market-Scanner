@@ -227,6 +227,8 @@ namespace MarketScanner.Data.Services
 
         private void ApplyFilters(TickerInfo info)
         {
+            Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
+                $"Exchange is {info.Exchange}");
             if (_filters.Count == 0)
                 return;
             bool matchesAll = _filters.All(f => f.Matches(info));
