@@ -1,12 +1,14 @@
-// Normalized after refactor: updated namespace and using references
+﻿// Normalized after refactor: updated namespace and using references
 using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
+using MarketScanner.Core.Metadata;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Indicators;
 using MarketScanner.Data.Providers;
+using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
@@ -39,7 +41,10 @@ namespace MarketScanner.Data.Services
         private readonly HistoricalPriceCache _priceCache;
         private readonly IAlertManager _alertManager;
         private readonly IAppLogger _logger;
+        private readonly IFundamentalProvider _fundamentalProvider;
+        private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
+        //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
         private readonly List<IFilter> _filters = new();
 
         public event Action<EquityScanResult>? ScanResultClassified;
@@ -57,6 +62,7 @@ namespace MarketScanner.Data.Services
 
         public EquityScannerService(
             IMarketDataProvider provider,
+            IFundamentalProvider fundamentalProvider,
             IDataCleaner dataCleaner,
             IAlertManager alertManager,
             IAppLogger logger,
@@ -64,14 +70,17 @@ namespace MarketScanner.Data.Services
         {
             _settings = settings;
             _provider = provider;
+            _fundamentalProvider = fundamentalProvider;
             _alertManager = alertManager;
             _logger = logger;
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
+            _fundamentalProvider = fundamentalProvider;
+            _metadataCache = new TickerMetadataCache("ticker_metadata.json");
         }
-
-        public EquityScannerService(IMarketDataProvider provider, IAlertSink alertSink, AppSettings settings)
+        public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, IAlertSink alertSink, AppSettings settings)
             : this(
                   provider,
+                  fundamentalProvider,
                   CreateDataCleaner(provider, out var logger),
                   CreateAlertManager(logger, alertSink),
                   logger, settings)
@@ -151,9 +160,12 @@ namespace MarketScanner.Data.Services
 
         public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken cancellationToken)
         {
+            Logger.WriteLine("[DEBUG] Clearing scan cache...");
+            _scanCache.Clear();
             await _alertManager.ResetAsync().ConfigureAwait(false);
 
             var tickers = await _provider.GetAllTickersAsync(cancellationToken).ConfigureAwait(false);
+            var totalSymbols = tickers.Count;
             if (tickers == null || tickers.Count == 0)
             {
                 _logger.Log(LogSeverity.Information, "[Scanner] No tickers available from provider.");
@@ -165,7 +177,7 @@ namespace MarketScanner.Data.Services
             var tracker = new ScanProgressTracker();
 
             var tasks = tickers
-                .Select(symbol => ProcessSymbolAsync(symbol, limiter, tickers.Count, tracker, progress, cancellationToken))
+                .Select(ticker => ProcessSymbolAsync(ticker, limiter, totalSymbols, tracker, progress, cancellationToken))
                 .ToList();
 
             try
@@ -227,8 +239,8 @@ namespace MarketScanner.Data.Services
 
         private void ApplyFilters(TickerInfo info)
         {
-            Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
-                $"Exchange is {info.Exchange}");
+            /*Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
+                $"Exchange is {info.Exchange}");*/
             if (_filters.Count == 0)
                 return;
             bool matchesAll = _filters.All(f => f.Matches(info));
@@ -261,14 +273,15 @@ namespace MarketScanner.Data.Services
             string symbol = info.Symbol;
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken);
             info.Price = price;
+
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
                 QueueAlerts(result);
                 ApplyFilters(info);
                 _scanCache[symbol] = result;
+                Logger.WriteLine($"[CACHE CHECK] {symbol} → sector={_scanCache[symbol].Sector}, country={_scanCache[symbol].Country}");
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
                 if (processed % BatchSize == 0 || processed == totalSymbols)
@@ -359,28 +372,56 @@ namespace MarketScanner.Data.Services
                 //_logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
                 return CreateEmptyResult(symbol);
             }
-            //_logger.Log(LogSeverity.Debug, $"[Settings] Using RSI method: {_settings.RsiMethod}");
+            TickerInfo? meta;
+            bool hasCached = _metadataCache.TryGet(symbol, out meta);
+
+            // Treat “Unknown” as not good enough – force enrichment
+            bool needsEnrich =
+                !hasCached ||
+                meta == null ||
+                string.IsNullOrWhiteSpace(meta.Country) ||
+                meta.Country == "Unknown" ||
+                string.IsNullOrWhiteSpace(meta.Sector) ||
+                meta.Sector == "Unknown";
+
+            if (needsEnrich && _fundamentalProvider != null)
+            {
+                var fetched = await _fundamentalProvider
+                    .GetMetadataAsync(symbol, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (fetched != null)
+                {
+                    meta = fetched;
+                    _metadataCache.AddOrUpdate(fetched);
+                }
+            }
+
             var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
             var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, rsiMethod);
             var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
             var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
 
-            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken).ConfigureAwait(false);
+            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
+                .ConfigureAwait(false);
 
-            EquityScanResult result = new EquityScanResult
+            var result = new EquityScanResult
             {
                 Symbol = symbol,
-                    Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
-                    Volume = volume,
-                    RSI = rsi,
-                    SMA = sma,
-                    Upper = upper,
-                    Lower = lower,
-                    TimeStamp = DateTime.UtcNow,
-                    MetaData = info
+                Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
+                Volume = volume,
+                RSI = rsi,
+                SMA = sma,
+                Upper = upper,
+                Lower = lower,
+                TimeStamp = DateTime.UtcNow,
+                Sector = meta?.Sector ?? "Unknown",
+                Country = meta?.Country ?? "Unknown"
             };
 
+            Logger.WriteLine($"Sector and country for {symbol} are {result.Sector} and {result.Country}");
             return result;
+
         }
 
         private static EquityScanResult CreateEmptyResult(string symbol)

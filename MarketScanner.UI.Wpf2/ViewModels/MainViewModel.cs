@@ -18,12 +18,15 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Models;
+using MarketScanner.Core.Metadata;
+using MarketScanner.Data.Providers.Finnhub;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
         private readonly IMarketDataProvider _provider;
+        private readonly IFundamentalProvider _fundamentalProvider;
         private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
         private readonly EquityScannerService _equityScannerService;
@@ -77,6 +80,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         // persisted / options fields
         private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
+        private string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
         private string _notificationEmail = string.Empty;
         private RsiSmoothingMethod _rsiMethod;
         private string _selectedTimespan = "3M";
@@ -119,14 +123,15 @@ namespace MarketScanner.UI.Wpf.ViewModels
             AppSettings settings)
         {
             _provider = new PolygonMarketDataProvider(apiKey);
+            _fundamentalProvider = new FinnhubFundamentalProvider(FinnApiKey);
             _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
             _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
-            _scannerService = new EquityScannerService(_provider, _alertManager, _appSettings);
+            _scannerService = new EquityScannerService(_provider,_fundamentalProvider, _alertManager, _appSettings);
             _scannerService.ScanResultClassified += OnScanResultClassified;
             //_scannerService.ClearFilters();
-            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(1, 1000000000000));
+            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
             _scannerViewModel = new ScannerViewModel(_scannerService);
 
 
@@ -164,8 +169,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 Logger.Info($"[Timer] Triggering digest at {DateTime.Now:T}");
                 if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
             };
-            
-            
+
             _digestTimer.Start();
 
         }

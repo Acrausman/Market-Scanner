@@ -1,5 +1,6 @@
 ﻿using MarketScanner.Data.Diagnostics;
 using MarketScanner.Core.Models;
+using MarketScanner.Core.Classification;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers.Polygon;
 using Newtonsoft.Json.Linq;
@@ -16,12 +17,35 @@ namespace MarketScanner.Data.Providers
         private readonly PolygonRestClient _client;
         private readonly PolygonBarDownloader _barDownloader;
         private readonly PolygonCorporateActionService _corporateActionService;
+        private readonly string _apiKey;
+
+        private static readonly Dictionary<string, string> SicToSector = new()
+{
+    // Technology
+    { "3571", "Technology" }, // Electronic Computers
+    { "3674", "Semiconductors" },
+
+    // Finance
+    { "6021", "National Commercial Banks" },
+    { "6211", "Security Brokers" },
+
+    // Energy
+    { "1389", "Oil & Gas" },
+
+    // Healthcare
+    { "2834", "Biotechnology" },
+
+    // Default
+    { "", "Unknown" }
+};
+
 
         public PolygonMarketDataProvider(string apiKey)
         {
             _client = new PolygonRestClient(apiKey);
             _barDownloader = new PolygonBarDownloader(_client);
             _corporateActionService = new PolygonCorporateActionService(_client);
+            _apiKey = apiKey;
         }
 
         public async Task<(double price, double volume)> GetQuoteAsync(string symbol, CancellationToken cancellationToken = default)
@@ -55,7 +79,6 @@ namespace MarketScanner.Data.Providers
             var tickers = new List<TickerInfo>();
             string? nextUrl = "https://api.polygon.io/v3/reference/tickers?market=stocks&active=true&type=CS&limit=1000";
 
-
             try
             {
                 while (!string.IsNullOrEmpty(nextUrl))
@@ -72,8 +95,7 @@ namespace MarketScanner.Data.Providers
                             bool? primary = r.Value<bool?>("primary_share");
                             string? ticker = r.Value<string>("ticker");
                             string? locale = r.Value<string>("locale");
-                            string? sicDesc = r.Value<string>("sic_description");
-                            string? industry = r.Value<string>("industry");
+                            string? sicCode = r.Value<string>("sic_code");
 
                             if (!string.IsNullOrWhiteSpace(ticker) &&
                                 type == "CS" &&
@@ -85,10 +107,11 @@ namespace MarketScanner.Data.Providers
                                 {
                                     Symbol = ticker,
                                     Country = locale ?? "US",
-                                    Sector = industry ?? sicDesc ?? "",
+                                    Sector = SicSectorMap.GetSector(sicCode),
                                     Exchange = exchange ?? ""
                                 };
-
+                                //Logger.WriteLine($"Sic Code for {info.Symbol} is {sicCode}");
+                                //await EnrichTickerInfoAsync(info, cancellationToken).ConfigureAwait(false);
                                 tickers.Add(info);
                             }
                         }
@@ -156,5 +179,36 @@ namespace MarketScanner.Data.Providers
             return tickers;
         }
 
+        private async Task EnrichTickerInfoAsync(TickerInfo info, CancellationToken cancellationToken)
+        {
+            if (info == null)
+                return;
+
+            string url = $"https://api.polygon.io/v3/reference/tickers/{info.Symbol}?apiKey={_apiKey}";
+
+            try
+            {
+                var json = await _client.GetJsonAsync(url, cancellationToken).ConfigureAwait(false);
+                var result = json["results"];
+                if (result == null)
+                    return;
+
+                // These fields actually exist in this endpoint
+                info.Sector = result.Value<string>("sector")
+                              ?? result.Value<string>("sic_description")
+                              ?? info.Sector;
+
+                info.Country = result.Value<string>("locale")?.ToUpperInvariant()
+                               ?? info.Country;
+            }
+            catch (Exception ex)
+            {
+                // optional debug logging
+                //_logger.Log(LogSeverity.Warning, $"Failed to enrich {info.Symbol}: {ex.Message}");
+            }
+        }
+
+
     }
+
 }

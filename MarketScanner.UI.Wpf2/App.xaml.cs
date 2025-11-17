@@ -1,6 +1,7 @@
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Data.Providers;
+using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
 using MarketScanner.UI.Views;
 using MarketScanner.UI.Wpf.Services;
@@ -25,7 +26,9 @@ namespace MarketScanner.UI
 
             // Dependency setup
             const string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
+            const string finnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
             var provider = new PolygonMarketDataProvider(apiKey);
+            var fundamentalProvider = new FinnhubFundamentalProvider(finnApiKey);
             IChartService chartService = new ChartManager();
 
             Settings = AppSettings.Load();
@@ -33,7 +36,7 @@ namespace MarketScanner.UI
             var alertService = new AlertService();
             var alertManager = new AlertManager(alertService,emailService);
 
-            var scannerService = new EquityScannerService(provider, alertManager, Settings);
+            var scannerService = new EquityScannerService(provider, fundamentalProvider, alertManager, Settings);
 
             var chartViewModel = new ChartViewModel(provider, chartService, dispatcher);
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
