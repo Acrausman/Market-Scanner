@@ -112,7 +112,7 @@ namespace MarketScanner.Data.Providers
                                 };
                                 //Logger.WriteLine($"Sic Code for {info.Symbol} is {sicCode}");
                                 //await EnrichTickerInfoAsync(info, cancellationToken).ConfigureAwait(false);
-                                tickers.Add(info);
+                                tickers.Add(new TickerInfo { Symbol = ticker});
                             }
                         }
                     }

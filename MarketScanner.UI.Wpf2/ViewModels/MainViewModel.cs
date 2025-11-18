@@ -20,6 +20,7 @@ using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Models;
 using MarketScanner.Core.Metadata;
 using MarketScanner.Data.Providers.Finnhub;
+using System.IO;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
@@ -30,6 +31,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
         private readonly EquityScannerService _equityScannerService;
+        private readonly TickerMetadataCache _metadataCache;
         private readonly ChartViewModel _chartViewModel;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
@@ -120,20 +122,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
             EmailService emailService,
             Dispatcher dispatcher,
             AlertManager alertManager,
-            AppSettings settings)
+            AppSettings settings,
+            TickerMetadataCache metadataCache,
+            EquityScannerService scannerService)
         {
-            _provider = new PolygonMarketDataProvider(apiKey);
-            _fundamentalProvider = new FinnhubFundamentalProvider(FinnApiKey);
-            _chartViewModel = chartViewModel ?? throw new ArgumentNullException(nameof(chartViewModel));
-            _dispatcher = dispatcher ?? Dispatcher.CurrentDispatcher;
+            _scannerService = scannerService;
+            _scannerViewModel = scannerViewModel;
+            _chartViewModel = chartViewModel;
+            _dispatcher = dispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
-            _scannerService = new EquityScannerService(_provider,_fundamentalProvider, _alertManager, _appSettings);
+            _appSettings = settings;
+            _metadataCache = metadataCache;
             _scannerService.ScanResultClassified += OnScanResultClassified;
-            //_scannerService.ClearFilters();
             if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
-            _scannerViewModel = new ScannerViewModel(_scannerService);
-
 
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);

@@ -26,7 +26,7 @@ namespace MarketScanner.Data.Providers.Finnhub
         {
             try
             {
-                Logger.WriteLine("[FUNDP] FinnhubFundamentalProvider.GetMetadataAsync CALLED");
+                //Logger.WriteLine("[FUNDP] FinnhubFundamentalProvider.GetMetadataAsync CALLED");
 
                 string url = $"https://finnhub.io/api/v1/stock/profile2?symbol={symbol}&token={_apiKey}";
                 string json = await _http.GetStringAsync(url, cancellationToken);
