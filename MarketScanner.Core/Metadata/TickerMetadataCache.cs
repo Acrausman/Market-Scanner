@@ -1,4 +1,5 @@
 ﻿using MarketScanner.Core.Models;
+using Newtonsoft.Json;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
@@ -30,21 +31,28 @@ namespace MarketScanner.Core.Metadata
         public bool TryGet(string symbol, out TickerInfo? info)
         {
             var found = _cache.TryGetValue(symbol, out info);
-
+            /*
             if (found)
                 Console.WriteLine($"[META READ] {symbol} → country={info?.Country}, sector={info?.Sector}");
             else
                 Console.WriteLine($"[META READ] {symbol} not found in cache");
+            */
 
             return found;
         }
 
         public void AddOrUpdate(TickerInfo info)
         {
-            _cache[info.Symbol] = info;
-            Console.WriteLine($"[META WRITE] {info.Symbol} → country={info.Country}, sector={info.Sector}");
+            if (info == null || string.IsNullOrWhiteSpace(info.Symbol))
+                return;
+            lock(_fileLock)
+            {
+                _cache[info.Symbol] = info;
+                Save();
+                //Console.WriteLine($"[META WRITE] {info.Symbol} - country={info.Country}, sector={info.Sector}");
 
-            // Save removed — now done once per scan
+            }
+
         }
 
         public void SaveCacheToDisk()
@@ -52,10 +60,11 @@ namespace MarketScanner.Core.Metadata
             Save();
         }
 
+
         private void Load()
         {
             Console.WriteLine("[META DEBUG] Loading metadata cache...");
-            Console.WriteLine("[META DEBUG] Path = " + Path.GetFullPath(_cacheFilePath));
+            Console.WriteLine($"[META DEBUG] Path = {_cacheFilePath}");
 
             if (!File.Exists(_cacheFilePath))
             {
@@ -66,38 +75,49 @@ namespace MarketScanner.Core.Metadata
             try
             {
                 var json = File.ReadAllText(_cacheFilePath);
-                var data = JsonSerializer.Deserialize<Dictionary<string, TickerInfo>>(json);
+                var list = JsonConvert.DeserializeObject<List<TickerInfo>>(json)
+                            ?? new List<TickerInfo>();
 
-                if (data == null)
+                lock(_fileLock)
                 {
-                    Console.WriteLine("[META DEBUG] Cache file exists but is empty.");
-                    return;
+                    _cache.Clear();
+                    foreach (var info in list)
+                    {
+                        if(info != null && !string.IsNullOrWhiteSpace(info.Symbol))
+                        {
+                            _cache[info.Symbol] = info;
+                        }
+                    }
+                    Console.WriteLine($"[META DEBUG] Loaded {_cache.Count} entries from cache.");
                 }
-
-                foreach (var kv in data)
-                    _cache[kv.Key] = kv.Value;
-
-                Console.WriteLine($"[META DEBUG] Loaded {_cache.Count} total entries.");
             }
-            catch (Exception ex)
+            catch(Exception ex)
             {
-                Console.WriteLine("[META DEBUG] ERROR loading cache: " + ex.Message);
+                Console.WriteLine($"[META DEBUG] Failed to read cache: {ex}");
             }
         }
 
         private void Save()
         {
             lock (_fileLock)
-            {
-                var tmp = _cache.ToDictionary(k => k.Key, v => v.Value);
+                lock (_fileLock)
+                {
+                    try
+                    {
+                        Console.WriteLine($"[META DEBUG] Saving metadata cache with {_cache.Count} entries...");
 
-                var json = JsonSerializer.Serialize(
-                    tmp,
-                    new JsonSerializerOptions { WriteIndented = true }
-                );
+                        var list = _cache.Values.ToList();
+                        var json = JsonConvert.SerializeObject(list, Formatting.Indented);
 
-                File.WriteAllText(_cacheFilePath, json);
-            }
+                        File.WriteAllText(_cacheFilePath, json);
+
+                        Console.WriteLine($"[META DEBUG] Saved metadata cache to {_cacheFilePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[META DEBUG] Failed to write cache: {ex}");
+                    }
+                }
         }
     }
 }

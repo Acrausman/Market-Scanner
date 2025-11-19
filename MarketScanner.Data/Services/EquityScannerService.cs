@@ -76,7 +76,7 @@ namespace MarketScanner.Data.Services
             _logger = logger;
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
             _fundamentalProvider = fundamentalProvider;
-            _metadataCache = new TickerMetadataCache("ticker_metadata.json");
+            _metadataCache = metadataCache;
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
             : this(

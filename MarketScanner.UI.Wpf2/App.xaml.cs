@@ -1,6 +1,7 @@
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Metadata;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;

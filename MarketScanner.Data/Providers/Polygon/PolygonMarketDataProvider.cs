@@ -89,13 +89,26 @@ namespace MarketScanner.Data.Providers
                     {
                         foreach (var r in results)
                         {
+                            if (r == null)
+                                continue;
                             string? type = r.Value<string>("type");
                             string? exchange = r.Value<string>("primary_exchange");
                             bool? active = r.Value<bool?>("active");
                             bool? primary = r.Value<bool?>("primary_share");
-                            string? ticker = r.Value<string>("ticker");
+                            string? ticker = r["ticker"]?.ToString();
+                            if(string.IsNullOrWhiteSpace(ticker))
+                            {
+                                Logger.WriteLine("[TICKER SKIP] Missing ticker field");
+                                continue;
+                            }
+
                             string? locale = r.Value<string>("locale");
                             string? sicCode = r.Value<string>("sic_code");
+
+                            if(string.IsNullOrWhiteSpace(ticker))
+                            {
+                                Console.WriteLine("[META INIT] Skipping row with missing ticker: " + r);
+                            }
 
                             if (!string.IsNullOrWhiteSpace(ticker) &&
                                 type == "CS" &&
