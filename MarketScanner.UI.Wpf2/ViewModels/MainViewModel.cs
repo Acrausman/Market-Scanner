@@ -36,10 +36,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
-        public decimal? MinPrice { get; set; }
-        public decimal? MaxPrice { get; set; }
-        public string? SelectedCountryFilter {  get; set; }
-        public string? SelectedSectorFilter { get; set; }
+        public double _minPrice;
+        public double _maxPrice;
+        public string _selectedCountryFilter {  get; set; }
+        public string _selectedSectorFilter { get; set; }
         public ObservableCollection<string> AvailableSectors { get; }
             = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableCountries { get; }
@@ -77,6 +77,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _stopScanCommand;
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
+        private readonly RelayCommand _applyFiltersCommand;
 
 
         // cancellation tokens for long-running ops
@@ -88,7 +89,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string _statusText = "Idle";
         private string? _selectedSymbol;
         private bool _isScanning;
-
         // persisted / options fields
         private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
         private string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
@@ -99,7 +99,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand SendDigestNow { get; }
         public ICommand PauseScanCommand => _pauseScanCommand;
         public ICommand ResumeScanCommand => _resumeScanCommand;
-        public ICommand ApplyFiltersCommand {  get; }
+        public ICommand ApplyFiltersCommand => _applyFiltersCommand;
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
                 Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
@@ -145,14 +145,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _appSettings = settings;
             _metadataCache = metadataCache;
             _scannerService.ScanResultClassified += OnScanResultClassified;
-            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
+            //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
 
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
             _pauseScanCommand = new RelayCommand(_ => PauseScan(), _ => IsScanning);
             _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
-            ApplyFiltersCommand = new RelayCommand(_ => ApplyFilters());
 
             // Load persisted settings
             _appSettings = settings;
@@ -164,11 +163,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _selectedInterval = _appSettings.AlertIntervalMinutes > 0
                 ? _appSettings.AlertIntervalMinutes
                 : 15;
+            _minPrice = _appSettings.FilterMinPrice;
+            _maxPrice = _appSettings.FilterMaxPrice;
+            _selectedCountryFilter = _appSettings.FilterCountry;
+            _selectedSectorFilter = _appSettings.FilterSector;
 
             // Commands for options panel
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
             SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
+            _applyFiltersCommand = new RelayCommand(_ => RebuildFiltersAndRestart());
 
             // push initial persisted values through their setters
             NotificationEmail = _notificationEmail;
@@ -353,9 +357,19 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
-        private void ApplyFilters()
+        private void RebuildFiltersAndRestart()
         {
+            var filters = new List<IFilter>();
 
+            if (_minPrice > 0 || _maxPrice < 99999)
+                filters.Add(new PriceFilter(_minPrice, _maxPrice));
+            if (!string.Equals(_selectedCountryFilter, "Any", StringComparison.OrdinalIgnoreCase))
+                filters.Add(new CountryFilter(_selectedCountryFilter));
+            if (!string.Equals(_selectedSectorFilter, "Any", StringComparison.OrdinalIgnoreCase))
+                filters.Add(new SectorFilter(_selectedSectorFilter));
+
+            _scannerService.AddMultipleFilters(filters);
+            StartScanCommand.Execute(null);
         }
 
         // -------- Chart loading for selected symbol --------
@@ -403,7 +417,72 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
 
-        // -------- Notification Email + Timespan persistence --------
+        // -------- Setting persistence --------
+
+        public double MinPrice
+        {
+            get => _minPrice;
+            set
+            {
+                if(_minPrice != value)
+                {
+                    _minPrice = value;
+                    OnPropertyChanged();
+
+                    _appSettings.FilterMinPrice = _minPrice;
+                    _appSettings.Save();
+
+                }
+            }
+        }
+        public double MaxPrice
+        {
+            get => _maxPrice;
+            set
+            {
+                if (_maxPrice != value)
+                {
+                    _maxPrice = value;
+                    OnPropertyChanged();
+
+                    _appSettings.FilterMaxPrice = _maxPrice;
+                    _appSettings.Save();
+
+                }
+            }
+        }
+        public string SelectedCountryFilter
+        {
+            get => _selectedCountryFilter;
+            set
+            {
+                if (_selectedCountryFilter != value)
+                {
+                    _selectedCountryFilter = value ?? string.Empty;
+                    OnPropertyChanged();
+
+                    _appSettings.FilterCountry = _selectedCountryFilter;
+                    _appSettings.Save();
+                }
+            }
+        }
+
+        public string SelectedSectorFilter
+        {
+            get => _selectedSectorFilter;
+            set
+            {
+                if(_selectedCountryFilter != value)
+                {
+                    _selectedCountryFilter = value ?? string.Empty;
+                    OnPropertyChanged();
+
+                    _appSettings.FilterSector = _selectedSectorFilter;
+                    _appSettings.Save();
+                }
+            }
+        
+        }
 
         public string NotificationEmail
         {

@@ -45,7 +45,7 @@ namespace MarketScanner.Data.Services
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
-        private readonly List<IFilter> _filters = new();
+        private List<IFilter> _filters = new();
 
         public event Action<EquityScanResult>? ScanResultClassified;
         public void AddFilter(IFilter filter)
@@ -53,6 +53,10 @@ namespace MarketScanner.Data.Services
             _logger.Log(LogSeverity.Information, $"Adding {filter} to filters\n Active filters:");
             _filters.Add(filter);
             foreach (var f in _filters )_logger.Log(LogSeverity.Information, f.Name);
+        }
+        public void AddMultipleFilters(List<IFilter> filters)
+        {
+            _filters = filters;
         }
         public void ClearFilters()
             {
@@ -308,7 +312,7 @@ namespace MarketScanner.Data.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
-                if(PassesFilters(result))
+                if(PassesFilters(result) || _filters.Count <= 0)
                     QueueAlerts(result);
                 //ApplyFilters(info);
                 _scanCache[symbol] = result;
@@ -456,7 +460,6 @@ namespace MarketScanner.Data.Services
 
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
                 .ConfigureAwait(false);
-
             var result = new EquityScanResult
             {
                 Symbol = symbol,
