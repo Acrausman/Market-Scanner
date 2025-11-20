@@ -36,6 +36,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
+        public decimal? MinPrice { get; set; }
+        public decimal? MaxPrice { get; set; }
+        public string? SelectedCountryFilter {  get; set; }
+        public string? SelectedSectorFilter { get; set; }
+        public ObservableCollection<string> AvailableSectors { get; }
+            = new ObservableCollection<string>();
+        public ObservableCollection<string> AvailableCountries { get; }
+            = new ObservableCollection<string>();
         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
         private RsiSmoothingMethod _selectedRsiMethod;
@@ -70,6 +78,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
 
+
         // cancellation tokens for long-running ops
         private CancellationTokenSource? _scanCts;
         private CancellationTokenSource? _symbolCts;
@@ -90,6 +99,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand SendDigestNow { get; }
         public ICommand PauseScanCommand => _pauseScanCommand;
         public ICommand ResumeScanCommand => _resumeScanCommand;
+        public ICommand ApplyFiltersCommand {  get; }
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
                 Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
@@ -142,6 +152,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
             _pauseScanCommand = new RelayCommand(_ => PauseScan(), _ => IsScanning);
             _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
+            ApplyFiltersCommand = new RelayCommand(_ => ApplyFilters());
 
             // Load persisted settings
             _appSettings = settings;
@@ -340,6 +351,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 else if (result.RSI <= 30)
                     _scannerViewModel.OversoldSymbols.Add(result.Symbol);
             });
+        }
+
+        private void ApplyFilters()
+        {
+
         }
 
         // -------- Chart loading for selected symbol --------
