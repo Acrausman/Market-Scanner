@@ -201,8 +201,8 @@ namespace MarketScanner.Data.Services
                     }
 
                     await ProcessSymbolAsync(t, limiter, totalSymbols, tracker, progress, cancellationToken);
-                    Console.WriteLine(
-    $"[ENRICHED] {t.Symbol}: Country={t.Country}, Sector={t.Sector}, Exchange={t.Exchange}");
+                   /*Console.WriteLine(
+    $"[ENRICHED] {t.Symbol}: Country={t.Country}, Sector={t.Sector}, Exchange={t.Exchange}");*/
 
                 })
                 .ToList();
@@ -266,10 +266,11 @@ namespace MarketScanner.Data.Services
             }
         }
 
+        /*
         private void ApplyFilters(TickerInfo info)
         {
-            /*Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
-                $"Exchange is {info.Exchange}");*/
+            Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
+                $"Exchange is {info.Exchange}");
             if (_filters.Count == 0)
                 return;
             bool matchesAll = _filters.All(f => f.Matches(info));
@@ -282,7 +283,7 @@ namespace MarketScanner.Data.Services
             }
 
         }
-
+        */
         public void ClearCache()
         {
             _priceCache.Clear();
@@ -307,10 +308,11 @@ namespace MarketScanner.Data.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
-                QueueAlerts(result);
-                ApplyFilters(info);
+                if(PassesFilters(result))
+                    QueueAlerts(result);
+                //ApplyFilters(info);
                 _scanCache[symbol] = result;
-                Logger.WriteLine($"[CACHE CHECK] {symbol} → sector={_scanCache[symbol].Sector}, country={_scanCache[symbol].Country}");
+                //Logger.WriteLine($"[CACHE CHECK] {symbol} → sector={_scanCache[symbol].Sector}, country={_scanCache[symbol].Country}");
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
                 if (processed % BatchSize == 0 || processed == totalSymbols)
@@ -365,6 +367,16 @@ namespace MarketScanner.Data.Services
             }
         }
 
+        private bool PassesFilters(EquityScanResult result)
+        {
+            foreach (var filter in _filters)
+            {
+                if (!filter.Matches(result))
+                    return false;
+            }
+            return true;
+        }
+
         private void QueueAlerts(EquityScanResult result)
         {
             if (double.IsNaN(result.RSI))
@@ -403,12 +415,12 @@ namespace MarketScanner.Data.Services
             }
             
             TickerInfo? meta;
-            Console.WriteLine($"[META PRECHECK] Checking metadata for {symbol}");
+            //Console.WriteLine($"[META PRECHECK] Checking metadata for {symbol}");
             bool hasCached = _metadataCache.TryGet(symbol, out meta);
-            Console.WriteLine(
+            /*Console.WriteLine(
     $"[META TRYGET] {symbol} found={hasCached}, " +
     $"country='{meta?.Country}', sector='{meta?.Sector}'"
-);
+);*/
             
 
             // Treat “Unknown” as not good enough – force enrichment
@@ -433,9 +445,9 @@ namespace MarketScanner.Data.Services
                     _metadataCache.SaveCacheToDisk();
                 }
             }
-            Console.WriteLine(
+            /*Console.WriteLine(
     $"[META POST-ENRICH] {symbol} → country={meta?.Country}, sector={meta?.Sector}"
-);
+);*/
             
             var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
             var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, rsiMethod);
@@ -455,8 +467,7 @@ namespace MarketScanner.Data.Services
                 Upper = upper,
                 Lower = lower,
                 TimeStamp = DateTime.UtcNow,
-                Sector = info.Sector ?? "Unknown",
-                Country = info.Country ?? "Unknown"
+                MetaData = info
             };
 
             //Logger.WriteLine($"Sector and country for {symbol} are {result.Sector} and {result.Country}");

@@ -26,7 +26,7 @@ namespace MarketScanner.Core.Filtering
             CountryCode = countryCode;
         }
 
-        public bool Matches(TickerInfo info)
-            => string.Equals(info.Country, CountryCode, StringComparison.OrdinalIgnoreCase);
+        public bool Matches(EquityScanResult info)
+            => string.Equals(info.MetaData.Country, CountryCode, StringComparison.OrdinalIgnoreCase);
     }
 }

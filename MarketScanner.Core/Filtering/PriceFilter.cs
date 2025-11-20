@@ -29,8 +29,8 @@ namespace MarketScanner.Core.Filtering
             MaxPrice = max;
         }
 
-        public bool Matches(TickerInfo info)
-            => info.Price >= MinPrice && info.Price <= MaxPrice;
+        public bool Matches(EquityScanResult info)
+            => info.MetaData.Price >= MinPrice && info.MetaData.Price <= MaxPrice;
 
     }
 }
