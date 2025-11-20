@@ -4,7 +4,6 @@ using MarketScanner.Data.Services;
 using MarketScanner.Core.Configuration;
 using MarketScanner.UI.Wpf.Services;
 using MarketScanner.Core.Enums;
-// Updated to use MarketScanner.Core.Configuration.AppSettings
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -167,6 +166,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _maxPrice = _appSettings.FilterMaxPrice;
             _selectedCountryFilter = _appSettings.FilterCountry;
             _selectedSectorFilter = _appSettings.FilterSector;
+            LoadFilterChoices();
 
             // Commands for options panel
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
@@ -369,7 +369,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 filters.Add(new SectorFilter(_selectedSectorFilter));
 
             _scannerService.AddMultipleFilters(filters);
-            StartScanCommand.Execute(null);
+            //StartScanCommand.Execute(null);
         }
 
         // -------- Chart loading for selected symbol --------
@@ -483,7 +483,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         
         }
+        private void LoadFilterChoices()
+        {
+            AvailableSectors.Clear();
+            AvailableCountries.Clear();
 
+            AvailableSectors.Add("Any");
+            AvailableCountries.Add("Any");
+
+            foreach (string s in _metadataCache.GetAllSectors())
+                AvailableSectors.Add(s);
+            foreach (string c in _metadataCache.GetAllCountries())
+                AvailableCountries.Add(c);
+            
+        }
         public string NotificationEmail
         {
             get => _notificationEmail;

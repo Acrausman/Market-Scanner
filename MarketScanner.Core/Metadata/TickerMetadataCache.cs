@@ -41,6 +41,24 @@ namespace MarketScanner.Core.Metadata
             return found;
         }
 
+        public IReadOnlyList<string> GetAllSectors()
+        {
+            return _cache.Values
+                .Select(v => v.Sector)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()
+                .OrderBy(s => s)
+                .ToList();
+        }
+        public IReadOnlyList<string> GetAllCountries()
+        {
+            return _cache.Values
+                .Select(v => v.Country)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct()
+                .OrderBy (s => s)
+                .ToList();
+        }
         public void AddOrUpdate(TickerInfo info)
         {
             if (info == null || string.IsNullOrWhiteSpace(info.Symbol))
