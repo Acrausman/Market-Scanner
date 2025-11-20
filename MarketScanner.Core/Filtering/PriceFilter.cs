@@ -30,7 +30,7 @@ namespace MarketScanner.Core.Filtering
         }
 
         public bool Matches(EquityScanResult info)
-            => info.MetaData.Price >= MinPrice && info.MetaData.Price <= MaxPrice;
+            => info.Price >= MinPrice && info.Price <= MaxPrice;
 
     }
 }

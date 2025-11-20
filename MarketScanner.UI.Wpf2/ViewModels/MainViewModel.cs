@@ -145,7 +145,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _appSettings = settings;
             _metadataCache = metadataCache;
             _scannerService.ScanResultClassified += OnScanResultClassified;
-            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(1, 100000000));
+            if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
 
             // Commands that show up in XAML
             _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
