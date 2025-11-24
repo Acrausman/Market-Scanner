@@ -43,7 +43,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public string _selectedSectorFilter { get; set; }
         public ObservableCollection<string> AvailableSectors { get; }
             = new ObservableCollection<string>();
+        public ObservableCollection<string> SelectedSectors { get; }
+            = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableCountries { get; }
+            = new ObservableCollection<string>();
+        public ObservableCollection<string> SelectedCountries { get; }
             = new ObservableCollection<string>();
         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
@@ -168,8 +172,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 : 15;
             _minPrice = _appSettings.FilterMinPrice;
             _maxPrice = _appSettings.FilterMaxPrice;
-            _selectedCountryFilter = _appSettings.FilterCountry;
-            _selectedSectorFilter = _appSettings.FilterSector;
+            foreach (var s in _appSettings.FilterCountries)
+                SelectedCountries.Add(s);
+            foreach(var s in _appSettings.FilterSectors) 
+                SelectedSectors.Add(s);
             LoadFilterChoices();
 
             // Commands for options panel
@@ -367,12 +373,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
             if (_minPrice > 0 || _maxPrice < 99999)
                 filters.Add(new PriceFilter(_minPrice, _maxPrice));
-            if (!string.Equals(_selectedCountryFilter, "Any", StringComparison.OrdinalIgnoreCase))
-                filters.Add(new CountryFilter(_selectedCountryFilter));
-            if (!string.Equals(_selectedSectorFilter, "Any", StringComparison.OrdinalIgnoreCase))
-                filters.Add(new SectorFilter(_selectedSectorFilter));
+            if (SelectedCountries.Count > 0 && !SelectedCountries.Contains("Any"))
+                filters.Add(new MultiCountryFilter(SelectedCountries));
+            if (SelectedSectors.Count > 0 && !SelectedSectors.Contains("Any"))
+                filters.Add(new MultiSectorFilter(SelectedSectors));
 
             _scannerService.AddMultipleFilters(filters);
+            Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
+                  string.Join(",", SelectedSectors));
             await _uiNotifier.ShowStatusAsync("Filters applied!");
             //StartScanCommand.Execute(null);
         }
@@ -466,7 +474,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _selectedCountryFilter = value ?? string.Empty;
                     OnPropertyChanged();
 
-                    _appSettings.FilterCountry = _selectedCountryFilter;
+                    SelectedCountries.Clear();
+                    if(!string.IsNullOrWhiteSpace(_selectedCountryFilter) &&
+                        _selectedCountryFilter != "Any")
+                    {
+                        SelectedSectors.Add(_selectedCountryFilter);
+                    }
                     _appSettings.Save();
                 }
             }
@@ -482,7 +495,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _selectedSectorFilter = value ?? string.Empty;
                     OnPropertyChanged();
 
-                    _appSettings.FilterSector = _selectedSectorFilter;
+                    SelectedSectors.Clear();
+                    if (!string.IsNullOrWhiteSpace(_selectedSectorFilter) &&
+                        _selectedSectorFilter != "Any")
+                    {
+                        SelectedSectors.Add(_selectedSectorFilter);
+                    }
+
+                    _appSettings.FilterSectors = SelectedSectors.ToList();
                     _appSettings.Save();
                 }
             }

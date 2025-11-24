@@ -10,8 +10,8 @@ public class AppSettings
 {
     public double FilterMinPrice { get; set; } = 0;
     public double FilterMaxPrice { get; set; } = 99999;
-    public string FilterSector { get; set; } = "Any";
-    public string FilterCountry { get; set; } = "Any";
+    public List<string> FilterSectors { get; set; } = new();
+    public List<string> FilterCountries { get; set; } = new();
     public string NotificationEmail { get; set; } = string.Empty;
 
     public int IndicatorPeriod { get; set; } = 14;
