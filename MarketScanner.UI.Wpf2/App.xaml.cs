@@ -40,6 +40,7 @@ namespace MarketScanner.UI
             IChartService chartService = new ChartManager();
 
             Settings = AppSettings.Load();
+            var notifier = new UiNotifier();
             var emailService = new EmailService();
             var alertService = new AlertService();
             var alertManager = new AlertManager(alertService,emailService);
@@ -61,6 +62,7 @@ namespace MarketScanner.UI
                 dispatcher,
                 alertManager,
                 Settings,
+                notifier,
                 metadataCache,
                 scannerService);
 

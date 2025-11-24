@@ -179,6 +179,8 @@ namespace MarketScanner.Data.Services
                 return;
             }
             _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...\nApplied filters: {_filters.Count}");
+            foreach(var f in _filters)
+            _logger.Log(LogSeverity.Information, $"{f.Name}, ");
 
             using var limiter = new SemaphoreSlim(MaxConcurrency);
             var tracker = new ScanProgressTracker();
@@ -312,7 +314,7 @@ namespace MarketScanner.Data.Services
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
-                if(PassesFilters(result) || _filters.Count <= 0)
+                if (PassesFilters(result) || _filters.Count <= 0)
                     QueueAlerts(result);
                 //ApplyFilters(info);
                 _scanCache[symbol] = result;
@@ -447,6 +449,12 @@ namespace MarketScanner.Data.Services
                     meta = fetched;
                     _metadataCache.AddOrUpdate(fetched);
                     _metadataCache.SaveCacheToDisk();
+                }
+                if(meta != null)
+                {
+                    info.Country = meta.Country;
+                    info.Sector = meta.Sector;
+                    info.Exchange = meta.Exchange;
                 }
             }
             /*Console.WriteLine(

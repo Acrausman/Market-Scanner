@@ -48,7 +48,7 @@
                             <ComboBox ItemsSource="{Binding AvailableCountries}"
                                       SelectedItem="{Binding SelectedCountryFilter}"
                                       Width="180"/>
-                            
+
                             <Separator Margin="5"/>
 
                             <TextBlock Text="Sector"
@@ -64,12 +64,15 @@
                                     Width="150"
                                     HorizontalAlignment="Left"
                                     Margin="0,10,0,0"/>
+                            <TextBlock Text="{Binding UiNotifier.StatusMessage}"
+                                       Foreground="LightGreen"
+                                       HorizontalAlignment="Left"/>
                         </StackPanel>
-                    
+
                     </ScrollViewer>
                 </Border>
             </TabItem>
-            
+
             <TabItem Header="Chart Settings">
                 <Border Grid.Column="0"
                 Background="#252526"
@@ -179,6 +182,7 @@
             </TabItem>
 
         </TabControl>
+        
         <!-- 🔹 Chart Section -->
         <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
             <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
@@ -255,19 +259,7 @@
                         </Style>
                     </ListBox.ItemContainerStyle>
                 </ListBox>
-                <TextBlock Text="{Binding FilteredSymbols.Count, StringFormat='Filtered: {0} symbols'}"
-           Foreground="#AAAAAA"
-           FontSize="12"
-           Margin="4,2,0,8"/>
-
-                <GroupBox Header="Filtered" Margin="0,10,0,0">
-                    <ListBox Grid.Row="2"
-                         ItemsSource="{Binding FilteredSymbols}"
-                         DisplayMemberPath="Symbol"
-                         BorderBrush="#555"
-                         Margin="0,8,0,0">
-                    </ListBox>
-                </GroupBox>
+                
             </StackPanel>
         </Border>
     </Grid>

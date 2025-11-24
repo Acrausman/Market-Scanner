@@ -35,6 +35,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
+        private readonly IUiNotifier _uiNotifier;
+        public IUiNotifier UiNotifier { get; }
         public double _minPrice;
         public double _maxPrice;
         public string _selectedCountryFilter {  get; set; }
@@ -132,6 +134,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             Dispatcher dispatcher,
             AlertManager alertManager,
             AppSettings settings,
+            UiNotifier uiNotifier,
             TickerMetadataCache metadataCache,
             EquityScannerService scannerService)
         {
@@ -142,6 +145,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _emailService = emailService;
             _alertManager = alertManager;
             _appSettings = settings;
+            _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
             _scannerService.ScanResultClassified += OnScanResultClassified;
             //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
@@ -357,7 +361,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             });
         }
 
-        private void RebuildFiltersAndRestart()
+        private async Task RebuildFiltersAndRestart()
         {
             var filters = new List<IFilter>();
 
@@ -369,6 +373,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 filters.Add(new SectorFilter(_selectedSectorFilter));
 
             _scannerService.AddMultipleFilters(filters);
+            await _uiNotifier.ShowStatusAsync("Filters applied!");
             //StartScanCommand.Execute(null);
         }
 
@@ -472,9 +477,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             get => _selectedSectorFilter;
             set
             {
-                if(_selectedCountryFilter != value)
+                if(_selectedSectorFilter != value)
                 {
-                    _selectedCountryFilter = value ?? string.Empty;
+                    _selectedSectorFilter = value ?? string.Empty;
                     OnPropertyChanged();
 
                     _appSettings.FilterSector = _selectedSectorFilter;
