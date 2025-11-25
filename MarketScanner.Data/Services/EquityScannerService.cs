@@ -375,9 +375,14 @@ namespace MarketScanner.Data.Services
 
         private bool PassesFilters(EquityScanResult result)
         {
+            if (_filters.Count <= 0)
+                return true;
+            var meta = result.MetaData;
+            if (meta == null)
+                return false;
             foreach (var filter in _filters)
             {
-                if (!filter.Matches(result))
+                if (!filter.Matches(meta))
                     return false;
             }
             return true;

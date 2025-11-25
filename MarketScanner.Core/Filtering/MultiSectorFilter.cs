@@ -18,7 +18,7 @@ namespace MarketScanner.Core.Filtering
         }
         public string Name => "Sectors";
 
-        public bool Matches(EquityScanResult r)
+        public bool Matches(TickerInfo r)
         {
             if (_sectors.Count == 0)
                 return true;

@@ -26,8 +26,8 @@ namespace MarketScanner.Core.Filtering
             Sector = sector;
         }
 
-        public bool Matches(EquityScanResult info)
-            => string.Equals(info.MetaData.Sector, Sector, StringComparison.OrdinalIgnoreCase);
+        public bool Matches(TickerInfo info)
+            => string.Equals(info.Sector, Sector, StringComparison.OrdinalIgnoreCase);
 
     }
 }

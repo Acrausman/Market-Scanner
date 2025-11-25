@@ -35,12 +35,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
-        private readonly IUiNotifier _uiNotifier;
+        private readonly UiNotifier _uiNotifier;
         public IUiNotifier UiNotifier { get; }
         public double _minPrice;
         public double _maxPrice;
-        public string _selectedCountryFilter {  get; set; }
-        public string _selectedSectorFilter { get; set; }
+        //public string _selectedCountryFilter {  get; set; }
+        //public string _selectedSectorFilter { get; set; }
         public ObservableCollection<string> AvailableSectors { get; }
             = new ObservableCollection<string>();
         public ObservableCollection<string> SelectedSectors { get; }
@@ -378,10 +378,15 @@ namespace MarketScanner.UI.Wpf.ViewModels
             if (SelectedSectors.Count > 0 && !SelectedSectors.Contains("Any"))
                 filters.Add(new MultiSectorFilter(SelectedSectors));
 
+            _appSettings.FilterCountries = SelectedCountries.ToList();
+            _appSettings.FilterSectors = SelectedSectors.ToList();
+            _appSettings.Save();
+
             _scannerService.AddMultipleFilters(filters);
             Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
                   string.Join(",", SelectedSectors));
-            await _uiNotifier.ShowStatusAsync("Filters applied!");
+            ((App)App.Current).Notifier.Show("Filters applied!");
+            //await _uiNotifier.ShowStatusAsync("Filters applied!");
             //StartScanCommand.Execute(null);
         }
 
@@ -464,7 +469,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 }
             }
         }
-        public string SelectedCountryFilter
+        /*public string SelectedCountryFilter
         {
             get => _selectedCountryFilter;
             set
@@ -484,7 +489,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 }
             }
         }
-
+        
         public string SelectedSectorFilter
         {
             get => _selectedSectorFilter;
@@ -508,6 +513,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         
         }
+        */
         private void LoadFilterChoices()
         {
             AvailableSectors.Clear();

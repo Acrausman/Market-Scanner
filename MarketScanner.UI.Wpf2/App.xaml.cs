@@ -20,6 +20,11 @@ namespace MarketScanner.UI
         private static extern bool AllocConsole();
 
         public static AppSettings Settings { get; private set; }
+        public UiNotifier Notifier { get; private set; }
+        public App()
+        {
+            Notifier = new UiNotifier();
+        }
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);

@@ -18,7 +18,7 @@ namespace MarketScanner.Core.Filtering
                 StringComparer.OrdinalIgnoreCase);
         }
 
-        public bool Matches(EquityScanResult r)
+        public bool Matches(TickerInfo r)
         {
             if (_countries.Count == 0)
                 return true;

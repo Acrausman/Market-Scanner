@@ -63,6 +63,7 @@
                             <Separator Margin="10"/>
 
                             <Button Content="Apply Filters"
+                                    Style="{StaticResource FlashButtonStyle}"
                                     Command="{Binding ApplyFiltersCommand}"
                                     Width="150"
                                     HorizontalAlignment="Left"
@@ -143,6 +144,7 @@
 
                         <!-- Save button -->
                         <Button Content="Save Email"
+                Style="{StaticResource FlashButtonStyle}"
                 Command="{Binding SaveEmailCommand}"
                 Margin="0,8,0,15"
                 Background="#3A3D41"
@@ -185,7 +187,7 @@
             </TabItem>
 
         </TabControl>
-        
+
         <!-- 🔹 Chart Section -->
         <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
             <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
@@ -262,8 +264,22 @@
                         </Style>
                     </ListBox.ItemContainerStyle>
                 </ListBox>
-                
+
             </StackPanel>
         </Border>
+
+        <Border x:Name="Snackbar"
+            Background="#333"
+            CornerRadius="6"
+            Padding="12"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,20"
+            Opacity="0">
+            <TextBlock x:Name="SnackbarMessage"
+                   Foreground="White"
+                   FontSize="14"/>
+        </Border>
     </Grid>
+
 </Window>

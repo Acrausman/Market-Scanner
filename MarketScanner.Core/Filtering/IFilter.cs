@@ -11,7 +11,7 @@ namespace MarketScanner.Core.Filtering
         /// </summary>
         string Name { get; }
 
-        bool Matches(EquityScanResult info);
+        bool Matches(TickerInfo info);
   
     }
 }
