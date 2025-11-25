@@ -340,19 +340,45 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             try
             {
+                if (IsScanning && _scanCts != null)
+                {
+                    _scanCts.Cancel();
+                    await Task.Delay(150);
+                }
+
                 if (_scannerService.IsScanning)
                     await _scannerService.StopAsync();
 
                 _scannerViewModel.OverboughtSymbols.Clear();
                 _scannerViewModel.OversoldSymbols.Clear();
+
                 _scannerService.ClearCache();
-                await _scannerService.StopAsync();
-                await Task.Delay(250);
-                await _scannerService.StartAsync();
+
+                _scanCts = new CancellationTokenSource();
+                IsScanning = true;
+                StatusText = "Scanning...";
+
+                var progress = new Progress<int>(value =>
+                {
+                    _dispatcher.Invoke(() =>
+                    {
+                        StatusText = $"Scanning... {value}%";
+                    });
+                });
+
+                await _scannerViewModel.StartScanAsync(progress, _scanCts.Token);
+
+                StatusText = "Scan complete";
+                IsScanning = false;
             }
-            catch (Exception ex)
+            catch (OperationCanceledException)
             {
-                Logger.Error($"[Scanner] Failed to restart scan: {ex.Message}");
+                StatusText = "Scan cancelled";
+            }
+            catch(Exception ex)
+            {
+                Logger.Error($"[RESTART] {ex.Message}");
+                StatusText = "Restart failed";
             }
         }
 
@@ -386,6 +412,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
                   string.Join(",", SelectedSectors));
             ((App)App.Current).Notifier.Show("Filters applied!");
+            if (IsScanning)
+                await RestartScanAsync();
             //await _uiNotifier.ShowStatusAsync("Filters applied!");
             //StartScanCommand.Execute(null);
         }
@@ -526,6 +554,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 AvailableSectors.Add(s);
             foreach (string c in _metadataCache.GetAllCountries())
                 AvailableCountries.Add(c);
+
             
         }
         public string NotificationEmail
