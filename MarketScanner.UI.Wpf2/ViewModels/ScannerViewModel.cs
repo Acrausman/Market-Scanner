@@ -23,7 +23,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public int ProgressValue
         {
             get => _progressValue;
-            private set => SetProperty(ref _progressValue, value);
+            set => SetProperty(ref _progressValue, value);
         }
 
         public ScannerViewModel(IEquityScannerService scannerService, Dispatcher dispatcher = null)

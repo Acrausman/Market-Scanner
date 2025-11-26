@@ -36,6 +36,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
         private readonly UiNotifier _uiNotifier;
+        private readonly IProgress<int> _scanProgress;
         public IUiNotifier UiNotifier { get; }
         public double _minPrice;
         public double _maxPrice;
@@ -152,6 +153,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
             _scannerService.ScanResultClassified += OnScanResultClassified;
+            _scanProgress = new Progress<int>(value =>
+            {
+                _scannerViewModel.ProgressValue = value;
+            });
             //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
 
             // Commands that show up in XAML
@@ -335,52 +340,35 @@ namespace MarketScanner.UI.Wpf.ViewModels
             StatusText = "Scan resumed";
             Log("Scan resumed");
         }
-
+        private bool _isRestarting;
         private async Task RestartScanAsync()
         {
+            if (_scannerService == null)
+                return;
+            if (_isRestarting)
+                return;
+            _isRestarting = true;
             try
             {
-                if (IsScanning && _scanCts != null)
-                {
-                    _scanCts.Cancel();
-                    await Task.Delay(150);
-                }
-
-                if (_scannerService.IsScanning)
-                    await _scannerService.StopAsync();
+                StatusText = "Restarting scan with new settings...";
 
                 _scannerViewModel.OverboughtSymbols.Clear();
                 _scannerViewModel.OversoldSymbols.Clear();
+                ResetProgressUI();
 
-                _scannerService.ClearCache();
-
-                _scanCts = new CancellationTokenSource();
-                IsScanning = true;
-                StatusText = "Scanning...";
-
-                var progress = new Progress<int>(value =>
-                {
-                    _dispatcher.Invoke(() =>
-                    {
-                        StatusText = $"Scanning... {value}%";
-                    });
-                });
-
-                await _scannerViewModel.StartScanAsync(progress, _scanCts.Token);
-
-                StatusText = "Scan complete";
-                IsScanning = false;
+                await _scannerService.RestartAsync(_scanProgress).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
+            catch (Exception ex)
             {
-                StatusText = "Scan cancelled";
+                Logger.Error($"UI Restart scan failed: {ex}");
+                StatusText = "Error restarting scan.";
             }
-            catch(Exception ex)
+            finally
             {
-                Logger.Error($"[RESTART] {ex.Message}");
-                StatusText = "Restart failed";
+                _isRestarting = false;
             }
         }
+            
 
         private void OnScanResultClassified(EquityScanResult result)
         {
@@ -392,7 +380,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     _scannerViewModel.OversoldSymbols.Add(result.Symbol);
             });
         }
-
+        private void ResetProgressUI()
+        {
+            _scannerViewModel.ProgressValue = 0;
+        }
         private async Task RebuildFiltersAndRestart()
         {
             var filters = new List<IFilter>();

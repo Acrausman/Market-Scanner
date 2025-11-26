@@ -36,6 +36,7 @@ namespace MarketScanner.Data.Services
         public bool IsScanning => _isScanning;
 
         private readonly ManualResetEventSlim _pauseEvent = new(true);
+        private readonly SemaphoreSlim _restartLock = new(1,1);
         private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private readonly HistoricalPriceCache _priceCache;
@@ -105,6 +106,7 @@ namespace MarketScanner.Data.Services
                 return;
             }
 
+            _pauseEvent.Set();
             _isScanning = true;
             _scanCts = new CancellationTokenSource();
             var token = _scanCts.Token;
@@ -133,6 +135,23 @@ namespace MarketScanner.Data.Services
             });
 
         }
+        public async Task RestartAsync(IProgress<int>? progress = null)
+        {
+            await _restartLock.WaitAsync();
+            try
+            {
+                if(IsScanning)
+                {
+                    await StopAsync().ConfigureAwait(false);
+                }
+
+                await StartAsync(progress).ConfigureAwait(false);
+            }
+            finally
+            {
+                _restartLock.Release();
+            }
+        }
 
         public async Task StopAsync()
         {
@@ -140,12 +159,31 @@ namespace MarketScanner.Data.Services
                 return;
 
             _logger.Log(LogSeverity.Information, "[Scanner] Stopping scan...");
-            _scanCts.Cancel();
+            try
+            {
+                _scanCts.Cancel();
+            }
+            catch
+            {
 
+            }
+
+            var scanTask = _scanTask;
             if (_scanTask != null)
-                await _scanTask;
+            {
+                try
+                {
+                    await scanTask.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
 
-            _isScanning = false;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Log(LogSeverity.Error, $"[Scanner] Error during stop: {ex.Message}");
+                }
+            }
             _scanCts.Dispose();
             _scanCts = null;
             
