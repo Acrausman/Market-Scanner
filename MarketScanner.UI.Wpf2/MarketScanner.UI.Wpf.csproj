@@ -4,11 +4,11 @@
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
-		<ApplicationIcon>Icon.ico</ApplicationIcon>
+		<ApplicationIcon>Coin.ico</ApplicationIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Content Include="Icon.ico" />
+	  <Content Include="Coin.ico" />
 	</ItemGroup>
 
         <ItemGroup>
