@@ -1,6 +1,6 @@
 [Setup]
 AppName=MarketScanner
-AppVersion=0.8
+AppVersion=1.0.0
 DefaultDirName={commonpf}\MarketScanner
 OutputBaseFilename=MarketScannerSetup
 Compression=lzma
