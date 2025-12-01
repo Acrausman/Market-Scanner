@@ -202,6 +202,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
             };
 
+            _ = Task.Run(async () =>
+            {
+                var updater = new UpdateService();
+                await updater.CheckForUpdatesAsync();
+            });
             _digestTimer.Start();
 
         }

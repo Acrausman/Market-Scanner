@@ -5,6 +5,7 @@
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<ApplicationIcon>Coin.ico</ApplicationIcon>
+		<AssemblyVersion>1.0.0</AssemblyVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
