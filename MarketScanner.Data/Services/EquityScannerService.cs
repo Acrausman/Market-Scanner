@@ -51,6 +51,7 @@ namespace MarketScanner.Data.Services
         public event Action<EquityScanResult>? ScanResultClassified;
         public void AddFilter(IFilter filter)
         {
+            _filters.Clear();
             _logger.Log(LogSeverity.Information, $"Adding {filter} to filters\n Active filters:");
             _filters.Add(filter);
             foreach (var f in _filters )_logger.Log(LogSeverity.Information, f.Name);
@@ -96,7 +97,7 @@ namespace MarketScanner.Data.Services
 
         public ObservableCollection<string> OverboughtSymbols => _alertManager.OverboughtSymbols;
         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
-        public ObservableCollection<TickerInfo> FilteredSymbols { get; } = new();
+        public ObservableCollection<string> CreeperSymbols { get; } = new();
 
         public async Task StartAsync(IProgress<int>? progress = null)
         {
@@ -309,25 +310,6 @@ namespace MarketScanner.Data.Services
                 return CreateEmptyResult(symbol);
             }
         }
-
-        /*
-        private void ApplyFilters(TickerInfo info)
-        {
-            Logger.Info($"Country and sector for {info.Symbol} are {info.Country} and {info.Sector} respectively." +
-                $"Exchange is {info.Exchange}");
-            if (_filters.Count == 0)
-                return;
-            bool matchesAll = _filters.All(f => f.Matches(info));
-            if(matchesAll)
-            {
-                lock (FilteredSymbols)
-                {
-                    FilteredSymbols.Add(info);
-                }
-            }
-
-        }
-        */
         public void ClearCache()
         {
             _priceCache.Clear();

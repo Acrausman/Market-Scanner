@@ -1,25 +1,26 @@
+using MarketScanner.Core.Configuration;
+using MarketScanner.Core.Enums;
+using MarketScanner.Core.Filtering;
+using MarketScanner.Core.Metadata;
+using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
+using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
-using MarketScanner.Core.Configuration;
 using MarketScanner.UI.Wpf.Services;
-using MarketScanner.Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
+using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using System.Windows.Threading;
-using MarketScanner.Core.Filtering;
-using MarketScanner.Core.Models;
-using MarketScanner.Core.Metadata;
-using MarketScanner.Data.Providers.Finnhub;
-using System.IO;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
@@ -57,8 +58,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private readonly DispatcherTimer _digestTimer;
         private double _alertIntervalMinutes = 30;
-        public ObservableCollection<TickerInfo> FilteredSymbols => _scannerService.FilteredSymbols;
-
 
         private bool enableEmail = false;
         public double AlertIntervalMinutes
@@ -391,6 +390,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
         }
         private async Task RebuildFiltersAndRestart()
         {
+
+            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
+            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
+            _appSettings.FilterCountries.Clear();
+            _appSettings.FilterSectors.Clear();
+
             var filters = new List<IFilter>();
 
             if (_minPrice > 0 || _maxPrice < 99999)
@@ -403,10 +408,21 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _appSettings.FilterCountries = SelectedCountries.ToList();
             _appSettings.FilterSectors = SelectedSectors.ToList();
             _appSettings.Save();
+            Console.WriteLine("[DEBUG] Saved Countries: " +
+    string.Join(", ", _appSettings.FilterCountries));
+
+            Console.WriteLine("[DEBUG] Saved Sectors: " +
+                string.Join(", ", _appSettings.FilterSectors));
+
 
             _scannerService.AddMultipleFilters(filters);
             Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
                   string.Join(",", SelectedSectors));
+            Console.WriteLine($"DEBUG FILTER Selected countries: ");
+            foreach(var c in SelectedCountries)
+            {
+                Console.WriteLine($"{c}, ");
+            }
             ((App)App.Current).Notifier.Show("Filters applied!");
             if (IsScanning)
                 await RestartScanAsync();

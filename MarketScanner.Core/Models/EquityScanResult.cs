@@ -7,6 +7,13 @@ namespace MarketScanner.Core.Models;
 /// Represents the outcome of analysing a symbol during a scan. Data and UI layers
 /// exchange this model without sharing implementation details.
 /// </summary>
+/// 
+public enum CreeperType
+{
+    Uptrend,
+    Downtrend,
+    Accumulation
+}
 public record EquityScanResult
 {
     /// <summary>
@@ -64,4 +71,9 @@ public record EquityScanResult
     /// 
     public TickerInfo MetaData { get; set; } = new TickerInfo();
     public IReadOnlyList<TriggerHit> TriggerHits { get; init; } = Array.Empty<TriggerHit>();
+
+    // Creeper info
+    public bool IsCreeper { get; set; }
+    public double CreeperScore {  get; set; }
+    public CreeperType? CreeperType { get; set; }
 }
