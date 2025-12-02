@@ -5,7 +5,12 @@
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
 		<ApplicationIcon>Coin.ico</ApplicationIcon>
-		<AssemblyVersion>1.0.0</AssemblyVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+		<AssemblyVersion>1.0.2</AssemblyVersion>
+		<FileVersion>1.0.2</FileVersion>
+		<ProductVersion>1.0.2</ProductVersion>
+		<Product>MarketScanner</Product>
+		<Version>1.0.2</Version>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime;
@@ -83,6 +84,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
         private readonly RelayCommand _applyFiltersCommand;
+        private readonly RelayCommand _clearFiltersCommand;
 
 
         // cancellation tokens for long-running ops
@@ -105,6 +107,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand PauseScanCommand => _pauseScanCommand;
         public ICommand ResumeScanCommand => _resumeScanCommand;
         public ICommand ApplyFiltersCommand => _applyFiltersCommand;
+        public ICommand ClearFiltersCommand => _clearFiltersCommand;
+
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
                 Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
@@ -186,6 +190,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
             SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
+            _clearFiltersCommand = new RelayCommand(
+                async _ => await ClearFilters(),
+                _ => true
+                );
             _applyFiltersCommand = new RelayCommand(_ => RebuildFiltersAndRestart());
 
             // push initial persisted values through their setters
@@ -387,6 +395,24 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private void ResetProgressUI()
         {
             _scannerViewModel.ProgressValue = 0;
+        }
+        private async Task ClearFilters()
+        {
+            SelectedCountries.Clear();
+            SelectedSectors.Clear();
+            Logger.WriteLine("Filters cleared\n Selected Countries: ");
+            foreach (var c in SelectedCountries)
+                Logger.WriteLine(c);
+            Logger.WriteLine("\nSlected Sectors: ");
+            foreach (var s in SelectedSectors)
+                Logger.WriteLine(s);
+            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
+            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
+            _appSettings.FilterCountries.Clear();
+            _appSettings.FilterSectors.Clear();
+            _appSettings.Save();
+            ((App)App.Current).Notifier.Show("Filters cleared!");
+
         }
         private async Task RebuildFiltersAndRestart()
         {
