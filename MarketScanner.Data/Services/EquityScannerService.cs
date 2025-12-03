@@ -44,6 +44,7 @@ namespace MarketScanner.Data.Services
         private readonly IAlertManager _alertManager;
         private readonly IAppLogger _logger;
         private readonly IFundamentalProvider _fundamentalProvider;
+        private readonly IIndicatorService _indicatorService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
@@ -86,6 +87,7 @@ namespace MarketScanner.Data.Services
             _fundamentalProvider = fundamentalProvider;
             _metadataCache = metadataCache;
             _classifiers.Add(new RSIClassifier());
+            _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
             : this(
@@ -483,15 +485,9 @@ namespace MarketScanner.Data.Services
                     info.Exchange = meta.Exchange;
                 }
             }
-            /*Console.WriteLine(
-    $"[META POST-ENRICH] {symbol} → country={meta?.Country}, sector={meta?.Sector}"
-);*/
-            
-            var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
-            var rsi = RsiCalculator.Calculate(trimmed, IndicatorPeriod, rsiMethod);
-            var sma = SmaCalculator.Calculate(trimmed, IndicatorPeriod);
-            var (_, upper, lower) = BollingerBandsCalculator.Calculate(trimmed, IndicatorPeriod);
 
+            var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
+            var indicators = _indicatorService.CalculateIndicators(trimmed, IndicatorPeriod, rsiMethod);
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
                 .ConfigureAwait(false);
             var result = new EquityScanResult
@@ -499,10 +495,10 @@ namespace MarketScanner.Data.Services
                 Symbol = symbol,
                 Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
                 Volume = volume,
-                RSI = rsi,
-                SMA = sma,
-                Upper = upper,
-                Lower = lower,
+                RSI = indicators.RSI,
+                SMA = indicators.SMA,
+                Upper = indicators.UpperBand,
+                Lower = indicators.LowerBand,
                 TimeStamp = DateTime.UtcNow,
                 MetaData = info
             };
