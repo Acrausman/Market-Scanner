@@ -413,20 +413,18 @@ namespace MarketScanner.Data.Services
 
         private void QueueAlerts(EquityScanResult result)
         {
-            if (double.IsNaN(result.RSI))
-            {
-                return;
-            }
-
-            if (result.RSI >= 70)
+            if(result.Tags.Contains("Overbought"))
             {
                 _alertManager.Enqueue(result.Symbol, "overbought", result.RSI);
                 ScanResultClassified?.Invoke(result);
+                return;
             }
-            else if (result.RSI <= 30)
+
+            if(result.Tags.Contains("Oversold"))
             {
                 _alertManager.Enqueue(result.Symbol, "oversold", result.RSI);
                 ScanResultClassified?.Invoke(result);
+                return;
             }
 
         }
@@ -511,8 +509,7 @@ namespace MarketScanner.Data.Services
 
             foreach (var classifier in _classifiers)
                 classifier.Classify(result);
-            
-            //Logger.WriteLine($"Sector and country for {symbol} are {result.Sector} and {result.Country}");
+
             return result;
 
         }
