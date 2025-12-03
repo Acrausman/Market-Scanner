@@ -1,5 +1,6 @@
 ﻿// Normalized after refactor: updated namespace and using references
 using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Classification;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
@@ -46,6 +47,7 @@ namespace MarketScanner.Data.Services
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
+        private readonly List<IEquityClassifier> _classifiers = new();
         private List<IFilter> _filters = new();
 
         public event Action<EquityScanResult>? ScanResultClassified;
@@ -83,6 +85,7 @@ namespace MarketScanner.Data.Services
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
             _fundamentalProvider = fundamentalProvider;
             _metadataCache = metadataCache;
+            _classifiers.Add(new RSIClassifier());
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
             : this(
@@ -506,6 +509,9 @@ namespace MarketScanner.Data.Services
                 MetaData = info
             };
 
+            foreach (var classifier in _classifiers)
+                classifier.Classify(result);
+            
             //Logger.WriteLine($"Sector and country for {symbol} are {result.Sector} and {result.Country}");
             return result;
 

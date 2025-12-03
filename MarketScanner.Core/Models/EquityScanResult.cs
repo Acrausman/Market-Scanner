@@ -70,9 +70,11 @@ public record EquityScanResult
     /// </summary>
     /// 
     public TickerInfo MetaData { get; set; } = new TickerInfo();
+    public List<string> Tags { get; } = new List<string>();
     public IReadOnlyList<TriggerHit> TriggerHits { get; init; } = Array.Empty<TriggerHit>();
 
-    // Creeper info
+    public bool IsOverbought { get; set; }
+    public bool IsOversold { get; set; }
     public bool IsCreeper { get; set; }
     public double CreeperScore {  get; set; }
     public CreeperType? CreeperType { get; set; }

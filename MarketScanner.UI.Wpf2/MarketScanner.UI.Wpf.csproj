@@ -9,8 +9,10 @@
 		<AssemblyVersion>1.0.2</AssemblyVersion>
 		<FileVersion>1.0.2</FileVersion>
 		<ProductVersion>1.0.2</ProductVersion>
-		<Product>MarketScanner</Product>
+		<Product>CentSense</Product>
 		<Version>1.0.2</Version>
+		<AssemblyName>CentSense</AssemblyName>
+		<Company>Carolina Canyon Corporation</Company>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -26,6 +28,13 @@
         <ItemGroup>
           <ProjectReference Include="..\MarketScanner.Core\MarketScanner.Core.csproj" />
           <ProjectReference Include="..\MarketScanner.Data\MarketScanner.Data.csproj" />
+        </ItemGroup>
+
+        <ItemGroup>
+          <None Update="Properties\Settings.settings">
+            <Generator>SettingsSingleFileGenerator</Generator>
+            <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+          </None>
         </ItemGroup>
 
 	<ItemGroup>
