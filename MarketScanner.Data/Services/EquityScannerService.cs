@@ -48,29 +48,17 @@ namespace MarketScanner.Data.Services
         private readonly IMetadataService _metadataService;
         private readonly IClassificationEngine _classificationEngine;
         private readonly ISymbolScanPipeline _symbolScanPipeline;
+        private readonly IFilterService _filterService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
-        //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
         private readonly List<IEquityClassifier> _classifiers = new();
         private List<IFilter> _filters = new();
+        
+        public void AddFilter(IFilter filter) => _filterService.AddFilter(filter);
+        public void AddMultipleFilters(List<IFilter> filters) => _filterService.AddMultipleFilters(filters);
+        public void ClearFilters() => _filterService.ClearFilters();
 
         public event Action<EquityScanResult>? ScanResultClassified;
-        public void AddFilter(IFilter filter)
-        {
-            _filters.Clear();
-            _logger.Log(LogSeverity.Information, $"Adding {filter} to filters\n Active filters:");
-            _filters.Add(filter);
-            foreach (var f in _filters )_logger.Log(LogSeverity.Information, f.Name);
-        }
-        public void AddMultipleFilters(List<IFilter> filters)
-        {
-            _filters = filters;
-        }
-        public void ClearFilters()
-            {
-            _logger.Log(LogSeverity.Information, "Filters cleared");
-            _filters.Clear();
-            }
 
         public EquityScannerService(
             IMarketDataProvider provider,
@@ -100,6 +88,7 @@ namespace MarketScanner.Data.Services
                 _classificationEngine,
                 _provider,
                 _settings);
+            _filterService = new FilterService();
             _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
@@ -346,7 +335,7 @@ namespace MarketScanner.Data.Services
                 var result = await _symbolScanPipeline
                     .ScanAsync(info, cancellationToken)
                     .ConfigureAwait(false);
-                if (PassesFilters(result) || _filters.Count <= 0)
+                if (_filterService.PassesFilters(result))
                     QueueAlerts(result);
                 _scanCache[symbol] = result;
 
@@ -371,7 +360,7 @@ namespace MarketScanner.Data.Services
             }
             catch (Exception ex)
             {
-                //_logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
             }
             finally
             {
@@ -401,21 +390,6 @@ namespace MarketScanner.Data.Services
                 progress?.Report(percentage);
                 Interlocked.Exchange(ref tracker.LastReported, percentage);
             }
-        }
-
-        private bool PassesFilters(EquityScanResult result)
-        {
-            if (_filters.Count <= 0)
-                return true;
-            var meta = result.MetaData;
-            if (meta == null)
-                return false;
-            foreach (var filter in _filters)
-            {
-                if (!filter.Matches(meta))
-                    return false;
-            }
-            return true;
         }
 
         private void QueueAlerts(EquityScanResult result)
