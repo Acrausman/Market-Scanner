@@ -45,6 +45,7 @@ namespace MarketScanner.Data.Services
         private readonly IAppLogger _logger;
         private readonly IFundamentalProvider _fundamentalProvider;
         private readonly IIndicatorService _indicatorService;
+        private readonly IMetadataService _metadataService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
@@ -86,6 +87,7 @@ namespace MarketScanner.Data.Services
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
             _fundamentalProvider = fundamentalProvider;
             _metadataCache = metadataCache;
+            _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
             _classifiers.Add(new RSIClassifier());
             _indicatorService = new IndicatorService();
         }
@@ -117,7 +119,7 @@ namespace MarketScanner.Data.Services
             _scanCts = new CancellationTokenSource();
             var token = _scanCts.Token;
             Logger.Info("[Scanner] Preloading metadata...");
-            await PreloadMetadataAsync();
+            await _metadataService.PreloadAsync(null, token).ConfigureAwait(false);
             _logger.Log(LogSeverity.Information, "[Scanner] Starting scan...");
             _scanTask = Task.Run(async () =>
             {
@@ -232,31 +234,20 @@ namespace MarketScanner.Data.Services
             var tasks = tickers
                 .Select(async t =>
                 {
-                    if (!_metadataCache.TryGet(t.Symbol, out var meta) ||
-                        string.IsNullOrWhiteSpace(meta?.Sector) ||
-                        meta.Sector == "Unknown")
-                    {
-                        var fetched = await _fundamentalProvider.GetMetadataAsync(t.Symbol, cancellationToken);
-                        if(fetched != null)
-                        {
-                            meta = fetched;
-                            _metadataCache.AddOrUpdate(fetched);
-                        }
-                    }
-                    if(meta != null)
-                    {
-                        t.Country = meta.Country;
-                        t.Sector = meta.Sector;
-                        t.Exchange = meta.Exchange;
-                    }
+                    var enriched = await _metadataService
+                    .EnsureMetadataAsync(t, cancellationToken)
+                    .ConfigureAwait(false);
 
-                    await ProcessSymbolAsync(t, limiter, totalSymbols, tracker, progress, cancellationToken);
-                   /*Console.WriteLine(
-    $"[ENRICHED] {t.Symbol}: Country={t.Country}, Sector={t.Sector}, Exchange={t.Exchange}");*/
-
+                    await ProcessSymbolAsync(
+                        enriched,
+                        limiter,
+                        totalSymbols,
+                        tracker,
+                        progress,
+                        cancellationToken
+                        ).ConfigureAwait(false);
                 })
                 .ToList();
-
 
             try
             {
@@ -448,43 +439,9 @@ namespace MarketScanner.Data.Services
                 return CreateEmptyResult(symbol);
             }
             
-            TickerInfo? meta;
-            //Console.WriteLine($"[META PRECHECK] Checking metadata for {symbol}");
-            bool hasCached = _metadataCache.TryGet(symbol, out meta);
-            /*Console.WriteLine(
-    $"[META TRYGET] {symbol} found={hasCached}, " +
-    $"country='{meta?.Country}', sector='{meta?.Sector}'"
-);*/
-            
-
-            // Treat “Unknown” as not good enough – force enrichment
-            bool needsEnrich =
-                !hasCached ||
-                meta == null ||
-                string.IsNullOrWhiteSpace(meta.Country) ||
-                meta.Country == "Unknown" ||
-                string.IsNullOrWhiteSpace(meta.Sector) ||
-                meta.Sector == "Unknown";
-
-            if (needsEnrich && _fundamentalProvider != null)
-            {
-                var fetched = await _fundamentalProvider
-                    .GetMetadataAsync(symbol, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (fetched != null)
-                {
-                    meta = fetched;
-                    _metadataCache.AddOrUpdate(fetched);
-                    _metadataCache.SaveCacheToDisk();
-                }
-                if(meta != null)
-                {
-                    info.Country = meta.Country;
-                    info.Sector = meta.Sector;
-                    info.Exchange = meta.Exchange;
-                }
-            }
+            info = await _metadataService
+                .EnsureMetadataAsync(info, cancellationToken)
+                .ConfigureAwait(false);
 
             var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
             var indicators = _indicatorService.CalculateIndicators(trimmed, IndicatorPeriod, rsiMethod);
@@ -509,28 +466,6 @@ namespace MarketScanner.Data.Services
             return result;
 
         }
-
-        public async Task PreloadMetadataAsync(IProgress<int>? progress = null)
-        {
-            var tickers = await _provider.GetAllTickersAsync();
-            int processed = 0;
-
-            foreach (var t in tickers)
-            {
-                if (!_metadataCache.TryGet(t.Symbol, out _))
-                {
-                    var meta = await _fundamentalProvider.GetMetadataAsync(t.Symbol);
-                    if (meta != null)
-                        _metadataCache.AddOrUpdate(meta);
-                }
-
-                processed++;
-                progress?.Report((processed * 100) / tickers.Count);
-            }
-
-            _metadataCache.SaveCacheToDisk();
-        }
-
 
         private static EquityScanResult CreateEmptyResult(string symbol)
         {
