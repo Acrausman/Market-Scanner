@@ -31,11 +31,11 @@ namespace MarketScanner.Data.Services
             TickerInfo info,
             CancellationToken token)
         {
+            //Logger.WriteLine($"Metadata requested for {info.Symbol}");
+
             if (!_cache.TryGet(info.Symbol, out var meta) ||
                     string.IsNullOrWhiteSpace(meta?.Sector) ||
-                    meta.Sector == "Unknown" ||
-                    string.IsNullOrWhiteSpace(meta?.Country) ||
-                    meta.Country == "Unknown")
+                    string.IsNullOrWhiteSpace(meta?.Country))
             {
                 try
                 {

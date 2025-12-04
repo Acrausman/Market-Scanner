@@ -1,4 +1,6 @@
+using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Analysis;
 using System;

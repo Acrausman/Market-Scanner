@@ -3,6 +3,7 @@ using MarketScanner.Core.Classification;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Data;
 using System;

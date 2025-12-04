@@ -49,6 +49,7 @@ namespace MarketScanner.Data.Services
         private readonly IClassificationEngine _classificationEngine;
         private readonly ISymbolScanPipeline _symbolScanPipeline;
         private readonly IFilterService _filterService;
+        private readonly IAlertDispatchService _alertDispatchService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         private readonly List<IEquityClassifier> _classifiers = new();
@@ -89,6 +90,8 @@ namespace MarketScanner.Data.Services
                 _provider,
                 _settings);
             _filterService = new FilterService();
+            _alertDispatchService = new AlertDispatchService(alertManager);
+            _alertDispatchService.ClassificationArrived += r => ScanResultClassified?.Invoke(r);
             _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
@@ -336,7 +339,7 @@ namespace MarketScanner.Data.Services
                     .ScanAsync(info, cancellationToken)
                     .ConfigureAwait(false);
                 if (_filterService.PassesFilters(result))
-                    QueueAlerts(result);
+                    _alertDispatchService.Dispatch(result);
                 _scanCache[symbol] = result;
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
@@ -390,24 +393,6 @@ namespace MarketScanner.Data.Services
                 progress?.Report(percentage);
                 Interlocked.Exchange(ref tracker.LastReported, percentage);
             }
-        }
-
-        private void QueueAlerts(EquityScanResult result)
-        {
-            if(result.Tags.Contains("Overbought"))
-            {
-                _alertManager.Enqueue(result.Symbol, "overbought", result.RSI);
-                ScanResultClassified?.Invoke(result);
-                return;
-            }
-
-            if(result.Tags.Contains("Oversold"))
-            {
-                _alertManager.Enqueue(result.Symbol, "oversold", result.RSI);
-                ScanResultClassified?.Invoke(result);
-                return;
-            }
-
         }
 
         private static EquityScanResult CreateEmptyResult(string symbol)
