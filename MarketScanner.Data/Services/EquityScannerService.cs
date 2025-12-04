@@ -47,6 +47,7 @@ namespace MarketScanner.Data.Services
         private readonly IIndicatorService _indicatorService;
         private readonly IMetadataService _metadataService;
         private readonly IClassificationEngine _classificationEngine;
+        private readonly ISymbolScanPipeline _symbolScanPipeline;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
@@ -84,6 +85,7 @@ namespace MarketScanner.Data.Services
             _provider = provider;
             _fundamentalProvider = fundamentalProvider;
             _alertManager = alertManager;
+            _indicatorService = new IndicatorService();
             _logger = logger;
             _priceCache = new HistoricalPriceCache(provider, dataCleaner);
             _fundamentalProvider = fundamentalProvider;
@@ -91,6 +93,13 @@ namespace MarketScanner.Data.Services
             _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
             _classifiers.Add(new RSIClassifier());
             _classificationEngine = new ClassificationEngine(_classifiers);
+            _symbolScanPipeline = new SymbolScanPipeline(
+                _priceCache,
+                _metadataService,
+                _indicatorService,
+                _classificationEngine,
+                _provider,
+                _settings);
             _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
@@ -294,7 +303,10 @@ namespace MarketScanner.Data.Services
             string symbol = info.Symbol;
             try
             {
-                var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
+                var result = await _symbolScanPipeline
+                    .ScanAsync(info, cancellationToken)
+                    .ConfigureAwait(false);
+
                 _scanCache[symbol] = result;
                 return result;
             }
@@ -304,7 +316,7 @@ namespace MarketScanner.Data.Services
             }
             catch (Exception ex)
             {
-                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}");
                 return CreateEmptyResult(symbol);
             }
         }
@@ -331,12 +343,12 @@ namespace MarketScanner.Data.Services
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var result = await ScanSymbolCoreAsync(info, cancellationToken).ConfigureAwait(false);
+                var result = await _symbolScanPipeline
+                    .ScanAsync(info, cancellationToken)
+                    .ConfigureAwait(false);
                 if (PassesFilters(result) || _filters.Count <= 0)
                     QueueAlerts(result);
-                //ApplyFilters(info);
                 _scanCache[symbol] = result;
-                //Logger.WriteLine($"[CACHE CHECK] {symbol} → sector={_scanCache[symbol].Sector}, country={_scanCache[symbol].Country}");
 
                 var processed = Interlocked.Increment(ref tracker.Processed);
                 if (processed % BatchSize == 0 || processed == totalSymbols)
@@ -421,49 +433,6 @@ namespace MarketScanner.Data.Services
                 ScanResultClassified?.Invoke(result);
                 return;
             }
-
-        }
-
-        private async Task<EquityScanResult> ScanSymbolCoreAsync(TickerInfo info, CancellationToken cancellationToken)
-        {
-            string symbol = info.Symbol;
-            var closes = await _priceCache.GetClosingPricesAsync(symbol, MinimumCloseCount, cancellationToken).ConfigureAwait(false);
-            if (closes == null || closes.Count < IndicatorPeriod)
-            {
-                //_logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
-                return CreateEmptyResult(symbol);
-            }
-
-            var trimmed = closes.Skip(Math.Max(0, closes.Count - IndicatorWindow)).ToList();
-            if (trimmed.Count < IndicatorPeriod)
-            {
-                //_logger.Log(LogSeverity.Warning, $"[Scanner] Skipping {symbol} due to missing data.");
-                return CreateEmptyResult(symbol);
-            }
-            
-            info = await _metadataService
-                .EnsureMetadataAsync(info, cancellationToken)
-                .ConfigureAwait(false);
-
-            var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
-            var indicators = _indicatorService.CalculateIndicators(trimmed, IndicatorPeriod, rsiMethod);
-            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
-                .ConfigureAwait(false);
-            var result = new EquityScanResult
-            {
-                Symbol = symbol,
-                Price = double.IsNaN(price) ? trimmed.LastOrDefault() : price,
-                Volume = volume,
-                RSI = indicators.RSI,
-                SMA = indicators.SMA,
-                Upper = indicators.UpperBand,
-                Lower = indicators.LowerBand,
-                TimeStamp = DateTime.UtcNow,
-                MetaData = info
-            };
-
-            _classificationEngine.Classify(result);
-            return result;
 
         }
 

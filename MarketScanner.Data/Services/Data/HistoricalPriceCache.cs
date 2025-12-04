@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace MarketScanner.Data.Services.Data
 {
-    internal class HistoricalPriceCache
+    public class HistoricalPriceCache
     {
         private readonly IMarketDataProvider _provider;
         private readonly IDataCleaner _dataCleaner;
