@@ -46,6 +46,7 @@ namespace MarketScanner.Data.Services
         private readonly IFundamentalProvider _fundamentalProvider;
         private readonly IIndicatorService _indicatorService;
         private readonly IMetadataService _metadataService;
+        private readonly IClassificationEngine _classificationEngine;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         //private readonly string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
@@ -89,6 +90,7 @@ namespace MarketScanner.Data.Services
             _metadataCache = metadataCache;
             _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
             _classifiers.Add(new RSIClassifier());
+            _classificationEngine = new ClassificationEngine(_classifiers);
             _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
@@ -460,9 +462,7 @@ namespace MarketScanner.Data.Services
                 MetaData = info
             };
 
-            foreach (var classifier in _classifiers)
-                classifier.Classify(result);
-
+            _classificationEngine.Classify(result);
             return result;
 
         }
