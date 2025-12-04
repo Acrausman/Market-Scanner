@@ -49,6 +49,7 @@ namespace MarketScanner.Data.Services
         private readonly IClassificationEngine _classificationEngine;
         private readonly ISymbolScanPipeline _symbolScanPipeline;
         private readonly IFilterService _filterService;
+        private readonly IScanController _scanController;
         private readonly IAlertDispatchService _alertDispatchService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
@@ -92,6 +93,7 @@ namespace MarketScanner.Data.Services
             _filterService = new FilterService();
             _alertDispatchService = new AlertDispatchService(alertManager);
             _alertDispatchService.ClassificationArrived += r => ScanResultClassified?.Invoke(r);
+            _scanController = new ScanController();
             _indicatorService = new IndicatorService();
         }
         public EquityScannerService(IMarketDataProvider provider, IFundamentalProvider fundamentalProvider, TickerMetadataCache metadataCache, IAlertSink alertSink, AppSettings settings)
@@ -111,40 +113,7 @@ namespace MarketScanner.Data.Services
 
         public async Task StartAsync(IProgress<int>? progress = null)
         {
-            if (_isScanning)
-            {
-                _logger.Log(LogSeverity.Warning, "[Scanner] A scan is already running.");
-                return;
-            }
-
-            _pauseEvent.Set();
-            _isScanning = true;
-            _scanCts = new CancellationTokenSource();
-            var token = _scanCts.Token;
-            Logger.Info("[Scanner] Preloading metadata...");
-            await _metadataService.PreloadAsync(null, token).ConfigureAwait(false);
-            _logger.Log(LogSeverity.Information, "[Scanner] Starting scan...");
-            _scanTask = Task.Run(async () =>
-            {
-                try
-                {
-                    await ScanAllAsync(progress, token);
-                }
-                catch (OperationCanceledException)
-                {
-                    _logger.Log(LogSeverity.Information, "[Scanner] Scan cancelled");
-                }
-                catch (Exception ex)
-                {
-                    _logger.Log(LogSeverity.Error, $"[Scanner] Scan failed: {ex.Message}");
-                }
-                finally
-                {
-                    _isScanning = false;
-                    _logger.Log(LogSeverity.Information, "[Scanner] Scan finished.");
-                }
-            });
-
+            //Replace with ScanController call
         }
         public async Task RestartAsync(IProgress<int>? progress = null)
         {
