@@ -3,8 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 namespace MarketScanner.Core.Abstractions
 {
-    public interface IScanController
-    {
         public interface IScanController
         {
             bool IsScanning { get; }
@@ -15,6 +13,7 @@ namespace MarketScanner.Core.Abstractions
 
             void Pause();
             void Resume();
+            void WaitForResume(CancellationToken token);
         }
-    }
+    
 }

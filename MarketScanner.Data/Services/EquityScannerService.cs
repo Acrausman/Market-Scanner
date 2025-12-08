@@ -31,13 +31,7 @@ namespace MarketScanner.Data.Services
         private const int IndicatorPeriod = 14;
         private const int BatchSize = 30;
         private const int MaxConcurrency = 12;
-        private CancellationTokenSource? _scanCts;
-        private Task? _scanTask;
-        private bool _isScanning;
-        public bool IsScanning => _isScanning;
-
-        private readonly ManualResetEventSlim _pauseEvent = new(true);
-        private readonly SemaphoreSlim _restartLock = new(1,1);
+        
         private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
         private readonly HistoricalPriceCache _priceCache;
@@ -111,73 +105,27 @@ namespace MarketScanner.Data.Services
         public ObservableCollection<string> OversoldSymbols => _alertManager.OversoldSymbols;
         public ObservableCollection<string> CreeperSymbols { get; } = new();
 
-        public async Task StartAsync(IProgress<int>? progress = null)
+        public Task StartAsync(IProgress<int>? progress = null)
         {
-            //Replace with ScanController call
+            return _scanController.StartAsync(
+                token => ScanAllAsync(progress, token),
+                progress);
         }
-        public async Task RestartAsync(IProgress<int>? progress = null)
+        public Task RestartAsync(IProgress<int>? progress = null)
         {
-            await _restartLock.WaitAsync();
-            try
-            {
-                if(IsScanning)
-                {
-                    await StopAsync().ConfigureAwait(false);
-                }
-
-                await StartAsync(progress).ConfigureAwait(false);
-            }
-            finally
-            {
-                _restartLock.Release();
-            }
+            return _scanController.RestartAsync(
+                token => ScanAllAsync(progress, token),
+                progress);
         }
 
-        public async Task StopAsync()
+        public Task StopAsync()
         {
-            if (!_isScanning || _scanCts == null)
-                return;
-
-            _logger.Log(LogSeverity.Information, "[Scanner] Stopping scan...");
-            try
-            {
-                _scanCts.Cancel();
-            }
-            catch
-            {
-
-            }
-
-            var scanTask = _scanTask;
-            if (_scanTask != null)
-            {
-                try
-                {
-                    await scanTask.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-
-                }
-                catch (Exception ex)
-                {
-                    _logger.Log(LogSeverity.Error, $"[Scanner] Error during stop: {ex.Message}");
-                }
-            }
-            _scanCts.Dispose();
-            _scanCts = null;
-            
+            return _scanController.StopAsync();
         }
 
-        public void Pause()
-        {
-            _pauseEvent.Reset();
-        }
+        public void Pause() => _scanController.Pause();
 
-        public void Resume()
-        {
-            _pauseEvent.Set();
-        }
+        public void Resume() => _scanController.Resume();
         public void SetAlertSink(IAlertSink alertSink)
         {
             _alertManager.SetSink(alertSink);
@@ -295,7 +243,7 @@ namespace MarketScanner.Data.Services
             IProgress<int>? progress,
             CancellationToken cancellationToken)
         {
-            _pauseEvent.Wait(cancellationToken);
+            _scanController.WaitForResume(cancellationToken);
             await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
             string symbol = info.Symbol;
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken);
