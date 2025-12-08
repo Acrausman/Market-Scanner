@@ -31,7 +31,7 @@ namespace MarketScanner.Data.Services
         private const int IndicatorWindow = 120;
         private const int IndicatorPeriod = 14;
         private const int BatchSize = 30;
-        private const int MaxConcurrency = 12;
+        private readonly int MaxConcurrency = 12;
         
         private readonly AppSettings _settings;
         private readonly IMarketDataProvider _provider;
@@ -135,73 +135,22 @@ namespace MarketScanner.Data.Services
 
         public async Task ScanAllAsync(IProgress<int>? progress, CancellationToken cancellationToken)
         {
-            Logger.WriteLine("[DEBUG] Clearing scan cache...");
-            _scanCache.Clear();
-            await _alertManager.ResetAsync().ConfigureAwait(false);
+            var tickers = await _provider.GetAllTickersAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-            var tickers = await _provider.GetAllTickersAsync(cancellationToken).ConfigureAwait(false);
-            var totalSymbols = tickers.Count;
-            if (tickers == null || tickers.Count == 0)
-            {
-                _logger.Log(LogSeverity.Information, "[Scanner] No tickers available from provider.");
-                return;
-            }
-            _logger.Log(LogSeverity.Information, $"[Scanner] Starting full scan for {tickers.Count:N0} tickers...\nApplied filters: {_filters.Count}");
-            foreach(var f in _filters)
-            _logger.Log(LogSeverity.Information, $"{f.Name}, ");
-
-            using var limiter = new SemaphoreSlim(MaxConcurrency);
+            int totalSymbols = tickers.Count;
             var tracker = _progressService.CreateTracker(totalSymbols);
+            using var limiter = new SemaphoreSlim(MaxConcurrency, MaxConcurrency);
 
-            var tasks = tickers
-                .Select(async t =>
-                {
-                    var enriched = await _metadataService
-                    .EnsureMetadataAsync(t, cancellationToken)
-                    .ConfigureAwait(false);
+            var tasks = tickers.Select(info =>
+                ProcessSymbolAsync(info, limiter, tracker, progress, cancellationToken));
 
-                    await ProcessSymbolAsync(
-                        enriched,
-                        limiter,
-                        totalSymbols,
-                        tracker,
-                        progress,
-                        cancellationToken
-                        ).ConfigureAwait(false);
-                })
-                .ToList();
+            await Task.WhenAll(tasks).ConfigureAwait(false);
 
-            try
-            {
-                await Task.WhenAll(tasks).ConfigureAwait(false);
-                _metadataCache.SaveCacheToDisk();
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.Log(LogSeverity.Information, "[Scanner] Scan cancelled by user.");
-            }
-
-            try
-            {
-                await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            }
-
-            if (!cancellationToken.IsCancellationRequested)
-            {
-                progress?.Report(100);
-                _logger.Log(LogSeverity.Information, $"[Scanner] Completed. Overbought={_alertManager.OverboughtCount}, Oversold={_alertManager.OversoldCount}");
-                //ApplyFilters(_scanCache.Values);
-            
-            }
-            else
-            {
-                _logger.Log(LogSeverity.Information, "[Scanner] Cancelled mid-run.");
-            }
             progress?.Report(100);
+            await _alertManager
+                .FlushAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
 
 
@@ -241,7 +190,6 @@ namespace MarketScanner.Data.Services
         private async Task ProcessSymbolAsync(
             TickerInfo info,
             SemaphoreSlim limiter,
-            int totalSymbols,
             ScanProgressTracker tracker,
             IProgress<int>? progress,
             CancellationToken cancellationToken)
