@@ -5,17 +5,13 @@ using MarketScanner.Core.Metadata;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
 using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
@@ -39,6 +35,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly AlertManager _alertManager;
         private readonly UiNotifier _uiNotifier;
         private readonly IProgress<int> _scanProgress;
+
+        private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
         public double _minPrice;
         public double _maxPrice;
@@ -155,7 +153,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _appSettings = settings;
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
-            _scannerService.ScanResultClassified += OnScanResultClassified;
+            _scanResultRouter = new ScanResultRouter(_scannerViewModel, _dispatcher);
+            _scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
+      
             _scanProgress = new Progress<int>(value =>
             {
                 _scannerViewModel.ProgressValue = value;
@@ -381,17 +381,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             }
         }
             
-
-        private void OnScanResultClassified(EquityScanResult result)
-        {
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                if (result.RSI >= 70)
-                    _scannerViewModel.OverboughtSymbols.Add(result.Symbol);
-                else if (result.RSI <= 30)
-                    _scannerViewModel.OversoldSymbols.Add(result.Symbol);
-            });
-        }
         private void ResetProgressUI()
         {
             _scannerViewModel.ProgressValue = 0;
