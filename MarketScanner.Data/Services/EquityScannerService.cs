@@ -6,6 +6,7 @@ using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Metadata;
 using MarketScanner.Core.Models;
+using MarketScanner.Core.Progress;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Indicators;
 using MarketScanner.Data.Providers;
@@ -45,12 +46,12 @@ namespace MarketScanner.Data.Services
         private readonly IFilterService _filterService;
         private readonly IScanController _scanController;
         private readonly IAlertDispatchService _alertDispatchService;
+        private readonly IProgressService _progressService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         private readonly List<IEquityClassifier> _classifiers = new();
         private List<IFilter> _filters = new();
         
-        public void AddFilter(IFilter filter) => _filterService.AddFilter(filter);
         public void AddMultipleFilters(List<IFilter> filters) => _filterService.AddMultipleFilters(filters);
         public void ClearFilters() => _filterService.ClearFilters();
 
@@ -77,6 +78,7 @@ namespace MarketScanner.Data.Services
             _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
             _classifiers.Add(new RSIClassifier());
             _classificationEngine = new ClassificationEngine(_classifiers);
+            _progressService = new ProgressService();
             _symbolScanPipeline = new SymbolScanPipeline(
                 _priceCache,
                 _metadataService,
@@ -149,7 +151,7 @@ namespace MarketScanner.Data.Services
             _logger.Log(LogSeverity.Information, $"{f.Name}, ");
 
             using var limiter = new SemaphoreSlim(MaxConcurrency);
-            var tracker = new ScanProgressTracker();
+            var tracker = _progressService.CreateTracker(totalSymbols);
 
             var tasks = tickers
                 .Select(async t =>
@@ -199,6 +201,7 @@ namespace MarketScanner.Data.Services
             {
                 _logger.Log(LogSeverity.Information, "[Scanner] Cancelled mid-run.");
             }
+            progress?.Report(100);
         }
 
 
@@ -245,70 +248,28 @@ namespace MarketScanner.Data.Services
         {
             _scanController.WaitForResume(cancellationToken);
             await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
-            string symbol = info.Symbol;
-            var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken);
-            info.Price = price;
 
             try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var result = await _symbolScanPipeline
-                    .ScanAsync(info, cancellationToken)
+                var result = await _symbolScanPipeline.ScanAsync(info, cancellationToken)
                     .ConfigureAwait(false);
                 if (_filterService.PassesFilters(result))
                     _alertDispatchService.Dispatch(result);
-                _scanCache[symbol] = result;
+                _scanCache[info.Symbol] = result;
 
-                var processed = Interlocked.Increment(ref tracker.Processed);
-                if (processed % BatchSize == 0 || processed == totalSymbols)
-                {
-                    try
-                    {
-                        await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        await _alertManager.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-                    }
+                _progressService.Increment(tracker);
+                _progressService.TryReport(tracker, progress);
 
-                    ReportProgress(totalSymbols, processed, tracker, progress);
-                }
+                await _alertManager.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                //_logger.Log(LogSeverity.Information, $"[Scanner] Scan cancelled for {symbol}.");
-            }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {symbol}: {ex.Message}", ex);
+                _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {info.Symbol}: {ex.Message}", ex);
             }
             finally
             {
                 limiter.Release();
-                try
-                {
-                    await Task.Delay(25, cancellationToken).ConfigureAwait(false);
-                }
-                catch
-                {
-                    // ignored
-                }
-            }
-        }
-
-        private static void ReportProgress(int totalSymbols, int processed, ScanProgressTracker tracker, IProgress<int>? progress)
-        {
-            if (totalSymbols == 0)
-            {
-                return;
-            }
-
-            var percentage = (int)((double)processed / totalSymbols * 100);
-            var last = Volatile.Read(ref tracker.LastReported);
-            if (percentage > last)
-            {
-                progress?.Report(percentage);
-                Interlocked.Exchange(ref tracker.LastReported, percentage);
             }
         }
 
@@ -325,12 +286,6 @@ namespace MarketScanner.Data.Services
                 Lower = double.NaN,
                 TimeStamp = DateTime.UtcNow
             };
-        }
-
-        private sealed class ScanProgressTracker
-        {
-            public int Processed;
-            public int LastReported;
         }
 
         private static IDataCleaner CreateDataCleaner(IMarketDataProvider provider, out IAppLogger logger)
