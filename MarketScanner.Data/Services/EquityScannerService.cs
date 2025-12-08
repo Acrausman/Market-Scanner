@@ -1,36 +1,21 @@
-﻿// Normalized after refactor: updated namespace and using references
-using MarketScanner.Core.Abstractions;
+﻿using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Classification;
 using MarketScanner.Core.Configuration;
-using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Metadata;
 using MarketScanner.Core.Models;
 using MarketScanner.Core.Progress;
 using MarketScanner.Data.Diagnostics;
-using MarketScanner.Data.Indicators;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Providers.Finnhub;
-using MarketScanner.Data.Services.Alerts;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
-using Polygon.Models;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace MarketScanner.Data.Services
 {
     public class EquityScannerService : IEquityScannerService
     {
-        private const int MinimumCloseCount = 150;
-        private const int IndicatorWindow = 120;
-        private const int IndicatorPeriod = 14;
-        private const int BatchSize = 30;
         private readonly int MaxConcurrency = 12;
         
         private readonly AppSettings _settings;
@@ -47,10 +32,10 @@ namespace MarketScanner.Data.Services
         private readonly IScanController _scanController;
         private readonly IAlertDispatchService _alertDispatchService;
         private readonly IProgressService _progressService;
+        private readonly IConcurrencyService _concurrencyService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         private readonly List<IEquityClassifier> _classifiers = new();
-        private List<IFilter> _filters = new();
         
         public void AddMultipleFilters(List<IFilter> filters) => _filterService.AddMultipleFilters(filters);
         public void ClearFilters() => _filterService.ClearFilters();
@@ -79,6 +64,7 @@ namespace MarketScanner.Data.Services
             _classifiers.Add(new RSIClassifier());
             _classificationEngine = new ClassificationEngine(_classifiers);
             _progressService = new ProgressService();
+            _concurrencyService = new ConcurrencyService();
             _symbolScanPipeline = new SymbolScanPipeline(
                 _priceCache,
                 _metadataService,
@@ -140,12 +126,13 @@ namespace MarketScanner.Data.Services
 
             int totalSymbols = tickers.Count;
             var tracker = _progressService.CreateTracker(totalSymbols);
-            using var limiter = new SemaphoreSlim(MaxConcurrency, MaxConcurrency);
 
-            var tasks = tickers.Select(info =>
-                ProcessSymbolAsync(info, limiter, tracker, progress, cancellationToken));
-
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            await _concurrencyService.RunForEachAsync(
+                tickers,
+                MaxConcurrency,
+                (info, token) => ProcessSymbolAsync(info, tracker, progress, token),
+                cancellationToken
+                ).ConfigureAwait(false);
 
             progress?.Report(100);
             await _alertManager
@@ -189,13 +176,11 @@ namespace MarketScanner.Data.Services
 
         private async Task ProcessSymbolAsync(
             TickerInfo info,
-            SemaphoreSlim limiter,
             ScanProgressTracker tracker,
             IProgress<int>? progress,
             CancellationToken cancellationToken)
         {
             _scanController.WaitForResume(cancellationToken);
-            await limiter.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -215,10 +200,7 @@ namespace MarketScanner.Data.Services
             {
                 _logger.Log(LogSeverity.Error, $"[Scanner] Failed to fetch {info.Symbol}: {ex.Message}", ex);
             }
-            finally
-            {
-                limiter.Release();
-            }
+
         }
 
         private static EquityScanResult CreateEmptyResult(string symbol)
