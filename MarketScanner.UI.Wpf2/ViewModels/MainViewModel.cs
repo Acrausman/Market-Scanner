@@ -5,6 +5,7 @@ using MarketScanner.Core.Metadata;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Analysis;
 using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.Generic;
@@ -30,6 +31,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly EquityScannerService _equityScannerService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ChartViewModel _chartViewModel;
+        private readonly FilterPanelViewModel _filterPanelViewModel;
+        public FilterPanelViewModel FilterPanel => _filterPanelViewModel;
+        private readonly FilterService _filterService;
+        private readonly FilterCoordinatorService _filterCoordinator;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
@@ -38,17 +43,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
-        public double _minPrice;
-        public double _maxPrice;
+        //public double? _minPrice;
+        //public double? _maxPrice;
         //public string _selectedCountryFilter {  get; set; }
         //public string _selectedSectorFilter { get; set; }
         public ObservableCollection<string> AvailableSectors { get; }
             = new ObservableCollection<string>();
-        public ObservableCollection<string> SelectedSectors { get; }
-            = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableCountries { get; }
-            = new ObservableCollection<string>();
-        public ObservableCollection<string> SelectedCountries { get; }
             = new ObservableCollection<string>();
         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
@@ -104,8 +105,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand SendDigestNow { get; }
         public ICommand PauseScanCommand => _pauseScanCommand;
         public ICommand ResumeScanCommand => _resumeScanCommand;
-        public ICommand ApplyFiltersCommand => _applyFiltersCommand;
-        public ICommand ClearFiltersCommand => _clearFiltersCommand;
 
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
@@ -136,7 +135,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public MainViewModel(
             ScannerViewModel scannerViewModel,
             ChartViewModel chartViewModel,
+            FilterPanelViewModel filterPanelViewModel,
             EmailService emailService,
+            FilterService filterService,
             Dispatcher dispatcher,
             AlertManager alertManager,
             AppSettings settings,
@@ -144,17 +145,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
             TickerMetadataCache metadataCache,
             EquityScannerService scannerService)
         {
+            _appSettings = settings;
+            _filterService = filterService;
+            _filterCoordinator = new FilterCoordinatorService(_filterService, _appSettings);
             _scannerService = scannerService;
             _scannerViewModel = scannerViewModel;
             _chartViewModel = chartViewModel;
+            _filterPanelViewModel = filterPanelViewModel;
             _dispatcher = dispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
-            _appSettings = settings;
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
             _scanResultRouter = new ScanResultRouter(_scannerViewModel, _dispatcher);
-            _scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
+            //_scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
             _symbolSelectionService = new SymbolSelectionService(scannerService, _chartViewModel);
       
             _scanProgress = new Progress<int>(value =>
@@ -179,23 +183,14 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _selectedInterval = _appSettings.AlertIntervalMinutes > 0
                 ? _appSettings.AlertIntervalMinutes
                 : 15;
-            _minPrice = _appSettings.FilterMinPrice;
-            _maxPrice = _appSettings.FilterMaxPrice;
-            foreach (var s in _appSettings.FilterCountries)
-                SelectedCountries.Add(s);
-            foreach(var s in _appSettings.FilterSectors) 
-                SelectedSectors.Add(s);
             LoadFilterChoices();
 
             // Commands for options panel
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
             SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
-            _clearFiltersCommand = new RelayCommand(
-                async _ => await ClearFilters(),
-                _ => true
-                );
-            _applyFiltersCommand = new RelayCommand(_ => RebuildFiltersAndRestart());
+            _filterPanelViewModel.FiltersApplied += OnFiltersApplied;
+            _filterPanelViewModel.FiltersCleared += OnFiltersCleared;
 
             // push initial persisted values through their setters
             NotificationEmail = _notificationEmail;
@@ -245,7 +240,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
         }
 
         // -------- Symbol selection / chart sync --------
-
+        private async void OnFiltersApplied()
+        {
+            _filterCoordinator.ApplyFilters(_filterPanelViewModel);
+            ((App)App.Current).Notifier.Show("Filters applied!");
+            if (IsScanning)
+                await RestartScanAsync();
+        }
+        private async void OnFiltersCleared()
+        {
+            _filterCoordinator.ClearFilters(_filterPanelViewModel);
+            ((App)App.Current).Notifier.Show("Filters cleared!");
+            if (IsScanning)
+                await RestartScanAsync();
+        }
         public string? SelectedSymbol
         {
             get => _selectedSymbol;
@@ -389,145 +397,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             _scannerViewModel.ProgressValue = 0;
         }
-        private async Task ClearFilters()
-        {
-            SelectedCountries.Clear();
-            SelectedSectors.Clear();
-            Logger.WriteLine("Filters cleared\n Selected Countries: ");
-            foreach (var c in SelectedCountries)
-                Logger.WriteLine(c);
-            Logger.WriteLine("\nSlected Sectors: ");
-            foreach (var s in SelectedSectors)
-                Logger.WriteLine(s);
-            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
-            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
-            _appSettings.FilterCountries.Clear();
-            _appSettings.FilterSectors.Clear();
-            _appSettings.Save();
-            ((App)App.Current).Notifier.Show("Filters cleared!");
-
-        }
-        private async Task RebuildFiltersAndRestart()
-        {
-
-            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
-            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
-            _appSettings.FilterCountries.Clear();
-            _appSettings.FilterSectors.Clear();
-
-            var filters = new List<IFilter>();
-
-            if (_minPrice > 0 || _maxPrice < 99999)
-                filters.Add(new PriceFilter(_minPrice, _maxPrice));
-            if (SelectedCountries.Count > 0 && !SelectedCountries.Contains("Any"))
-                filters.Add(new MultiCountryFilter(SelectedCountries));
-            if (SelectedSectors.Count > 0 && !SelectedSectors.Contains("Any"))
-                filters.Add(new MultiSectorFilter(SelectedSectors));
-
-            _appSettings.FilterCountries = SelectedCountries.ToList();
-            _appSettings.FilterSectors = SelectedSectors.ToList();
-            _appSettings.Save();
-            Console.WriteLine("[DEBUG] Saved Countries: " +
-    string.Join(", ", _appSettings.FilterCountries));
-
-            Console.WriteLine("[DEBUG] Saved Sectors: " +
-                string.Join(", ", _appSettings.FilterSectors));
-
-
-            _scannerService.AddMultipleFilters(filters);
-            Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
-                  string.Join(",", SelectedSectors));
-            Console.WriteLine($"DEBUG FILTER Selected countries: ");
-            foreach(var c in SelectedCountries)
-            {
-                Console.WriteLine($"{c}, ");
-            }
-            ((App)App.Current).Notifier.Show("Filters applied!");
-            if (IsScanning)
-                await RestartScanAsync();
-            //await _uiNotifier.ShowStatusAsync("Filters applied!");
-            //StartScanCommand.Execute(null);
-        }
 
         // -------- Setting persistence --------
 
-        public double MinPrice
-        {
-            get => _minPrice;
-            set
-            {
-                if(_minPrice != value)
-                {
-                    _minPrice = value;
-                    OnPropertyChanged();
-
-                    _appSettings.FilterMinPrice = _minPrice;
-                    _appSettings.Save();
-
-                }
-            }
-        }
-        public double MaxPrice
-        {
-            get => _maxPrice;
-            set
-            {
-                if (_maxPrice != value)
-                {
-                    _maxPrice = value;
-                    OnPropertyChanged();
-
-                    _appSettings.FilterMaxPrice = _maxPrice;
-                    _appSettings.Save();
-
-                }
-            }
-        }
-        /*public string SelectedCountryFilter
-        {
-            get => _selectedCountryFilter;
-            set
-            {
-                if (_selectedCountryFilter != value)
-                {
-                    _selectedCountryFilter = value ?? string.Empty;
-                    OnPropertyChanged();
-
-                    SelectedCountries.Clear();
-                    if(!string.IsNullOrWhiteSpace(_selectedCountryFilter) &&
-                        _selectedCountryFilter != "Any")
-                    {
-                        SelectedSectors.Add(_selectedCountryFilter);
-                    }
-                    _appSettings.Save();
-                }
-            }
-        }
-        
-        public string SelectedSectorFilter
-        {
-            get => _selectedSectorFilter;
-            set
-            {
-                if(_selectedSectorFilter != value)
-                {
-                    _selectedSectorFilter = value ?? string.Empty;
-                    OnPropertyChanged();
-
-                    SelectedSectors.Clear();
-                    if (!string.IsNullOrWhiteSpace(_selectedSectorFilter) &&
-                        _selectedSectorFilter != "Any")
-                    {
-                        SelectedSectors.Add(_selectedSectorFilter);
-                    }
-
-                    _appSettings.FilterSectors = SelectedSectors.ToList();
-                    _appSettings.Save();
-                }
-            }
-        
-        }
-        */
         private void LoadFilterChoices()
         {
             AvailableSectors.Clear();

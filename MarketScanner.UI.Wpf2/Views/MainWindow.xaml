@@ -34,11 +34,11 @@
                                 <TextBlock Text="Min:" Width="40"
                                            Foreground="#CCCCCC"/>
                                 <TextBox Width="80"
-                                           Text="{Binding MinPrice, Mode=TwoWay}"/>
+                                           Text="{Binding FilterPanel.MinPrice, Mode=TwoWay}"/>
                                 <TextBlock Text="Max:" Margin="10,0,0,0"
                                            Foreground="#CCCCCC"/>
                                 <TextBox Width="80"
-                                         Text="{Binding MaxPrice, Mode=TwoWay}"/>
+                                         Text="{Binding FilterPanel.MaxPrice, Mode=TwoWay}"/>
                             </StackPanel>
 
                             <Separator Margin="5"/>
@@ -48,7 +48,7 @@
                                        Foreground="#CCCCCC"/>
                             <ListBox ItemsSource="{Binding AvailableCountries}"
                                      SelectionMode="Multiple"
-                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding SelectedCountries}" 
+                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedCountries}" 
                                      Width="180"/>
 
                             <Separator Margin="5"/>
@@ -58,13 +58,13 @@
                                        Foreground="#CCCCCC"/>
                             <ListBox ItemsSource="{Binding AvailableSectors}"
                                      SelectionMode="Multiple"
-                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding SelectedSectors}"
+                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedSectors}"
                                      Width="240"/>
                             <Separator Margin="10"/>
 
                             <Button Content="Clear Filters"
                                     Style="{StaticResource FlashButtonStyle}"
-                                    Command="{Binding ClearFiltersCommand}"
+                                    Command="{Binding FilterPanel.ClearFiltersCommand}"
                                     Width="150"
                                     HorizontalAlignment="Left"
                                     Margin="0,10,0,0"/>
@@ -72,7 +72,7 @@
 
                             <Button Content="Apply Filters"
                                     Style="{StaticResource FlashButtonStyle}"
-                                    Command="{Binding ApplyFiltersCommand}"
+                                    Command="{Binding FilterPanel.ApplyFiltersCommand}"
                                     Width="150"
                                     HorizontalAlignment="Left"
                                     Margin="0,10,0,0"/>

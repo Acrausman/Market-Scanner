@@ -5,6 +5,7 @@ using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Analysis;
 using MarketScanner.UI.Views;
 using MarketScanner.UI.Wpf.Services;
 using MarketScanner.UI.Wpf.ViewModels;
@@ -45,10 +46,10 @@ namespace MarketScanner.UI
             IChartService chartService = new ChartManager();
 
             Settings = AppSettings.Load();
-            var notifier = new UiNotifier();
             var emailService = new EmailService();
             var alertService = new AlertService();
             var alertManager = new AlertManager(alertService,emailService);
+            var filterService = new FilterService();
 
             var scannerService = new EquityScannerService(
                 provider,
@@ -58,16 +59,19 @@ namespace MarketScanner.UI
                 Settings);
 
             var chartViewModel = new ChartViewModel(provider, chartService, dispatcher);
+            var filterPanelViewModel = new FilterPanelViewModel();
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
 
             var mainViewModel = new MainViewModel(
                 scannerViewModel,
                 chartViewModel,
+                filterPanelViewModel,
                 emailService,
+                filterService,
                 dispatcher,
                 alertManager,
                 Settings,
-                notifier,
+                Notifier,
                 metadataCache,
                 scannerService);
 
