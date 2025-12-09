@@ -35,6 +35,7 @@ namespace MarketScanner.Data.Services
         private readonly IConcurrencyService _concurrencyService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
+        public IReadOnlyDictionary<string, EquityScanResult> ScanCache => _scanCache;
         private readonly List<IEquityClassifier> _classifiers = new();
         
         public void AddMultipleFilters(List<IFilter> filters) => _filterService.AddMultipleFilters(filters);

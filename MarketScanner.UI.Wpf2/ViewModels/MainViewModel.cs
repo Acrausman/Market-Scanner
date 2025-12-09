@@ -2,7 +2,6 @@ using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Metadata;
-using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services;
@@ -25,6 +24,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
     {
         private readonly IMarketDataProvider _provider;
         private readonly IFundamentalProvider _fundamentalProvider;
+        private readonly ISymbolSelectionService _symbolSelectionService;
         private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
         private readonly EquityScannerService _equityScannerService;
@@ -155,6 +155,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _metadataCache = metadataCache;
             _scanResultRouter = new ScanResultRouter(_scannerViewModel, _dispatcher);
             _scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
+            _symbolSelectionService = new SymbolSelectionService(scannerService, _chartViewModel);
       
             _scanProgress = new Progress<int>(value =>
             {
@@ -250,10 +251,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
             get => _selectedSymbol;
             set
             {
-                if (SetProperty(ref _selectedSymbol, value))
-                {
-                    _ = LoadSelectedSymbolAsync(value);
-                }
+                if (_selectedSymbol == value)
+                    return;
+
+                _selectedSymbol = value;
+                OnPropertyChanged();
+
+                _ = _symbolSelectionService.SelectSymbolAsync(value);
             }
         }
 
@@ -443,51 +447,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 await RestartScanAsync();
             //await _uiNotifier.ShowStatusAsync("Filters applied!");
             //StartScanCommand.Execute(null);
-        }
-
-        // -------- Chart loading for selected symbol --------
-
-        private async Task LoadSelectedSymbolAsync(string? symbol)
-        {
-            // cancel any in-flight symbol load
-            var previous = _symbolCts;
-            previous?.Cancel();
-            previous?.Dispose();
-
-            _symbolCts = new CancellationTokenSource();
-            var currentCts = _symbolCts;
-            var token = currentCts.Token;
-
-            if (string.IsNullOrWhiteSpace(symbol))
-            {
-                StatusText = "Select a symbol to view details";
-                _chartViewModel.Clear();
-                return;
-            }
-
-            try
-            {
-                StatusText = $"Loading {symbol}...";
-                await _chartViewModel.LoadChartForSymbol(symbol).ConfigureAwait(false);
-                await _dispatcher.InvokeAsync(() => StatusText = $"Showing {symbol}");
-            }
-            catch (OperationCanceledException)
-            {
-                // selection changed, ignore
-            }
-            catch (Exception ex)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = $"Error loading {symbol}");
-                Log($"Failed to load {symbol}: {ex.Message}");
-            }
-            finally
-            {
-                if (ReferenceEquals(_symbolCts, currentCts))
-                {
-                    _symbolCts.Dispose();
-                    _symbolCts = null;
-                }
-            }
         }
 
         // -------- Setting persistence --------
