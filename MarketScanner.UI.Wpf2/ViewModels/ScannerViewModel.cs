@@ -1,7 +1,6 @@
 using MarketScanner.Data.Services;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -16,9 +15,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly Dispatcher _dispatcher;
         private CancellationTokenSource _scanCts;
         private int _progressValue;
-
-        public ObservableCollection<string> OverboughtSymbols => _scannerService.OverboughtSymbols;
-        public ObservableCollection<string> OversoldSymbols => _scannerService.OversoldSymbols;
 
         public int ProgressValue
         {

@@ -235,7 +235,7 @@
 
                 <TextBlock Text="Overbought (RSI &gt; 70)"
                            Foreground="#FFAAAA" FontWeight="Bold" Margin="0,4,0,4"/>
-                <ListBox ItemsSource="{Binding Scanner.OverboughtSymbols}"
+                <ListBox ItemsSource="{Binding AlertPanel.OverboughtSymbols}"
                          SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"
@@ -255,7 +255,7 @@
 
                 <TextBlock Text="Oversold (RSI &lt; 30)"
                            Foreground="#A0FFA0" FontWeight="Bold" Margin="10,10,0,4"/>
-                <ListBox ItemsSource="{Binding Scanner.OversoldSymbols}"
+                <ListBox ItemsSource="{Binding AlertPanel.OversoldSymbols}"
                          SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"

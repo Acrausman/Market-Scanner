@@ -33,6 +33,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly ChartViewModel _chartViewModel;
         private readonly FilterPanelViewModel _filterPanelViewModel;
         public FilterPanelViewModel FilterPanel => _filterPanelViewModel;
+        private readonly AlertPanelViewModel _alertPanelViewModel;
+        public AlertPanelViewModel AlertPanel => _alertPanelViewModel;
+        private readonly AlertCoordinatorService _alertCoordinatorService;
         private readonly FilterService _filterService;
         private readonly FilterCoordinatorService _filterCoordinator;
         private readonly EmailService? _emailService;
@@ -136,6 +139,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             ScannerViewModel scannerViewModel,
             ChartViewModel chartViewModel,
             FilterPanelViewModel filterPanelViewModel,
+            AlertPanelViewModel alertPanelViewModel,
             EmailService emailService,
             FilterService filterService,
             Dispatcher dispatcher,
@@ -146,18 +150,21 @@ namespace MarketScanner.UI.Wpf.ViewModels
             EquityScannerService scannerService)
         {
             _appSettings = settings;
+            _dispatcher = dispatcher;
             _filterService = filterService;
             _filterCoordinator = new FilterCoordinatorService(_filterService, _appSettings);
             _scannerService = scannerService;
             _scannerViewModel = scannerViewModel;
             _chartViewModel = chartViewModel;
+            _alertPanelViewModel = alertPanelViewModel;
+            _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
+            _scannerService.ScanResultClassified += result => _alertCoordinatorService.HandleResult(result);
             _filterPanelViewModel = filterPanelViewModel;
-            _dispatcher = dispatcher;
             _emailService = emailService;
             _alertManager = alertManager;
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
-            _scanResultRouter = new ScanResultRouter(_scannerViewModel, _dispatcher);
+            _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
             //_scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
             _symbolSelectionService = new SymbolSelectionService(scannerService, _chartViewModel);
       
@@ -376,8 +383,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             {
                 StatusText = "Restarting scan with new settings...";
 
-                _scannerViewModel.OverboughtSymbols.Clear();
-                _scannerViewModel.OversoldSymbols.Clear();
+                _alertPanelViewModel.ClearAlertsCommand.Execute(null);
                 ResetProgressUI();
 
                 await _scannerService.RestartAsync(_scanProgress).ConfigureAwait(false);
