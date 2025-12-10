@@ -59,5 +59,17 @@ namespace MarketScanner.UI.Wpf.Services
             _settings.Save();
             
         }
+
+        public void LoadFiltersFromSettings(FilterPanelViewModel vm)
+        {
+            vm.MinPrice = _settings.FilterMinPrice;
+            vm.MaxPrice = _settings.FilterMaxPrice;
+            vm.SelectedSectors.Clear();
+            foreach (var s in _settings.FilterSectors)
+                vm.SelectedSectors.Add(s);
+            vm.SelectedCountries.Clear();
+            foreach (var c in _settings.FilterCountries)
+                vm.SelectedCountries.Add(c);
+        }
     }
 }

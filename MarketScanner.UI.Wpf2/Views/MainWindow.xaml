@@ -46,7 +46,7 @@
                             <TextBlock Text="Country"
                                        FontWeight="Bold" Margin="0,5,0,2"
                                        Foreground="#CCCCCC"/>
-                            <ListBox ItemsSource="{Binding AvailableCountries}"
+                            <ListBox ItemsSource="{Binding FilterPanel.AvailableCountries}"
                                      SelectionMode="Multiple"
                                      behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedCountries}" 
                                      Width="180"/>
@@ -56,7 +56,7 @@
                             <TextBlock Text="Sector"
                                        FontWeight="Bold" Margin="0,5,0,2"
                                        Foreground="#CCCCCC"/>
-                            <ListBox ItemsSource="{Binding AvailableSectors}"
+                            <ListBox ItemsSource="{Binding FilterPanel.AvailableSectors}"
                                      SelectionMode="Multiple"
                                      behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedSectors}"
                                      Width="240"/>
@@ -98,7 +98,7 @@
                             <TextBlock Text="RSI Method:" VerticalAlignment="Center" Margin="0,0,8,0"
                                                   Foreground="#CCCCCC"/>
                             <ComboBox ItemsSource="{Binding RsiMethods}"
-                            SelectedItem="{Binding SelectedRsiMethod, Mode=TwoWay}"
+                            SelectedItem="{Binding SettingsPanel.SmoothingMethod, Mode=TwoWay}"
                             Background="#2D2D30"
                             BorderBrush="#444"
                             FontSize="13"
@@ -113,7 +113,7 @@
                         Margin="0,10,0,2"/>
 
                         <ComboBox ItemsSource="{Binding TimeSpanOptions}"
-                        SelectedItem="{Binding Chart.SelectedTimespan, Mode=TwoWay}"
+                        SelectedItem="{Binding SettingsPanel.SelectedTimespan, Mode=TwoWay}"
                         Background="#2D2D30"
                         BorderBrush="#444"
                         FontSize="13"
@@ -142,7 +142,7 @@
                    Foreground="#CCCCCC"
                    FontSize="13"
                    Margin="0,10,0,2"/>
-                        <TextBox Text="{Binding NotificationEmail, UpdateSourceTrigger=PropertyChanged}"
+                        <TextBox Text="{Binding SettingsPanel.EmailAddress, UpdateSourceTrigger=PropertyChanged}"
                  Background="#2D2D30"
                  Foreground="White"
                  BorderBrush="#444"
@@ -153,7 +153,7 @@
                         <!-- Save button -->
                         <Button Content="Save Email"
                 Style="{StaticResource FlashButtonStyle}"
-                Command="{Binding SaveEmailCommand}"
+                Command="{Binding SettingsPanel.ApplySettingsCommand}"
                 Margin="0,8,0,15"
                 Background="#3A3D41"
                 Foreground="White"
@@ -183,7 +183,7 @@
                         Margin="0,0,0,5"/>
 
                         <ComboBox ItemsSource="{Binding IntervalOptions}"
-                        SelectedItem="{Binding AlertIntervalMinutes, Mode=TwoWay}"
+                        SelectedItem="{Binding SettingsPanel.AlertIntervalMinutes, Mode=TwoWay}"
                         Width="120"
                         Margin="0,0,0,15"
                         Background="#3A3D41"

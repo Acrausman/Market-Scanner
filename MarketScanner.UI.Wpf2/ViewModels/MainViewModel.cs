@@ -35,6 +35,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly AlertCoordinatorService _alertCoordinatorService;
         private readonly FilterService _filterService;
         private readonly FilterCoordinatorService _filterCoordinator;
+        private readonly SettingsPanelViewModel _settingsPanelViewModel;
+        private readonly SettingsCoordinatorService _settingsCoordinator;
+        public SettingsPanelViewModel SettingsPanel => 
+            _settingsPanelViewModel;
         private readonly IChartCoordinator _chartCoordinator;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
@@ -127,6 +131,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             ScannerViewModel scannerViewModel,
             ChartViewModel chartViewModel,
             FilterPanelViewModel filterPanelViewModel,
+            SettingsPanelViewModel settingsPanelViewModel,
             AlertPanelViewModel alertPanelViewModel,
             EmailService emailService,
             FilterService filterService,
@@ -145,6 +150,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scannerViewModel = scannerViewModel;
             _chartViewModel = chartViewModel;
             _alertPanelViewModel = alertPanelViewModel;
+            _settingsPanelViewModel = settingsPanelViewModel;
+            _settingsCoordinator = new SettingsCoordinatorService(_appSettings);
             _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
             _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
             _scannerService.ScanResultClassified += async result =>
@@ -177,23 +184,25 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
 
             // Load persisted settings
-            _appSettings = settings;
-            _notificationEmail = _appSettings.NotificationEmail ?? string.Empty;
-            _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
-                ? "3M"
-                : _appSettings.SelectedTimespan;
-            _selectedRsiMethod = _appSettings.RsiMethod;
-            _selectedInterval = _appSettings.AlertIntervalMinutes > 0
-                ? _appSettings.AlertIntervalMinutes
-                : 15;
-            LoadFilterChoices();
-
+            var sectors = _metadataCache.GetAllSectors();
+            _filterPanelViewModel.AvailableSectors.Clear();
+            foreach (var sector in sectors)
+                _filterPanelViewModel.AvailableSectors.Add(sector);
+            var countries = _metadataCache.GetAllCountries();
+            _filterPanelViewModel.AvailableCountries.Clear();
+            foreach (var country in countries)
+                _filterPanelViewModel.AvailableCountries.Add(country);
+            _filterCoordinator.LoadFiltersFromSettings(_filterPanelViewModel);
+            _settingsCoordinator.LoadInto(_settingsPanelViewModel);
+            
             // Commands for options panel
             SaveEmailCommand = new RelayCommand(_ => SaveEmail());
             TestEmailCommand = new RelayCommand(_ => TestEmail());
             SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
             _filterPanelViewModel.FiltersApplied += OnFiltersApplied;
             _filterPanelViewModel.FiltersCleared += OnFiltersCleared;
+            _settingsPanelViewModel.SettingsApplied += OnSettingsApplied;
+            _settingsPanelViewModel.SettingsReset += OnSettingsReset;
 
             // push initial persisted values through their setters
             NotificationEmail = _notificationEmail;
@@ -402,20 +411,20 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         // -------- Setting persistence --------
 
-        private void LoadFilterChoices()
+        private async void OnSettingsApplied()
         {
-            AvailableSectors.Clear();
-            AvailableCountries.Clear();
+            _settingsCoordinator.Apply(_settingsPanelViewModel);
+            ((App)App.Current).Notifier.Show("Settings saved!");
+            if (IsScanning)
+                await RestartScanAsync();
+        }
 
-            AvailableSectors.Add("Any");
-            AvailableCountries.Add("Any");
-
-            foreach (string s in _metadataCache.GetAllSectors())
-                AvailableSectors.Add(s);
-            foreach (string c in _metadataCache.GetAllCountries())
-                AvailableCountries.Add(c);
-
-            
+        private async void OnSettingsReset()
+        {
+            _settingsCoordinator.Reset(_settingsPanelViewModel);
+            ((App)App.Current).Notifier.Show("Settings reset to defaults!");
+            if (IsScanning)
+                await RestartScanAsync();
         }
         public string NotificationEmail
         {

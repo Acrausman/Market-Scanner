@@ -60,6 +60,7 @@ namespace MarketScanner.UI
 
             var chartViewModel = new ChartViewModel(provider, chartService, dispatcher);
             var filterPanelViewModel = new FilterPanelViewModel();
+            var settingsPanelViewModel = new SettingsPanelViewModel();
             var alertPanelViewModel = new AlertPanelViewModel();
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
 
@@ -67,6 +68,7 @@ namespace MarketScanner.UI
                 scannerViewModel,
                 chartViewModel,
                 filterPanelViewModel,
+                settingsPanelViewModel,
                 alertPanelViewModel,
                 emailService,
                 filterService,

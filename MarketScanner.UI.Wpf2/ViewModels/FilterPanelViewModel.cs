@@ -13,7 +13,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         [ObservableProperty]
         public double? maxPrice;
 
+        public ObservableCollection<string> AvailableSectors { get; } = new();
         public ObservableCollection<string> SelectedSectors { get; } = new();
+        public ObservableCollection<string> AvailableCountries { get; } = new();
         public ObservableCollection<string> SelectedCountries { get; } = new();
         public event Action? FiltersApplied;
         public event Action? FiltersCleared;
