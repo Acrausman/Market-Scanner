@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 
 namespace MarketScanner.UI.Wpf.ViewModels
 {
-    public partial class AlertPanelViewModel
+    public partial class AlertPanelViewModel : ObservableObject
     {
         public ObservableCollection<string> OverboughtSymbols { get; } = new();
         public ObservableCollection<string> OversoldSymbols { get; } = new();

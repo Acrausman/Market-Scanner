@@ -23,12 +23,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
-        private readonly IMarketDataProvider _provider;
-        private readonly IFundamentalProvider _fundamentalProvider;
         private readonly ISymbolSelectionService _symbolSelectionService;
         private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
-        private readonly EquityScannerService _equityScannerService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ChartViewModel _chartViewModel;
         private readonly FilterPanelViewModel _filterPanelViewModel;
@@ -38,6 +35,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly AlertCoordinatorService _alertCoordinatorService;
         private readonly FilterService _filterService;
         private readonly FilterCoordinatorService _filterCoordinator;
+        private readonly IChartCoordinator _chartCoordinator;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
@@ -46,10 +44,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
-        //public double? _minPrice;
-        //public double? _maxPrice;
-        //public string _selectedCountryFilter {  get; set; }
-        //public string _selectedSectorFilter { get; set; }
         public ObservableCollection<string> AvailableSectors { get; }
             = new ObservableCollection<string>();
         public ObservableCollection<string> AvailableCountries { get; }
@@ -85,13 +79,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _stopScanCommand;
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
-        private readonly RelayCommand _applyFiltersCommand;
-        private readonly RelayCommand _clearFiltersCommand;
-
 
         // cancellation tokens for long-running ops
         private CancellationTokenSource? _scanCts;
-        private CancellationTokenSource? _symbolCts;
 
         // backing fields for bindable props
         private string _consoleText = string.Empty;
@@ -99,8 +89,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string? _selectedSymbol;
         private bool _isScanning;
         // persisted / options fields
-        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
-        private string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
         private string _notificationEmail = string.Empty;
         private RsiSmoothingMethod _rsiMethod;
         private string _selectedTimespan = "3M";
@@ -158,14 +146,22 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _chartViewModel = chartViewModel;
             _alertPanelViewModel = alertPanelViewModel;
             _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
-            _scannerService.ScanResultClassified += result => _alertCoordinatorService.HandleResult(result);
+            _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
+            _scannerService.ScanResultClassified += async result =>
+            {
+                await _chartCoordinator.OnScanResult(result);
+            };
             _filterPanelViewModel = filterPanelViewModel;
             _emailService = emailService;
             _alertManager = alertManager;
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
             _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
-            //_scannerService.ScanResultClassified += result => _scanResultRouter.HandleResult(result);
+            _scannerService.ScanResultClassified += async result =>
+            {
+                await _chartCoordinator.OnScanResult(result);
+                _scanResultRouter.HandleResult(result);
+            };
             _symbolSelectionService = new SymbolSelectionService(scannerService, _chartViewModel);
       
             _scanProgress = new Progress<int>(value =>
@@ -272,7 +268,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 _selectedSymbol = value;
                 OnPropertyChanged();
 
-                _ = _symbolSelectionService.SelectSymbolAsync(value);
+                _ = _chartCoordinator.OnSymbolSelected(value);
             }
         }
 
