@@ -153,7 +153,7 @@
                         <!-- Save button -->
                         <Button Content="Save Email"
                 Style="{StaticResource FlashButtonStyle}"
-                Command="{Binding SettingsPanel.ApplySettingsCommand}"
+                Command="{Binding SettingsPanel.SaveEmail}"
                 Margin="0,8,0,15"
                 Background="#3A3D41"
                 Foreground="White"

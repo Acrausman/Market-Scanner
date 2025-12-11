@@ -48,7 +48,8 @@ namespace MarketScanner.UI
             Settings = AppSettings.Load();
             var emailService = new EmailService();
             var alertService = new AlertService();
-            var alertManager = new AlertManager(alertService,emailService);
+            var settingsPanelViewModel = new SettingsPanelViewModel(emailService);
+            var alertManager = new AlertManager(alertService,emailService, settingsPanelViewModel);
             var filterService = new FilterService();
 
             var scannerService = new EquityScannerService(
@@ -60,7 +61,6 @@ namespace MarketScanner.UI
 
             var chartViewModel = new ChartViewModel(provider, chartService, dispatcher);
             var filterPanelViewModel = new FilterPanelViewModel();
-            var settingsPanelViewModel = new SettingsPanelViewModel();
             var alertPanelViewModel = new AlertPanelViewModel();
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
 
