@@ -13,6 +13,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,6 +42,8 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _settingsPanelViewModel;
         private readonly IChartCoordinator _chartCoordinator;
         private readonly ScanCoordinatorService _scanCoordinator;
+        private readonly ScanStatusViewModel _scanStatusViewModel;
+        public ScanStatusViewModel ScanStatus => _scanStatusViewModel;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
@@ -89,7 +92,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private string _consoleText = string.Empty;
         private string _statusText = "Idle";
         private string? _selectedSymbol;
-        private bool _isScanning;
         // persisted / options fields
         private string _notificationEmail = string.Empty;
         private RsiSmoothingMethod _rsiMethod;
@@ -149,6 +151,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _chartViewModel = chartViewModel;
             _alertPanelViewModel = alertPanelViewModel;
             _settingsPanelViewModel = settingsPanelViewModel;
+            _scanStatusViewModel = new ScanStatusViewModel();
             _settingsCoordinator = new SettingsCoordinatorService(_appSettings);
             _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
             _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
@@ -167,17 +170,15 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 _dispatcher);
             _scanCoordinator.ScanStarted += () =>
             {
-                IsScanning = true;
-                StatusText = "Scanning...";
+                _scanStatusViewModel.OnScanStarted();
             };
             _scanCoordinator.ProgressChanged += p =>
             {
-                StatusText = $"Scanning... {p}%";
+                _scanStatusViewModel.UpdateProgress(p);
             };
             _scanCoordinator.ScanStopped += () =>
             {
-                IsScanning = false;
-                StatusText = "Idle";
+                _scanStatusViewModel.OnScanStopped();
             };
             _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
             _scannerService.ScanResultClassified += async result =>
@@ -190,10 +191,18 @@ namespace MarketScanner.UI.Wpf.ViewModels
             //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
 
             // Commands that show up in XAML
-            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
-            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
-            _pauseScanCommand = new RelayCommand(_ => PauseScan(), _ => IsScanning);
-            _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
+            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !ScanStatus.IsScanning);
+            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => ScanStatus.IsScanning);
+            _pauseScanCommand = new RelayCommand(_ =>
+            {
+                _scanCoordinator.Pause();
+                _scanStatusViewModel.OnScanPaused();
+            });
+            _resumeScanCommand = new RelayCommand(_ =>
+            {
+                _scanCoordinator.Resume();
+                _scanStatusViewModel.OnScanResumed();
+            });
 
             // Load persisted settings
             var sectors = _metadataCache.GetAllSectors();
@@ -257,25 +266,19 @@ namespace MarketScanner.UI.Wpf.ViewModels
             private set => SetProperty(ref _consoleText, value);
         }
 
-        public string StatusText
-        {
-            get => _statusText;
-            private set => SetProperty(ref _statusText, value);
-        }
-
         // -------- Symbol selection / chart sync --------
         private async void OnFiltersApplied()
         {
             _filterCoordinator.ApplyFilters(_filterPanelViewModel);
             ((App)App.Current).Notifier.Show("Filters applied!");
-            if (IsScanning)
+            if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
         private async void OnFiltersCleared()
         {
             _filterCoordinator.ClearFilters(_filterPanelViewModel);
             ((App)App.Current).Notifier.Show("Filters cleared!");
-            if (IsScanning)
+            if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
         public string? SelectedSymbol
@@ -297,23 +300,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         public ICommand StartScanCommand => _startScanCommand;
         public ICommand StopScanCommand => _stopScanCommand;
-
-        private bool IsScanning
-        {
-            get => _isScanning;
-            set
-            {
-                if (SetProperty(ref _isScanning, value, nameof(IsScanning)))
-                {
-                    // update CanExecute on the commands after state change
-                    _dispatcher.InvokeAsync(() =>
-                    {
-                        _startScanCommand.RaiseCanExecuteChanged();
-                        _stopScanCommand.RaiseCanExecuteChanged();
-                    });
-                }
-            }
-        }
 
         private void UpdateAlertTimerInterval()
         {
@@ -363,7 +349,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             _settingsCoordinator.Apply(_settingsPanelViewModel);
             ((App)App.Current).Notifier.Show("Settings saved!");
-            if (IsScanning)
+            if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
 
@@ -371,7 +357,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         {
             _settingsCoordinator.Reset(_settingsPanelViewModel);
             ((App)App.Current).Notifier.Show("Settings reset to defaults!");
-            if (IsScanning)
+            if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
         public string NotificationEmail

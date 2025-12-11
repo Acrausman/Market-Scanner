@@ -223,12 +223,13 @@
                 </StackPanel>
 
                 <ProgressBar Minimum="0" Maximum="100"
-             Value="{Binding Scanner.ProgressValue, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
+             Value="{Binding ScanStatus.ProgressValue, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
              Height="18" Margin="0,4,0,0"/>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ScanStatus.StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ScanStatus.ProgressText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" Margin="5"/>
                 </StackPanel>
 
                 <Separator Margin="0,10,0,10"/>
