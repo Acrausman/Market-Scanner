@@ -40,11 +40,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public SettingsPanelViewModel SettingsPanel => 
             _settingsPanelViewModel;
         private readonly IChartCoordinator _chartCoordinator;
+        private readonly ScanCoordinatorService _scanCoordinator;
         private readonly EmailService? _emailService;
         private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
         private readonly UiNotifier _uiNotifier;
-        private readonly IProgress<int> _scanProgress;
 
         private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
@@ -84,8 +84,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
 
-        // cancellation tokens for long-running ops
-        private CancellationTokenSource? _scanCts;
 
         // backing fields for bindable props
         private string _consoleText = string.Empty;
@@ -163,6 +161,24 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _alertManager = alertManager;
             _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
+            _scanCoordinator = new ScanCoordinatorService(
+                _scannerViewModel,
+                _scannerService,
+                _dispatcher);
+            _scanCoordinator.ScanStarted += () =>
+            {
+                IsScanning = true;
+                StatusText = "Scanning...";
+            };
+            _scanCoordinator.ProgressChanged += p =>
+            {
+                StatusText = $"Scanning... {p}%";
+            };
+            _scanCoordinator.ScanStopped += () =>
+            {
+                IsScanning = false;
+                StatusText = "Idle";
+            };
             _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
             _scannerService.ScanResultClassified += async result =>
             {
@@ -171,10 +187,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             };
             _symbolSelectionService = new SymbolSelectionService(scannerService, _chartViewModel);
       
-            _scanProgress = new Progress<int>(value =>
-            {
-                _scannerViewModel.ProgressValue = value;
-            });
             //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
 
             // Commands that show up in XAML
@@ -320,93 +332,29 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         private async Task StartScanAsync()
         {
-            if (IsScanning)
-                return;
-            
-            _scanCts = new CancellationTokenSource();
-            IsScanning = true;
-            StatusText = "Scanning...";
-            Log("Starting equity scan...");
-
-            var progress = new Progress<int>(value =>
-            {
-                _dispatcher.InvokeAsync(() => StatusText = $"Scanning... {value}%");
-            });
-
-            try
-            {
-                await _scannerViewModel.StartScanAsync(progress, _scanCts.Token).ConfigureAwait(false);
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan complete");
-            }
-            catch (OperationCanceledException)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan cancelled");
-                Log("Scan cancelled by user.");
-            }
-            catch (Exception ex)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan failed");
-                Log($"Scan failed: {ex.Message}");
-            }
-            finally
-            {
-                _scanCts?.Dispose();
-                _scanCts = null;
-                IsScanning = false;
-            }
+            await _scanCoordinator.StartScanAsync();
         }
-        
         private void StopScan()
         {
-            if (!IsScanning)
-                return;
-            _scanCts?.Cancel();
+            _scanCoordinator.StopScan();
         }
 
         private void PauseScan()
         {
             _scannerService.Pause();
-            StatusText = "Scan paused";
             Log("Scan paused");
         }
 
         private void ResumeScan()
         {
             _scannerService.Resume();
-            StatusText = "Scan resumed";
             Log("Scan resumed");
         }
         private bool _isRestarting;
         private async Task RestartScanAsync()
         {
-            if (_scannerService == null)
-                return;
-            if (_isRestarting)
-                return;
-            _isRestarting = true;
-            try
-            {
-                StatusText = "Restarting scan with new settings...";
-
-                _alertPanelViewModel.ClearAlertsCommand.Execute(null);
-                ResetProgressUI();
-
-                await _scannerService.RestartAsync(_scanProgress).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"UI Restart scan failed: {ex}");
-                StatusText = "Error restarting scan.";
-            }
-            finally
-            {
-                _isRestarting = false;
-            }
-        }
-            
-        private void ResetProgressUI()
-        {
-            _scannerViewModel.ProgressValue = 0;
+            _alertPanelViewModel.ClearAlertsCommand.Execute(null);
+            await _scanCoordinator.RestartScanAsync();
         }
 
         // -------- Setting persistence --------
