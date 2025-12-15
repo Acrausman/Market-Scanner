@@ -78,6 +78,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         public void Stop()
         {
+            Console.WriteLine("Scan stopped");
             _scanCts?.Cancel();
         }
 

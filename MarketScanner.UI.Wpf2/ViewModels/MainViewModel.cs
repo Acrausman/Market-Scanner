@@ -253,6 +253,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         private async Task StartScanAsync()
         {
+            _alertPanelViewModel.ClearAlertsCommand.Execute(null);
             await _scanCoordinator.StartScanAsync();
         }
         private void StopScan()
