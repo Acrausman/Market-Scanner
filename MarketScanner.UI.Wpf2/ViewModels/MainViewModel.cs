@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
@@ -46,7 +47,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ScanStatusViewModel ScanStatus => _scanStatusViewModel;
         private readonly EmailService? _emailService;
         private readonly AlertManager _alertManager;
-        private readonly UiNotifier _uiNotifier;
 
         private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
@@ -129,9 +129,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
             _filterPanelViewModel = filterPanelViewModel;
             _symbolSelectionCoordinator = symbolSelectionCoordinator;
+            UiNotifier = uiNotifier;
             _emailService = emailService;
             _alertManager = alertManager;
-            _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
             _scanCoordinator = new ScanCoordinatorService(
                 _scannerViewModel,
@@ -225,15 +225,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
         // -------- Symbol selection / chart sync --------
         private async void OnFiltersApplied()
         {
-            _filterCoordinator.ApplyFilters(_filterPanelViewModel);
-            ((App)App.Current).Notifier.Show("Filters applied!");
+            await UiNotifier.ShowSnackbarAsync("Filters applied!");
             if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
         private async void OnFiltersCleared()
         {
-            _filterCoordinator.ClearFilters(_filterPanelViewModel);
-            ((App)App.Current).Notifier.Show("Filters cleared!");
+            await UiNotifier.ShowSnackbarAsync("Filters cleared!");
             if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
@@ -289,7 +287,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _settingsCoordinator.Apply(_settingsPanelViewModel);
             _alertManager.ConfigureDigestInterval(SettingsPanel.AlertIntervalMinutes);
             _alertManager.StartDigest();
-            ((App)App.Current).Notifier.Show("Settings saved!");
+            await UiNotifier.ShowSnackbarAsync("Settings saved!");
             if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
@@ -297,7 +295,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private async void OnSettingsReset()
         {
             _settingsCoordinator.Reset(_settingsPanelViewModel);
-            ((App)App.Current).Notifier.Show("Settings reset to defaults!");
+            await UiNotifier.ShowSnackbarAsync("Settings reset to defaults!");
             if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }

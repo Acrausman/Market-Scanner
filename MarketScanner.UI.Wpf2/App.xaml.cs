@@ -21,7 +21,7 @@ namespace MarketScanner.UI
         private static extern bool AllocConsole();
 
         public static AppSettings Settings { get; private set; }
-        public UiNotifier Notifier { get; private set; }
+        public UiNotifier Notifier { get; } = new UiNotifier();
         public App()
         {
             Notifier = new UiNotifier();

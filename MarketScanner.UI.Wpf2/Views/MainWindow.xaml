@@ -7,142 +7,157 @@
         Height="900" Width="1600"
         Background="#1E1E1E">
 
-    <Grid Margin="10">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300"/>
-            <!-- Console -->
-            <ColumnDefinition Width="*"/>
-            <!-- Charts -->
-            <ColumnDefinition Width="400"/>
-            <!-- Controls -->
-        </Grid.ColumnDefinitions>
+    <Grid>
+        <Grid Margin="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <!-- Console -->
+                <ColumnDefinition Width="*"/>
+                <!-- Charts -->
+                <ColumnDefinition Width="400"/>
+                <!-- Controls -->
+            </Grid.ColumnDefinitions>
 
-        <!-- === OPTIONS PANEL (left side) === -->
-        <TabControl Margin="10" Grid.Row="0">
-            <TabItem Header="Filters">
-                <Border Grid.Column="0"
+            <!-- === OPTIONS PANEL (left side) === -->
+            <TabControl Margin="10" Grid.Row="0">
+                <TabItem Header="Filters">
+                    <Border Grid.Column="0"
                 Background="#252526"
                 Padding="15"
                 BorderBrush="#333"
                 BorderThickness="0,0,1,0">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="10">
-                            <TextBlock Text="Price Range"
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="10">
+                                <TextBlock Text="Price Range"
                                        FontWeight="Bold" Margin="0,5,0,2"
                                        Foreground="#CCCCCC"/>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Min:" Width="40"
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Min:" Width="40"
                                            Foreground="#CCCCCC"/>
-                                <TextBox Width="80"
+                                    <TextBox Width="80"
                                            Text="{Binding FilterPanel.MinPrice, Mode=TwoWay}"/>
-                                <TextBlock Text="Max:" Margin="10,0,0,0"
+                                    <TextBlock Text="Max:" Margin="10,0,0,0"
                                            Foreground="#CCCCCC"/>
-                                <TextBox Width="80"
+                                    <TextBox Width="80"
                                          Text="{Binding FilterPanel.MaxPrice, Mode=TwoWay}"/>
-                            </StackPanel>
+                                </StackPanel>
 
-                            <Separator Margin="5"/>
+                                <Expander Header="{Binding FilterPanel.CountryHeaderText}"
+                                      Foreground="#CCCCCC"
+                                      FontWeight="Bold"
+                                      IsExpanded="false"
+                                      Margin="0,0,0,8">
+                                    <Border BorderBrush="#444"
+                                        BorderThickness="1"
+                                        Padding="6"
+                                        MaxHeight="250">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ListBox ItemsSource="{Binding FilterPanel.AvailableCountries}"
+                                                 SelectionMode="Multiple"
+                                                 FontWeight="Normal"
+                                                 behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedCountries}" 
+                                                 Width="180"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Expander>
 
-                            <TextBlock Text="Country"
-                                       FontWeight="Bold" Margin="0,5,0,2"
-                                       Foreground="#CCCCCC"/>
-                            <ListBox ItemsSource="{Binding FilterPanel.AvailableCountries}"
-                                     SelectionMode="Multiple"
-                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedCountries}" 
-                                     Width="180"/>
+                                <Expander Header="{Binding FilterPanel.SectorHeaderText}"
+                                      IsExpanded="False"
+                                      Foreground="#CCCCCC"
+                                      FontWeight="Bold"
+                                      Margin="0,0,0,8">
+                                    <Border BorderBrush="#444"
+                                        BorderThickness="1"
+                                        Padding="6"
+                                        MaxHeight="250">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                            <ListBox ItemsSource="{Binding FilterPanel.AvailableSectors}"
+                                                 SelectionMode="Multiple"
+                                                 FontWeight="Normal"
+                                                 behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedSectors}"
+                                                 Width="240"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Expander>
+                                <Separator Margin="10"/>
 
-                            <Separator Margin="5"/>
-
-                            <TextBlock Text="Sector"
-                                       FontWeight="Bold" Margin="0,5,0,2"
-                                       Foreground="#CCCCCC"/>
-                            <ListBox ItemsSource="{Binding FilterPanel.AvailableSectors}"
-                                     SelectionMode="Multiple"
-                                     behaviors:MultiSelectBehavior.SelectedItems="{Binding FilterPanel.SelectedSectors}"
-                                     Width="240"/>
-                            <Separator Margin="10"/>
-
-                            <Button Content="Clear Filters"
+                                <Button Content="Clear Filters"
                                     Style="{StaticResource FlashButtonStyle}"
                                     Command="{Binding FilterPanel.ClearFiltersCommand}"
                                     Width="150"
                                     HorizontalAlignment="Left"
                                     Margin="0,10,0,0"/>
 
-
-                            <Button Content="Apply Filters"
+                                <Button Content="Apply Filters"
                                     Style="{StaticResource FlashButtonStyle}"
                                     Command="{Binding FilterPanel.ApplyFiltersCommand}"
                                     Width="150"
                                     HorizontalAlignment="Left"
                                     Margin="0,10,0,0"/>
-                            <TextBlock Text="{Binding UiNotifier.StatusMessage}"
-                                       Foreground="LightGreen"
-                                       HorizontalAlignment="Left"/>
-                        </StackPanel>
+                            </StackPanel>
 
-                    </ScrollViewer>
-                </Border>
-            </TabItem>
+                        </ScrollViewer>
+                    </Border>
+                </TabItem>
 
-            <TabItem Header="Chart Settings">
-                <Border Grid.Column="0"
+                <TabItem Header="Chart Settings">
+                    <Border Grid.Column="0"
                 Background="#252526"
                 Padding="15"
                 BorderBrush="#333"
                 BorderThickness="0,0,1,0">
-                    <StackPanel>
+                        <StackPanel>
 
-                        <!-- Data Settings-->
-                        <StackPanel Orientation="Horizontal" Margin="8">
-                            <TextBlock Text="RSI Method:" VerticalAlignment="Center" Margin="0,0,8,0"
+                            <!-- Data Settings-->
+                            <StackPanel Orientation="Horizontal" Margin="8">
+                                <TextBlock Text="RSI Method:" VerticalAlignment="Center" Margin="0,0,8,0"
                                                   Foreground="#CCCCCC"/>
-                            <ComboBox ItemsSource="{Binding RsiMethods}"
+                                <ComboBox ItemsSource="{Binding RsiMethods}"
                             SelectedItem="{Binding SettingsPanel.SmoothingMethod, Mode=TwoWay}"
                             Background="#2D2D30"
                             BorderBrush="#444"
                             FontSize="13"
                             Width="120"/>
-                        </StackPanel>
+                            </StackPanel>
 
 
-                        <!-- Chart Timespan Selection -->
-                        <TextBlock Text="Chart Timespan:"
+                            <!-- Chart Timespan Selection -->
+                            <TextBlock Text="Chart Timespan:"
                         Foreground="#CCCCCC"
                         FontSize="13"
                         Margin="0,10,0,2"/>
 
-                        <ComboBox ItemsSource="{Binding TimeSpanOptions}"
+                            <ComboBox ItemsSource="{Binding TimeSpanOptions}"
                         SelectedItem="{Binding SettingsPanel.SelectedTimespan, Mode=TwoWay}"
                         Background="#2D2D30"
                         BorderBrush="#444"
                         FontSize="13"
                         Padding="4"
                         Height="28"/>
-                        <!-- Spacer -->
-                        <StackPanel Margin="0,20,0,0">
-                            <TextBlock Text="Notifications and chart preferences will be applied automatically."
+                            <!-- Spacer -->
+                            <StackPanel Margin="0,20,0,0">
+                                <TextBlock Text="Notifications and chart preferences will be applied automatically."
                        Foreground="#888"
                        FontSize="11"
                        TextWrapping="Wrap"/>
+                            </StackPanel>
                         </StackPanel>
-                    </StackPanel>
-                </Border>
-            </TabItem>
+                    </Border>
+                </TabItem>
 
-            <TabItem Header="Notification Settings">
-                <Border Grid.Column="0"
+                <TabItem Header="Notification Settings">
+                    <Border Grid.Column="0"
                 Background="#252526"
                 Padding="15"
                 BorderBrush="#333"
                 BorderThickness="0,0,1,0">
-                    <StackPanel>
-                        <!-- Email input -->
-                        <TextBlock Text="Email:"
+                        <StackPanel>
+                            <!-- Email input -->
+                            <TextBlock Text="Email:"
                    Foreground="#CCCCCC"
                    FontSize="13"
                    Margin="0,10,0,2"/>
-                        <TextBox Text="{Binding SettingsPanel.EmailAddress, UpdateSourceTrigger=PropertyChanged}"
+                            <TextBox Text="{Binding SettingsPanel.EmailAddress, UpdateSourceTrigger=PropertyChanged}"
                  Background="#2D2D30"
                  Foreground="White"
                  BorderBrush="#444"
@@ -150,39 +165,30 @@
                  Padding="4"
                  FontSize="13"/>
 
-                        <!-- Save button -->
-                        <Button Content="Save Email"
-                Style="{StaticResource FlashButtonStyle}"
-                Command="{Binding SettingsPanel.SaveEmail}"
-                Margin="0,8,0,15"
-                Background="#3A3D41"
-                Foreground="White"
-                BorderBrush="#555"
-                FontWeight="Bold"/>
+                            <!-- Save button -->
+                            <Button Content="Save Email"
+                        Style="{StaticResource FlashButtonStyle}"
+                        Command="{Binding SettingsPanel.SaveEmailCommand}"
+                        Margin="0,8,0,15"
+                        Background="#3A3D41"
+                        Foreground="White"
+                        BorderBrush="#555"
+                        FontWeight="Bold"/>
 
-                        <!-- Email test buttons -->
-                        <Button Content="Send Test Email"
-                Command="{Binding TestEmailCommand}"
-                Margin="0,9,0,15"
-                Background="#3A3D41"
-                Foreground="White"
-                BorderBrush="#555"
-                FontWeight="Bold"/>
-
-                        <Button Content="Send Digest Now"
+                            <Button Content="Send Digest Now"
                         Command="{Binding SendDigestNow}"
                         Margin="0,9,0,15"
                         Background="#3A3D41"
                         Foreground="White"
                         BorderBrush="#555"
                         FontWeight="Bold"/>
-                        <!-- Email notification interval> -->
-                        <TextBlock Text="Email Digest Interval (minutes)"
+                            <!-- Email notification interval> -->
+                            <TextBlock Text="Email Digest Interval (minutes)"
                         Foreground="White"
                         FontWeight="Bold"
                         Margin="0,0,0,5"/>
 
-                        <ComboBox ItemsSource="{Binding IntervalOptions}"
+                            <ComboBox ItemsSource="{Binding IntervalOptions}"
                         SelectedItem="{Binding SettingsPanel.AlertIntervalMinutes, Mode=TwoWay}"
                         Width="120"
                         Margin="0,0,0,15"
@@ -190,104 +196,107 @@
                         BorderBrush="#555"
                         FontWeight="Bold"/>
 
-                    </StackPanel>
-                </Border>
-            </TabItem>
+                        </StackPanel>
+                    </Border>
+                </TabItem>
 
-        </TabControl>
+            </TabControl>
 
-        <!-- 🔹 Chart Section -->
-        <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
-            <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
-            <oxy:PlotView Model="{Binding Chart.RsiView}" Height="200"/>
-            <oxy:PlotView Model="{Binding Chart.VolumeView}" Height="200"/>
+            <!-- 🔹 Chart Section -->
+            <StackPanel Grid.Column="1" Orientation="Vertical" Background="#1E1E1E" Margin="10,0">
+                <oxy:PlotView Model="{Binding Chart.PriceView}" Height="300"/>
+                <oxy:PlotView Model="{Binding Chart.RsiView}" Height="200"/>
+                <oxy:PlotView Model="{Binding Chart.VolumeView}" Height="200"/>
 
-            <StackPanel Orientation="Horizontal" Margin="10,10,0,0">
-                <TextBlock Text="{Binding Chart.PriceText}" FontWeight="Bold" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding Chart.SmaText}" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding Chart.RsiText}" Margin="5,0" Foreground="White"/>
-                <TextBlock Text="{Binding Chart.VolumeText}" Margin="5,0" Foreground="White"/>
-            </StackPanel>
-        </StackPanel>
-
-        <!-- 🔹 Controls -->
-        <Border Grid.Column="2" Background="#252526" Padding="12" CornerRadius="6">
-            <StackPanel>
-                <TextBlock Text="Market Scanner" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
-
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                    <Button Content="Start Scan" Command="{Binding StartScanCommand}"
-                            Width="100" Margin="0,0,6,0"/>
-                    <Button Content="Stop Scan" Command="{Binding StopScanCommand}"
-                            Width="100"/>
+                <StackPanel Orientation="Horizontal" Margin="10,10,0,0">
+                    <TextBlock Text="{Binding Chart.PriceText}" FontWeight="Bold" Margin="5,0" Foreground="White"/>
+                    <TextBlock Text="{Binding Chart.SmaText}" Margin="5,0" Foreground="White"/>
+                    <TextBlock Text="{Binding Chart.RsiText}" Margin="5,0" Foreground="White"/>
+                    <TextBlock Text="{Binding Chart.VolumeText}" Margin="5,0" Foreground="White"/>
                 </StackPanel>
+            </StackPanel>
 
-                <ProgressBar Minimum="0" Maximum="100"
+            <!-- 🔹 Controls -->
+            <Border Grid.Column="2" Background="#252526" Padding="12" CornerRadius="6">
+                <StackPanel>
+                    <TextBlock Text="Market Scanner" Foreground="White" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Content="Start Scan" Command="{Binding StartScanCommand}"
+                            Width="100" Margin="0,0,6,0"/>
+                        <Button Content="Stop Scan" Command="{Binding StopScanCommand}"
+                            Width="100"/>
+                    </StackPanel>
+
+                    <ProgressBar Minimum="0" Maximum="100"
              Value="{Binding ScanStatus.ProgressValue, Mode=OneWay, UpdateSourceTrigger=PropertyChanged}"
              Height="18" Margin="0,4,0,0"/>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
-                    <TextBlock Text="{Binding ScanStatus.StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ScanStatus.ProgressText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" Margin="5"/>
-                </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="12" Height="12" Fill="#00FF00" Stroke="White" StrokeThickness="1" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding ScanStatus.StatusText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding ScanStatus.ProgressText}" Foreground="White" FontWeight="Bold" VerticalAlignment="Center" Margin="5"/>
+                    </StackPanel>
 
-                <Separator Margin="0,10,0,10"/>
+                    <Separator Margin="0,10,0,10"/>
 
-                <TextBlock Text="Overbought (RSI &gt; 70)"
+                    <TextBlock Text="Overbought (RSI &gt; 70)"
                            Foreground="#FFAAAA" FontWeight="Bold" Margin="0,4,0,4"/>
-                <ListBox ItemsSource="{Binding AlertPanel.OverboughtSymbols}"
+                    <ListBox ItemsSource="{Binding AlertPanel.OverboughtSymbols}"
                          SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"
                          Height="150" BorderThickness="0" FontSize="13">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Foreground" Value="White"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#3A3A3A"/>
-                                    <Setter Property="FontWeight" Value="Bold"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                </ListBox>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="White"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#3A3A3A"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
 
-                <TextBlock Text="Oversold (RSI &lt; 30)"
+                    <TextBlock Text="Oversold (RSI &lt; 30)"
                            Foreground="#A0FFA0" FontWeight="Bold" Margin="10,10,0,4"/>
-                <ListBox ItemsSource="{Binding AlertPanel.OversoldSymbols}"
+                    <ListBox ItemsSource="{Binding AlertPanel.OversoldSymbols}"
                          SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                          SelectionMode="Single"
                          Background="#2D2D30" Foreground="White"
                          Height="150" BorderThickness="0" FontSize="13">
-                    <ListBox.ItemContainerStyle>
-                        <Style TargetType="ListBoxItem">
-                            <Setter Property="Foreground" Value="White"/>
-                            <Style.Triggers>
-                                <Trigger Property="IsSelected" Value="True">
-                                    <Setter Property="Background" Value="#3A3A3A"/>
-                                    <Setter Property="FontWeight" Value="Bold"/>
-                                </Trigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ListBox.ItemContainerStyle>
-                </ListBox>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Foreground" Value="White"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#3A3A3A"/>
+                                        <Setter Property="FontWeight" Value="Bold"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
 
-            </StackPanel>
-        </Border>
-
+                </StackPanel>
+            </Border>
+        </Grid>
         <Border x:Name="Snackbar"
-            Background="#333"
+            Background="#323232"
             CornerRadius="6"
-            Padding="12"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Bottom"
-            Margin="0,0,0,20"
-            Opacity="0">
+            Padding="16"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="60,250,0,0"
+            Opacity="0"
+            MaxWidth="400">
             <TextBlock x:Name="SnackbarMessage"
                    Foreground="White"
-                   FontSize="14"/>
+                   TextWrapping="Wrap"
+                   FontSize="14"
+                   TextAlignment="Center"/>
         </Border>
     </Grid>
 
