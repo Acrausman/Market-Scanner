@@ -63,6 +63,8 @@ namespace MarketScanner.UI
             var filterPanelViewModel = new FilterPanelViewModel();
             var alertPanelViewModel = new AlertPanelViewModel();
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
+            var symbolSelectionCoordinator = new SymbolSelectionCoordinator();
+            var updateService = new UpdateService();
 
             var mainViewModel = new MainViewModel(
                 scannerViewModel,
@@ -70,6 +72,7 @@ namespace MarketScanner.UI
                 filterPanelViewModel,
                 settingsPanelViewModel,
                 alertPanelViewModel,
+                symbolSelectionCoordinator,
                 emailService,
                 filterService,
                 dispatcher,

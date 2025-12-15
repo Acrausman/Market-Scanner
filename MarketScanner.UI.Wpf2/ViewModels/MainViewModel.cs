@@ -41,6 +41,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _settingsPanelViewModel;
         private readonly IChartCoordinator _chartCoordinator;
         private readonly ScanCoordinatorService _scanCoordinator;
+        private readonly ISymbolSelectionCoordinator _symbolSelectionCoordinator;
         private readonly ScanStatusViewModel _scanStatusViewModel;
         public ScanStatusViewModel ScanStatus => _scanStatusViewModel;
         private readonly EmailService? _emailService;
@@ -54,7 +55,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private int _selectedInterval = 15;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
-        private bool enableEmail = false;
 
         // running console text buffer for in-app "console"
         private readonly StringBuilder _consoleBuilder = new();
@@ -104,6 +104,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             FilterPanelViewModel filterPanelViewModel,
             SettingsPanelViewModel settingsPanelViewModel,
             AlertPanelViewModel alertPanelViewModel,
+            SymbolSelectionCoordinator symbolSelectionCoordinator,
             EmailService emailService,
             FilterService filterService,
             Dispatcher dispatcher,
@@ -127,6 +128,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
             _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
             _filterPanelViewModel = filterPanelViewModel;
+            _symbolSelectionCoordinator = symbolSelectionCoordinator;
             _emailService = emailService;
             _alertManager = alertManager;
             _uiNotifier = uiNotifier;
@@ -146,6 +148,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scanCoordinator.ScanStopped += () =>
             {
                 _scanStatusViewModel.OnScanStopped();
+            };
+            _symbolSelectionCoordinator.SymbolSelected += async symbol =>
+            {
+                await _chartCoordinator.OnSymbolSelected(symbol);
             };
             _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
             _scannerService.ScanResultClassified += async result =>
@@ -232,6 +238,16 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 await RestartScanAsync();
         }
 
+        public string? SelectedSymbol
+        {
+            get => _symbolSelectionCoordinator.SelectedSymbol;
+            set
+            { 
+                _symbolSelectionCoordinator.SelectSymbol(value);
+                OnPropertyChanged();
+            }
+        }
+
         // -------- Scan control / commands --------
 
         public ICommand StartScanCommand => _startScanCommand;
@@ -260,7 +276,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
             _scanStatusViewModel.OnScanResumed();
             Log("Scan resumed");
         }
-        private bool _isRestarting;
         private async Task RestartScanAsync()
         {
             _alertPanelViewModel.ClearAlertsCommand.Execute(null);
