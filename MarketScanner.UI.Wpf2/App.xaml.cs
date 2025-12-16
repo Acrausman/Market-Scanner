@@ -5,6 +5,7 @@ using MarketScanner.Core.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Analysis;
 using MarketScanner.UI.Views;
 using MarketScanner.UI.Wpf.Services;
 using MarketScanner.UI.Wpf.ViewModels;
@@ -20,7 +21,7 @@ namespace MarketScanner.UI
         private static extern bool AllocConsole();
 
         public static AppSettings Settings { get; private set; }
-        public UiNotifier Notifier { get; private set; }
+        public UiNotifier Notifier { get; } = new UiNotifier();
         public App()
         {
             Notifier = new UiNotifier();
@@ -45,10 +46,11 @@ namespace MarketScanner.UI
             IChartService chartService = new ChartManager();
 
             Settings = AppSettings.Load();
-            var notifier = new UiNotifier();
             var emailService = new EmailService();
             var alertService = new AlertService();
-            var alertManager = new AlertManager(alertService,emailService);
+            var settingsPanelViewModel = new SettingsPanelViewModel(emailService);
+            var alertManager = new AlertManager(alertService,emailService, settingsPanelViewModel);
+            var filterService = new FilterService();
 
             var scannerService = new EquityScannerService(
                 provider,
@@ -58,16 +60,25 @@ namespace MarketScanner.UI
                 Settings);
 
             var chartViewModel = new ChartViewModel(provider, chartService, dispatcher);
+            var filterPanelViewModel = new FilterPanelViewModel();
+            var alertPanelViewModel = new AlertPanelViewModel();
             var scannerViewModel = new ScannerViewModel(scannerService, dispatcher);
+            var symbolSelectionCoordinator = new SymbolSelectionCoordinator();
+            var updateService = new UpdateService();
 
             var mainViewModel = new MainViewModel(
                 scannerViewModel,
                 chartViewModel,
+                filterPanelViewModel,
+                settingsPanelViewModel,
+                alertPanelViewModel,
+                symbolSelectionCoordinator,
                 emailService,
+                filterService,
                 dispatcher,
                 alertManager,
                 Settings,
-                notifier,
+                Notifier,
                 metadataCache,
                 scannerService);
 

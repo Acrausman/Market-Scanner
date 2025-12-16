@@ -1,11 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading.Tasks;
+using System.Timers;
+using System.Windows.Threading;
 using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Services;
+using MarketScanner.UI.Wpf.ViewModels;
 
 namespace MarketScanner.UI.Wpf.Services;
 
@@ -13,17 +17,41 @@ public class AlertManager : IAlertSink
 {
     private readonly AlertService _alertService;
     private readonly EmailService _emailService;
+    private readonly SettingsPanelViewModel _settingsPanelViewModel;
 
     private readonly List<string> _pendingMessages = new();
     private readonly object _lock = new();
     private DateTime _lastDigestSent = DateTime.MinValue;
+    private readonly DispatcherTimer _timer = new();
 
     public List<Alert> Alerts { get; } = new();
 
-    public AlertManager(AlertService alertService, EmailService emailService)
+    public AlertManager(AlertService alertService, EmailService emailService, SettingsPanelViewModel settingsPanelViewModel)
     {
         _alertService = alertService;
         _emailService = emailService;
+        _settingsPanelViewModel = settingsPanelViewModel;
+    }
+    public void ConfigureDigestInterval(int minutes)
+    {
+        if (minutes <= 0)
+            throw new ArgumentException("Interval must be greater than zero.");
+        _timer.Interval = TimeSpan.FromMinutes(minutes);
+    }
+    public void StartDigest()
+    {
+        _timer.Tick -= OnDigestTimerTick;
+        _timer.Tick += OnDigestTimerTick;
+        _timer.Start();
+ 
+    }
+    private async void OnDigestTimerTick(object? sender, EventArgs e)
+    {
+        SendPendingDigest(_settingsPanelViewModel.EmailAddress);
+    }
+    public void StopDigest()
+    {
+        _timer.Stop();
     }
 
     public void ProcessScanResult(EquityScanResult result)
@@ -87,7 +115,6 @@ public class AlertManager : IAlertSink
     {
 
     }
-
     public void SendPendingDigest(string recipientEmail)
     {
         Logger.Debug($"Pending alerts: {_pendingMessages.Count}");

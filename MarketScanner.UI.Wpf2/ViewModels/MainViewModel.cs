@@ -2,21 +2,19 @@ using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
 using MarketScanner.Core.Metadata;
-using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Providers.Finnhub;
 using MarketScanner.Data.Services;
+using MarketScanner.Data.Services.Analysis;
 using MarketScanner.UI.Wpf.Services;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Runtime;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,53 +25,36 @@ namespace MarketScanner.UI.Wpf.ViewModels
 {
     public class MainViewModel : INotifyPropertyChanged
     {
-        private readonly IMarketDataProvider _provider;
-        private readonly IFundamentalProvider _fundamentalProvider;
         private readonly EquityScannerService _scannerService;
         private readonly ScannerViewModel _scannerViewModel;
-        private readonly EquityScannerService _equityScannerService;
         private readonly TickerMetadataCache _metadataCache;
         private readonly ChartViewModel _chartViewModel;
+        private readonly FilterPanelViewModel _filterPanelViewModel;
+        public FilterPanelViewModel FilterPanel => _filterPanelViewModel;
+        private readonly AlertPanelViewModel _alertPanelViewModel;
+        public AlertPanelViewModel AlertPanel => _alertPanelViewModel;
+        private readonly AlertCoordinatorService _alertCoordinatorService;
+        private readonly FilterService _filterService;
+        private readonly FilterCoordinatorService _filterCoordinator;
+        private readonly SettingsPanelViewModel _settingsPanelViewModel;
+        private readonly SettingsCoordinatorService _settingsCoordinator;
+        public SettingsPanelViewModel SettingsPanel => 
+            _settingsPanelViewModel;
+        private readonly IChartCoordinator _chartCoordinator;
+        private readonly ScanCoordinatorService _scanCoordinator;
+        private readonly ISymbolSelectionCoordinator _symbolSelectionCoordinator;
+        private readonly ScanStatusViewModel _scanStatusViewModel;
+        public ScanStatusViewModel ScanStatus => _scanStatusViewModel;
         private readonly EmailService? _emailService;
-        private readonly System.Timers.Timer _alertTimer;
         private readonly AlertManager _alertManager;
-        private readonly UiNotifier _uiNotifier;
-        private readonly IProgress<int> _scanProgress;
+
+        private readonly IScanResultRouter _scanResultRouter;
         public IUiNotifier UiNotifier { get; }
-        public double _minPrice;
-        public double _maxPrice;
-        //public string _selectedCountryFilter {  get; set; }
-        //public string _selectedSectorFilter { get; set; }
-        public ObservableCollection<string> AvailableSectors { get; }
-            = new ObservableCollection<string>();
-        public ObservableCollection<string> SelectedSectors { get; }
-            = new ObservableCollection<string>();
-        public ObservableCollection<string> AvailableCountries { get; }
-            = new ObservableCollection<string>();
-        public ObservableCollection<string> SelectedCountries { get; }
-            = new ObservableCollection<string>();
+
         private readonly List<double> _intervalOptions = new() { 1, 5, 15, 30, 60}; //Minutes
         private int _selectedInterval = 15;
-        private RsiSmoothingMethod _selectedRsiMethod;
         private readonly AppSettings _appSettings;
         private readonly Dispatcher _dispatcher;
-        private readonly DispatcherTimer _digestTimer;
-        private double _alertIntervalMinutes = 30;
-
-        private bool enableEmail = false;
-        public double AlertIntervalMinutes
-        {
-            get => _alertIntervalMinutes;
-            set
-            {
-                if(Math.Abs(_alertIntervalMinutes - value) > 0.01)
-                {
-                    _alertIntervalMinutes = value;
-                    OnPropertyChanged(nameof(AlertIntervalMinutes));
-                    UpdateAlertTimerInterval();
-                }
-            }
-        }
 
         // running console text buffer for in-app "console"
         private readonly StringBuilder _consoleBuilder = new();
@@ -83,31 +64,15 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private readonly RelayCommand _stopScanCommand;
         private readonly RelayCommand _pauseScanCommand;
         private readonly RelayCommand _resumeScanCommand;
-        private readonly RelayCommand _applyFiltersCommand;
-        private readonly RelayCommand _clearFiltersCommand;
 
-
-        // cancellation tokens for long-running ops
-        private CancellationTokenSource? _scanCts;
-        private CancellationTokenSource? _symbolCts;
 
         // backing fields for bindable props
         private string _consoleText = string.Empty;
-        private string _statusText = "Idle";
-        private string? _selectedSymbol;
-        private bool _isScanning;
         // persisted / options fields
-        private string apiKey = "YISIR_KLqJAdX7U6ix6Pjkyx70C_QgpI";
-        private string FinnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
-        private string _notificationEmail = string.Empty;
-        private RsiSmoothingMethod _rsiMethod;
-        private string _selectedTimespan = "3M";
         public IEnumerable<double> IntervalOptions => _intervalOptions;
         public ICommand SendDigestNow { get; }
         public ICommand PauseScanCommand => _pauseScanCommand;
         public ICommand ResumeScanCommand => _resumeScanCommand;
-        public ICommand ApplyFiltersCommand => _applyFiltersCommand;
-        public ICommand ClearFiltersCommand => _clearFiltersCommand;
 
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
@@ -123,8 +88,6 @@ namespace MarketScanner.UI.Wpf.ViewModels
                     OnPropertyChanged(nameof(SelectedInterval));
 
                     // Restart timer with new interval
-                    _alertTimer.Interval = TimeSpan.FromMinutes(_selectedInterval).TotalMilliseconds;
-                    _alertTimer.Start();
 
                     _appSettings.AlertIntervalMinutes = _selectedInterval;
                     _appSettings.Save();
@@ -138,7 +101,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public MainViewModel(
             ScannerViewModel scannerViewModel,
             ChartViewModel chartViewModel,
+            FilterPanelViewModel filterPanelViewModel,
+            SettingsPanelViewModel settingsPanelViewModel,
+            AlertPanelViewModel alertPanelViewModel,
+            SymbolSelectionCoordinator symbolSelectionCoordinator,
             EmailService emailService,
+            FilterService filterService,
             Dispatcher dispatcher,
             AlertManager alertManager,
             AppSettings settings,
@@ -146,75 +114,92 @@ namespace MarketScanner.UI.Wpf.ViewModels
             TickerMetadataCache metadataCache,
             EquityScannerService scannerService)
         {
+            _appSettings = settings;
+            _dispatcher = dispatcher;
+            _filterService = filterService;
+            _filterCoordinator = new FilterCoordinatorService(_filterService, _appSettings);
             _scannerService = scannerService;
             _scannerViewModel = scannerViewModel;
             _chartViewModel = chartViewModel;
-            _dispatcher = dispatcher;
+            _alertPanelViewModel = alertPanelViewModel;
+            _settingsPanelViewModel = settingsPanelViewModel;
+            _scanStatusViewModel = new ScanStatusViewModel();
+            _settingsCoordinator = new SettingsCoordinatorService(_appSettings);
+            _alertCoordinatorService = new AlertCoordinatorService(alertPanelViewModel, dispatcher);
+            _chartCoordinator = new ChartCoordinator(_chartViewModel, _dispatcher);
+            _filterPanelViewModel = filterPanelViewModel;
+            _symbolSelectionCoordinator = symbolSelectionCoordinator;
+            UiNotifier = uiNotifier;
             _emailService = emailService;
             _alertManager = alertManager;
-            _appSettings = settings;
-            _uiNotifier = uiNotifier;
             _metadataCache = metadataCache;
-            _scannerService.ScanResultClassified += OnScanResultClassified;
-            _scanProgress = new Progress<int>(value =>
+            _scanCoordinator = new ScanCoordinatorService(
+                _scannerViewModel,
+                _scannerService,
+                _dispatcher);
+            _scanCoordinator.ScanStarted += () =>
             {
-                _scannerViewModel.ProgressValue = value;
-            });
-            //if (_scannerService != null) _scannerService.AddFilter(new PriceFilter(5, 30));
+                _scanStatusViewModel.OnScanStarted();
+            };
+            _scanCoordinator.ProgressChanged += p =>
+            {
+                _scanStatusViewModel.UpdateProgress(p);
+            };
+            _scanCoordinator.ScanStopped += () =>
+            {
+                _scanStatusViewModel.OnScanStopped();
+            };
+            _symbolSelectionCoordinator.SymbolSelected += async symbol =>
+            {
+                await _chartCoordinator.OnSymbolSelected(symbol);
+            };
+            _scanResultRouter = new ScanResultRouter(_alertPanelViewModel, _dispatcher);
+            _scannerService.ScanResultClassified += async result =>
+            {
+                await _chartCoordinator.OnScanResult(result);
+                _scanResultRouter.HandleResult(result);
+            };      
 
             // Commands that show up in XAML
-            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !IsScanning);
-            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => IsScanning);
-            _pauseScanCommand = new RelayCommand(_ => PauseScan(), _ => IsScanning);
-            _resumeScanCommand = new RelayCommand(_ => ResumeScan(), _ => IsScanning);
+            _startScanCommand = new RelayCommand(async _ => await StartScanAsync(), _ => !ScanStatus.IsScanning);
+            _stopScanCommand = new RelayCommand(_ => StopScan(), _ => ScanStatus.IsScanning);
+            _pauseScanCommand = new RelayCommand(_ =>
+            {
+                _scanCoordinator.Pause();
+                _scanStatusViewModel.OnScanPaused();
+            });
+            _resumeScanCommand = new RelayCommand(_ =>
+            {
+                _scanCoordinator.Resume();
+                _scanStatusViewModel.OnScanResumed();
+            });
 
             // Load persisted settings
-            _appSettings = settings;
-            _notificationEmail = _appSettings.NotificationEmail ?? string.Empty;
-            _selectedTimespan = string.IsNullOrWhiteSpace(_appSettings.SelectedTimespan)
-                ? "3M"
-                : _appSettings.SelectedTimespan;
-            _selectedRsiMethod = _appSettings.RsiMethod;
-            _selectedInterval = _appSettings.AlertIntervalMinutes > 0
-                ? _appSettings.AlertIntervalMinutes
-                : 15;
-            _minPrice = _appSettings.FilterMinPrice;
-            _maxPrice = _appSettings.FilterMaxPrice;
-            foreach (var s in _appSettings.FilterCountries)
-                SelectedCountries.Add(s);
-            foreach(var s in _appSettings.FilterSectors) 
-                SelectedSectors.Add(s);
-            LoadFilterChoices();
-
+            var sectors = _metadataCache.GetAllSectors();
+            _filterPanelViewModel.AvailableSectors.Clear();
+            foreach (var sector in sectors)
+                _filterPanelViewModel.AvailableSectors.Add(sector);
+            var countries = _metadataCache.GetAllCountries();
+            _filterPanelViewModel.AvailableCountries.Clear();
+            foreach (var country in countries)
+                _filterPanelViewModel.AvailableCountries.Add(country);
+            _filterCoordinator.LoadFiltersFromSettings(_filterPanelViewModel);
+            _settingsCoordinator.LoadInto(_settingsPanelViewModel);
+            
             // Commands for options panel
-            SaveEmailCommand = new RelayCommand(_ => SaveEmail());
-            TestEmailCommand = new RelayCommand(_ => TestEmail());
-            SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(NotificationEmail));
-            _clearFiltersCommand = new RelayCommand(
-                async _ => await ClearFilters(),
-                _ => true
-                );
-            _applyFiltersCommand = new RelayCommand(_ => RebuildFiltersAndRestart());
+            SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(_settingsPanelViewModel.EmailAddress));
+            _filterPanelViewModel.FiltersApplied += OnFiltersApplied;
+            _filterPanelViewModel.FiltersCleared += OnFiltersCleared;
+            _settingsPanelViewModel.SettingsApplied += OnSettingsApplied;
+            _settingsPanelViewModel.SettingsReset += OnSettingsReset;
 
             // push initial persisted values through their setters
-            NotificationEmail = _notificationEmail;
-            SelectedTimespan = _selectedTimespan;
-            _digestTimer = new DispatcherTimer
-            {
-                Interval = TimeSpan.FromMinutes(_appSettings.AlertIntervalMinutes)
-            };
-            _digestTimer.Tick += (s, e) =>
-            {
-                Logger.Info($"[Timer] Triggering digest at {DateTime.Now:T}");
-                if(enableEmail)_alertManager.SendPendingDigest(NotificationEmail ?? string.Empty);
-            };
 
             _ = Task.Run(async () =>
             {
                 var updater = new UpdateService();
                 await updater.CheckForUpdatesAsync();
             });
-            _digestTimer.Start();
 
         }
 
@@ -237,23 +222,27 @@ namespace MarketScanner.UI.Wpf.ViewModels
             private set => SetProperty(ref _consoleText, value);
         }
 
-        public string StatusText
-        {
-            get => _statusText;
-            private set => SetProperty(ref _statusText, value);
-        }
-
         // -------- Symbol selection / chart sync --------
+        private async void OnFiltersApplied()
+        {
+            await UiNotifier.ShowSnackbarAsync("Filters applied!");
+            if (_scanStatusViewModel.IsScanning)
+                await RestartScanAsync();
+        }
+        private async void OnFiltersCleared()
+        {
+            await UiNotifier.ShowSnackbarAsync("Filters cleared!");
+            if (_scanStatusViewModel.IsScanning)
+                await RestartScanAsync();
+        }
 
         public string? SelectedSymbol
         {
-            get => _selectedSymbol;
+            get => _symbolSelectionCoordinator.SelectedSymbol;
             set
-            {
-                if (SetProperty(ref _selectedSymbol, value))
-                {
-                    _ = LoadSelectedSymbolAsync(value);
-                }
+            { 
+                _symbolSelectionCoordinator.SelectSymbol(value);
+                OnPropertyChanged();
             }
         }
 
@@ -262,441 +251,54 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ICommand StartScanCommand => _startScanCommand;
         public ICommand StopScanCommand => _stopScanCommand;
 
-        private bool IsScanning
-        {
-            get => _isScanning;
-            set
-            {
-                if (SetProperty(ref _isScanning, value, nameof(IsScanning)))
-                {
-                    // update CanExecute on the commands after state change
-                    _dispatcher.InvokeAsync(() =>
-                    {
-                        _startScanCommand.RaiseCanExecuteChanged();
-                        _stopScanCommand.RaiseCanExecuteChanged();
-                    });
-                }
-            }
-        }
-
-        private void UpdateAlertTimerInterval()
-        {
-            if (_digestTimer == null)
-            {
-                Logger.Warn("[Timer] Attempted to change interval, but timer not initialized.");
-                return;
-            }
-
-            _digestTimer.Stop();
-            _digestTimer.Interval = TimeSpan.FromMinutes(_alertIntervalMinutes);
-            _digestTimer.Start();
-
-            Logger.Info($"[Timer] Digest interval updated to {_alertIntervalMinutes} minutes.");
-        }
-
         private async Task StartScanAsync()
         {
-            if (IsScanning)
-                return;
-            
-            _scanCts = new CancellationTokenSource();
-            IsScanning = true;
-            StatusText = "Scanning...";
-            Log("Starting equity scan...");
-
-            var progress = new Progress<int>(value =>
-            {
-                _dispatcher.InvokeAsync(() => StatusText = $"Scanning... {value}%");
-            });
-
-            try
-            {
-                await _scannerViewModel.StartScanAsync(progress, _scanCts.Token).ConfigureAwait(false);
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan complete");
-            }
-            catch (OperationCanceledException)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan cancelled");
-                Log("Scan cancelled by user.");
-            }
-            catch (Exception ex)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = "Scan failed");
-                Log($"Scan failed: {ex.Message}");
-            }
-            finally
-            {
-                _scanCts?.Dispose();
-                _scanCts = null;
-                IsScanning = false;
-            }
+            _alertPanelViewModel.ClearAlertsCommand.Execute(null);
+            await _scanCoordinator.StartScanAsync();
         }
-        
         private void StopScan()
         {
-            if (!IsScanning)
-                return;
-            _scanCts?.Cancel();
+            _alertManager.StopDigest();
+            _scanCoordinator.StopScan();
         }
 
         private void PauseScan()
         {
-            _scannerService.Pause();
-            StatusText = "Scan paused";
+            _scanCoordinator.Pause();
+            _scanStatusViewModel.OnScanPaused();
             Log("Scan paused");
         }
 
         private void ResumeScan()
         {
-            _scannerService.Resume();
-            StatusText = "Scan resumed";
+            _scanCoordinator.Resume();
+            _scanStatusViewModel.OnScanResumed();
             Log("Scan resumed");
         }
-        private bool _isRestarting;
         private async Task RestartScanAsync()
         {
-            if (_scannerService == null)
-                return;
-            if (_isRestarting)
-                return;
-            _isRestarting = true;
-            try
-            {
-                StatusText = "Restarting scan with new settings...";
-
-                _scannerViewModel.OverboughtSymbols.Clear();
-                _scannerViewModel.OversoldSymbols.Clear();
-                ResetProgressUI();
-
-                await _scannerService.RestartAsync(_scanProgress).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"UI Restart scan failed: {ex}");
-                StatusText = "Error restarting scan.";
-            }
-            finally
-            {
-                _isRestarting = false;
-            }
-        }
-            
-
-        private void OnScanResultClassified(EquityScanResult result)
-        {
-            App.Current.Dispatcher.Invoke(() =>
-            {
-                if (result.RSI >= 70)
-                    _scannerViewModel.OverboughtSymbols.Add(result.Symbol);
-                else if (result.RSI <= 30)
-                    _scannerViewModel.OversoldSymbols.Add(result.Symbol);
-            });
-        }
-        private void ResetProgressUI()
-        {
-            _scannerViewModel.ProgressValue = 0;
-        }
-        private async Task ClearFilters()
-        {
-            SelectedCountries.Clear();
-            SelectedSectors.Clear();
-            Logger.WriteLine("Filters cleared\n Selected Countries: ");
-            foreach (var c in SelectedCountries)
-                Logger.WriteLine(c);
-            Logger.WriteLine("\nSlected Sectors: ");
-            foreach (var s in SelectedSectors)
-                Logger.WriteLine(s);
-            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
-            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
-            _appSettings.FilterCountries.Clear();
-            _appSettings.FilterSectors.Clear();
-            _appSettings.Save();
-            ((App)App.Current).Notifier.Show("Filters cleared!");
-
-        }
-        private async Task RebuildFiltersAndRestart()
-        {
-
-            _appSettings.FilterCountries = SelectedCountries.ToList() ?? new List<string>();
-            _appSettings.FilterSectors = SelectedSectors.ToList() ?? new List<string>();
-            _appSettings.FilterCountries.Clear();
-            _appSettings.FilterSectors.Clear();
-
-            var filters = new List<IFilter>();
-
-            if (_minPrice > 0 || _maxPrice < 99999)
-                filters.Add(new PriceFilter(_minPrice, _maxPrice));
-            if (SelectedCountries.Count > 0 && !SelectedCountries.Contains("Any"))
-                filters.Add(new MultiCountryFilter(SelectedCountries));
-            if (SelectedSectors.Count > 0 && !SelectedSectors.Contains("Any"))
-                filters.Add(new MultiSectorFilter(SelectedSectors));
-
-            _appSettings.FilterCountries = SelectedCountries.ToList();
-            _appSettings.FilterSectors = SelectedSectors.ToList();
-            _appSettings.Save();
-            Console.WriteLine("[DEBUG] Saved Countries: " +
-    string.Join(", ", _appSettings.FilterCountries));
-
-            Console.WriteLine("[DEBUG] Saved Sectors: " +
-                string.Join(", ", _appSettings.FilterSectors));
-
-
-            _scannerService.AddMultipleFilters(filters);
-            Console.WriteLine("[DEBUG FILTER] Selected sectors: " +
-                  string.Join(",", SelectedSectors));
-            Console.WriteLine($"DEBUG FILTER Selected countries: ");
-            foreach(var c in SelectedCountries)
-            {
-                Console.WriteLine($"{c}, ");
-            }
-            ((App)App.Current).Notifier.Show("Filters applied!");
-            if (IsScanning)
-                await RestartScanAsync();
-            //await _uiNotifier.ShowStatusAsync("Filters applied!");
-            //StartScanCommand.Execute(null);
-        }
-
-        // -------- Chart loading for selected symbol --------
-
-        private async Task LoadSelectedSymbolAsync(string? symbol)
-        {
-            // cancel any in-flight symbol load
-            var previous = _symbolCts;
-            previous?.Cancel();
-            previous?.Dispose();
-
-            _symbolCts = new CancellationTokenSource();
-            var currentCts = _symbolCts;
-            var token = currentCts.Token;
-
-            if (string.IsNullOrWhiteSpace(symbol))
-            {
-                StatusText = "Select a symbol to view details";
-                _chartViewModel.Clear();
-                return;
-            }
-
-            try
-            {
-                StatusText = $"Loading {symbol}...";
-                await _chartViewModel.LoadChartForSymbol(symbol).ConfigureAwait(false);
-                await _dispatcher.InvokeAsync(() => StatusText = $"Showing {symbol}");
-            }
-            catch (OperationCanceledException)
-            {
-                // selection changed, ignore
-            }
-            catch (Exception ex)
-            {
-                await _dispatcher.InvokeAsync(() => StatusText = $"Error loading {symbol}");
-                Log($"Failed to load {symbol}: {ex.Message}");
-            }
-            finally
-            {
-                if (ReferenceEquals(_symbolCts, currentCts))
-                {
-                    _symbolCts.Dispose();
-                    _symbolCts = null;
-                }
-            }
+            _alertPanelViewModel.ClearAlertsCommand.Execute(null);
+            await _scanCoordinator.RestartScanAsync();
         }
 
         // -------- Setting persistence --------
 
-        public double MinPrice
+        private async void OnSettingsApplied()
         {
-            get => _minPrice;
-            set
-            {
-                if(_minPrice != value)
-                {
-                    _minPrice = value;
-                    OnPropertyChanged();
-
-                    _appSettings.FilterMinPrice = _minPrice;
-                    _appSettings.Save();
-
-                }
-            }
-        }
-        public double MaxPrice
-        {
-            get => _maxPrice;
-            set
-            {
-                if (_maxPrice != value)
-                {
-                    _maxPrice = value;
-                    OnPropertyChanged();
-
-                    _appSettings.FilterMaxPrice = _maxPrice;
-                    _appSettings.Save();
-
-                }
-            }
-        }
-        /*public string SelectedCountryFilter
-        {
-            get => _selectedCountryFilter;
-            set
-            {
-                if (_selectedCountryFilter != value)
-                {
-                    _selectedCountryFilter = value ?? string.Empty;
-                    OnPropertyChanged();
-
-                    SelectedCountries.Clear();
-                    if(!string.IsNullOrWhiteSpace(_selectedCountryFilter) &&
-                        _selectedCountryFilter != "Any")
-                    {
-                        SelectedSectors.Add(_selectedCountryFilter);
-                    }
-                    _appSettings.Save();
-                }
-            }
-        }
-        
-        public string SelectedSectorFilter
-        {
-            get => _selectedSectorFilter;
-            set
-            {
-                if(_selectedSectorFilter != value)
-                {
-                    _selectedSectorFilter = value ?? string.Empty;
-                    OnPropertyChanged();
-
-                    SelectedSectors.Clear();
-                    if (!string.IsNullOrWhiteSpace(_selectedSectorFilter) &&
-                        _selectedSectorFilter != "Any")
-                    {
-                        SelectedSectors.Add(_selectedSectorFilter);
-                    }
-
-                    _appSettings.FilterSectors = SelectedSectors.ToList();
-                    _appSettings.Save();
-                }
-            }
-        
-        }
-        */
-        private void LoadFilterChoices()
-        {
-            AvailableSectors.Clear();
-            AvailableCountries.Clear();
-
-            AvailableSectors.Add("Any");
-            AvailableCountries.Add("Any");
-
-            foreach (string s in _metadataCache.GetAllSectors())
-                AvailableSectors.Add(s);
-            foreach (string c in _metadataCache.GetAllCountries())
-                AvailableCountries.Add(c);
-
-            
-        }
-        public string NotificationEmail
-        {
-            get => _notificationEmail;
-            set
-            {
-                if (_notificationEmail != value)
-                {
-                    _notificationEmail = value ?? string.Empty;
-                    OnPropertyChanged(nameof(NotificationEmail));
-
-                    _appSettings.NotificationEmail = _notificationEmail;
-                    _appSettings.Save();
-
-                    Logger.Info($"[Settings] NotificationEmail now '{_notificationEmail}'");
-                }
-            }
+            _settingsCoordinator.Apply(_settingsPanelViewModel);
+            _alertManager.ConfigureDigestInterval(SettingsPanel.AlertIntervalMinutes);
+            _alertManager.StartDigest();
+            await UiNotifier.ShowSnackbarAsync("Settings saved!");
+            if (_scanStatusViewModel.IsScanning)
+                await RestartScanAsync();
         }
 
-        public RsiSmoothingMethod SelectedRsiMethod
+        private async void OnSettingsReset()
         {
-            get => _selectedRsiMethod;
-            set
-            {
-                if(_selectedRsiMethod != value)
-                {
-                    _selectedRsiMethod = value;
-                    OnPropertyChanged(nameof(_rsiMethod));
-
-                    _appSettings.RsiMethod = _selectedRsiMethod;
-                    _appSettings.Save();
-                    Logger.Info($"[Settings] RSI Smoothing is now set to '{_selectedRsiMethod}'");
-
-                    _ = RestartScanAsync();
-                }
-
-            }
-        }
-
-        public string SelectedTimespan
-        {
-            get => _selectedTimespan;
-            set
-            {
-                if (_selectedTimespan != value && !string.IsNullOrWhiteSpace(value))
-                {
-                    _selectedTimespan = value;
-                    OnPropertyChanged(nameof(SelectedTimespan));
-
-                    _appSettings.SelectedTimespan = _selectedTimespan;
-                    _appSettings.Save();
-
-                }
-            }
-        }
-
-        public void Dispose()
-        {
-            _alertTimer?.Stop();
-            _alertTimer?.Dispose();
-        }
-
-        public ICommand SaveEmailCommand { get; }
-        private void SaveEmail()
-        {
-            if (!string.IsNullOrWhiteSpace(NotificationEmail))
-            {
-                Logger.Info($"[Options] Email saved: {NotificationEmail}");
-                // Additional persistence already handled in setter
-            }
-        }
-
-        public ICommand TestEmailCommand { get; }
-        private void TestEmail()
-        {
-            Logger.Info("[Email] Test email triggered.");
-
-            if (string.IsNullOrWhiteSpace(NotificationEmail))
-            {
-                Logger.Warn("[Email] Cannot send test: no address configured.");
-                return;
-            }
-
-            if (_emailService == null)
-            {
-                Logger.Warn("[Email] Cannot send test: no email service available.");
-                return;
-            }
-
-            try
-            {
-                _emailService.SendEmail(
-                    NotificationEmail,
-                    "Test Email",
-                    "This is a test email from MarketScanner."
-                );
-
-                Logger.Info($"[Email] Test message sent to {NotificationEmail}");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"[Email] Send failed: {ex.Message}");
-            }
+            _settingsCoordinator.Reset(_settingsPanelViewModel);
+            await UiNotifier.ShowSnackbarAsync("Settings reset to defaults!");
+            if (_scanStatusViewModel.IsScanning)
+                await RestartScanAsync();
         }
 
         // -------- Console logging helper --------

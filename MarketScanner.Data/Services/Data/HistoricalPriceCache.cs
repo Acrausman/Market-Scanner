@@ -1,4 +1,6 @@
+using MarketScanner.Core.Abstractions;
 using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Analysis;
 using System;
@@ -10,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace MarketScanner.Data.Services.Data
 {
-    internal class HistoricalPriceCache
+    public class HistoricalPriceCache
     {
         private readonly IMarketDataProvider _provider;
         private readonly IDataCleaner _dataCleaner;

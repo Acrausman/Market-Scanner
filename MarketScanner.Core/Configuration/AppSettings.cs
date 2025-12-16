@@ -8,8 +8,8 @@ namespace MarketScanner.Core.Configuration;
 
 public class AppSettings
 {
-    public double FilterMinPrice { get; set; } = 0;
-    public double FilterMaxPrice { get; set; } = 99999;
+    public double? FilterMinPrice { get; set; } = 0;
+    public double? FilterMaxPrice { get; set; } = 99999;
     public List<string> FilterSectors { get; set; } = new();
     public List<string> FilterCountries { get; set; } = new();
     public string NotificationEmail { get; set; } = string.Empty;

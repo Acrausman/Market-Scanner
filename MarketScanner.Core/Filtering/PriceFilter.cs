@@ -13,17 +13,17 @@ namespace MarketScanner.Core.Filtering
         /// <summary>
         /// Minimum price
         /// </summary>
-        public double MinPrice { get; set; }
+        public double? MinPrice { get; set; }
         /// <summary>
         /// Maximum price
         /// </summary>
-        public double MaxPrice { get; set; }
+        public double? MaxPrice { get; set; }
         /// <summary>
         /// Constructor
         /// </summary>
         /// <param name="min"></param>
         /// <param name="max"></param>
-        public PriceFilter(double min, double max)
+        public PriceFilter(double? min, double? max)
         {
             MinPrice = min;
             MaxPrice = max;
