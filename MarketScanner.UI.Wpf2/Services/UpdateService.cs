@@ -46,7 +46,6 @@ namespace MarketScanner.UI.Wpf.Services
                 Logger.WriteLine($"[UPDATER] Update check failed: {ex.Message}");
             }
         }
-
         private async Task DownloadAndInstallAsync()
         {
             string tempPath = Path.Combine(Path.GetTempPath(), "MarketScannerSetup.exe");
@@ -55,6 +54,23 @@ namespace MarketScanner.UI.Wpf.Services
             {
                 using var client = new HttpClient();
                 var bytes = await client.GetByteArrayAsync(InstallerUrl);
+
+                string hashUrl = InstallerUrl.Replace(".exe", ".sha256");
+                string expectedHash = (await client.GetStringAsync(hashUrl)).Trim().ToLowerInvariant();
+                string actualHash = ComputeSha256(tempPath);
+                if(actualHash != expectedHash)
+                {
+                    System.Windows.MessageBox.Show(
+                        "The update file could not be verified and will not be installed.\n\n" +
+                        "Please try again later.",
+                        "Update Verification Failed",
+                        System.Windows.MessageBoxButton.OK,
+                        System.Windows.MessageBoxImage.Error);
+
+                    File.Delete(tempPath);
+                    return;
+                }
+
                 await File.WriteAllBytesAsync(tempPath, bytes);
 
                 Process.Start(new ProcessStartInfo
@@ -72,6 +88,13 @@ namespace MarketScanner.UI.Wpf.Services
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
             }
+        }
+        private static string ComputeSha256(string filePath)
+        {
+            using var stream = File.OpenRead(filePath);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hashBytes = sha.ComputeHash(stream);
+            return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
         }
     }
 }
