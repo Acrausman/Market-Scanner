@@ -20,7 +20,7 @@ jobs:
 
       - name: Publish WPF app
         run: |
-          dotnet publish MarketScanner.UI.Wpf/MarketScanner.UI.Wpf.csproj `
+          dotnet publish MarketScanner.UI.Wpf2/MarketScanner.UI.Wpf.csproj `
             -c Release `
             -r win-x64 `
             --self-contained true `
