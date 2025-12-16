@@ -32,7 +32,7 @@ jobs:
 
       - name: Build installer
         run: |
-          "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\Setup.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\Setup.iss
 
       - name: Generate SHA256 hash
         run: |
