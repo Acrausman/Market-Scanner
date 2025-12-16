@@ -6,11 +6,11 @@
 		<UseWPF>true</UseWPF>
 		<ApplicationIcon>Coin.ico</ApplicationIcon>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
-		<AssemblyVersion>1.1.0</AssemblyVersion>
-		<FileVersion>1.1.0</FileVersion>
+		<AssemblyVersion>1.1.8</AssemblyVersion>
+		<FileVersion>1.1.8</FileVersion>
 		<ProductVersion>1.0.2</ProductVersion>
 		<Product>CentSense</Product>
-		<Version>1.1.0</Version>
+		<Version>1.1.8</Version>
 		<AssemblyName>CentSense</AssemblyName>
 		<Company>Carolina Canyon Corporation</Company>
 	</PropertyGroup>
