@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -31,8 +33,10 @@ jobs:
           choco install innosetup --no-progress --yes
 
       - name: Build installer
+        shell: powershell
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\Setup.iss
+          $iscc "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" 
+          & $iscc "Installer\Setup.iss"
 
       - name: Generate SHA256 hash
         run: |

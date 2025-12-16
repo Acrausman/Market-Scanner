@@ -1,6 +1,6 @@
 [Setup]
 AppName=CentSense
-AppVersion=1.1.0
+AppVersion=1.1.5
 DefaultDirName={commonpf}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma
