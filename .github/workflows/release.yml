@@ -31,11 +31,19 @@ jobs:
       - name: Install Inno Setup
         run: |
           choco install innosetup --no-progress --yes
+      - name: Extract version from tag
+        id: version
+        shell: powershell
+        run: |
+          $tag = "${{GitHub.MarketScanner}}"
+          $version = $tag.TrimStart("v")
+          echo "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Build installer
         shell: powershell
         run: |
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          $version = "${{ steps.version.ouputs.version}}"
           & $iscc "Installer\Setup.iss"
 
       - name: Generate SHA256 hash

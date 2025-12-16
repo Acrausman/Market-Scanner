@@ -1,6 +1,8 @@
+#define MyAppVersion GetStringParam("AppVersion", "0.0.0")
+
 [Setup]
 AppName=CentSense
-AppVersion=1.1.5
+AppVersion={#MyAppVersion}
 DefaultDirName={commonpf}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma
