@@ -4,9 +4,6 @@ using System.Threading.Tasks;
 
 namespace MarketScanner.Core.Abstractions;
 
-/// <summary>
-/// Coordinates alert generation during market scans and tracks triggered symbols.
-/// </summary>
 public interface IAlertManager
 {
     /// <summary>
