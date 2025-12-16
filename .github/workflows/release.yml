@@ -1,0 +1,39 @@
+name: Build and Release Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+steps:
+  - name: Checkout repository
+    uses: actions/checkout@v4
+  - name: Publish WPF app
+    run: |
+      dotnet publish MarketScanner.UI.Wpf/MarketScanner.UI.Wpf.csproj
+        -c Release '
+        -r win-x64 '
+        --self-contained true '
+        -0 Publish
+  - name: Install Inno Setup
+    run: |
+      choco install innosetup --no-progress --yes
+  - name: Build Installer
+    run: |
+      "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Installer\Setup.iss
+  - name: Generate SHA256 hash
+    run: |
+      $hash = (Get-FileHash Installer\Output\CentSenseSetup.exe -Algorithm SHA256).Hash
+      $hash | Out-File Installer\Output\CentSenseSetup.sha256 - Encoding ASCII
+  - name: Create GitHub Release
+    uses: softprops/action-gh-release@v2
+    with:
+      files: |
+        Installer/Output/CentSenseSetup.exe 
+        Installer/Output/CentSenseSetup.sha256
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
