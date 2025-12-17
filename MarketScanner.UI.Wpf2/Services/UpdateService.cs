@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Xps.Serialization;
 
 namespace MarketScanner.UI.Wpf.Services
 {

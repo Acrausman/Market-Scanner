@@ -6,7 +6,7 @@ using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Models;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Providers.Polygon;
-using MarketScanner.Data.Indicators;
+using MarketScanner.Core.Indicators;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;

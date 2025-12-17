@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Windows.Threading;
 using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.UI.Wpf.ViewModels;
 
 namespace MarketScanner.UI.Wpf.Services
@@ -39,6 +40,7 @@ namespace MarketScanner.UI.Wpf.Services
                 }
                 if (isCreeper)
                 {
+                    Logger.WriteLine("Creeper...aw man");
                     if(!_alerts.CreeperSymbols.Contains(result.Symbol))
                         _alerts.CreeperSymbols.Add(result.Symbol);
                 }

@@ -2,7 +2,7 @@
 using MarketScanner.Core.Models;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Data.Providers;
-using MarketScanner.Data.Indicators;
+using MarketScanner.Core.Indicators;
 using MarketScanner.Data.Diagnostics;
 using MarketScanner.UI.Wpf.Services;
 using OxyPlot;

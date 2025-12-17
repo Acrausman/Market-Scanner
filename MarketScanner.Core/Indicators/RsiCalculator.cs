@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using MarketScanner.Core.Enums;
 
-namespace MarketScanner.Data.Indicators;
-
-public static class RsiCalculator
+namespace MarketScanner.Core.Indicators
+{
+    public static class RsiCalculator
 {
     public static double Calculate(
         IReadOnlyList<double> closes,
@@ -159,4 +159,5 @@ public static class RsiCalculator
 
         return rsiValues;
     }
+}
 }

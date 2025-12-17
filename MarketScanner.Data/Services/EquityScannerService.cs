@@ -34,6 +34,7 @@ namespace MarketScanner.Data.Services
         private readonly IProgressService _progressService;
         private readonly IConcurrencyService _concurrencyService;
         private readonly TickerMetadataCache _metadataCache;
+        private readonly CreeperCriteria creeperCriteria;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         public IReadOnlyDictionary<string, EquityScanResult> ScanCache => _scanCache;
         private readonly List<IEquityClassifier> _classifiers = new();
@@ -62,7 +63,9 @@ namespace MarketScanner.Data.Services
             _fundamentalProvider = fundamentalProvider;
             _metadataCache = metadataCache;
             _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
+            creeperCriteria = new CreeperCriteria();
             _classifiers.Add(new RSIClassifier());
+            _classifiers.Add(new CreeperClassifier(creeperCriteria));
             _classificationEngine = new ClassificationEngine(_classifiers);
             _progressService = new ProgressService();
             _concurrencyService = new ConcurrencyService();

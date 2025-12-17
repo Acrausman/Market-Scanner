@@ -78,4 +78,5 @@ public record EquityScanResult
     public bool IsCreeper { get; set; }
     public double CreeperScore {  get; set; }
     public CreeperType? CreeperType { get; set; }
+    public IReadOnlyDictionary<string, double>? CreeperMetrics { get; init; }
 }

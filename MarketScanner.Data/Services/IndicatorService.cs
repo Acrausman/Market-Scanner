@@ -1,6 +1,6 @@
 ﻿using MarketScanner.Core.Enums;
 using MarketScanner.Core.Models;
-using MarketScanner.Data.Indicators;
+using MarketScanner.Core.Indicators;
 using System;
 using System.Collections.Generic;
 using System.Linq;

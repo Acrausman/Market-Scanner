@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MarketScanner.Data.Indicators
+namespace MarketScanner.Core.Indicators
 {
     public static class SmaCalculator
     {
