@@ -4,7 +4,6 @@
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWPF>true</UseWPF>
-		<ApplicationIcon>Coin.ico</ApplicationIcon>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<AssemblyVersion>1.1.8</AssemblyVersion>
 		<FileVersion>1.1.8</FileVersion>
@@ -13,10 +12,11 @@
 		<Version>1.1.8</Version>
 		<AssemblyName>CentSense</AssemblyName>
 		<Company>Carolina Canyon Corporation</Company>
+		<ApplicationIcon>C3 logo.ico</ApplicationIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Content Include="Coin.ico" />
+	  <Content Include="C3 logo.ico" />
 	</ItemGroup>
 
         <ItemGroup>

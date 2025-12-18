@@ -1,15 +1,14 @@
-#define MyAppVersion GetStringParam("AppVersion", "0.0.0")
-
+#define MyAppVersion "{#Param:AppVersion|0.0.0}"
 [Setup]
 AppName=CentSense
-AppVersion={#MyAppVersion}
+AppVersion={{#MyAppVersion}}
 DefaultDirName={commonpf}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma
 SolidCompression=yes
 AppId={{A6A1A1C3-8A04-4D7A-9E7B-F5A65CE1BD2F}}
 AllowNoIcons=yes
-SetupIconFile=MarketScanner.ico
+SetupIconFile=C3 logo.ico
 UninstallFilesDir={app}
 CloseApplications=yes
 CloseApplicationsFilter=CentSense.exe
