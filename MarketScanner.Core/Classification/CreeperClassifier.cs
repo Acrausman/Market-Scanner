@@ -7,6 +7,8 @@ namespace MarketScanner.Core.Classification
     {
         private readonly CreeperCriteria _criteria;
         private sealed record TrendMetrics(double PctAboveBaseline, double MaxDeviationPct, double SlopePct);
+        private sealed record VolatilityMetrics(double AtrPctOfPrice, double AtrCompressionRatio);
+        private sealed record PullbackMetrics(double MaxDrawdownPct, int MaxConsecutiveDownBars, int WorstRecoveryBars);
 
         public CreeperClassifier(CreeperCriteria criteria)
         {
@@ -24,8 +26,9 @@ namespace MarketScanner.Core.Classification
                 .ToArray();
 
             TrendMetrics trendMetrics = ComputeTrendMetrics(window);
+            VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
 
-            CreeperEvaluation evaluation = Evaluate(trendMetrics);
+            CreeperEvaluation evaluation = Evaluate(trendMetrics, volatilityMetrics);
 
             result.CreeperScore = evaluation.Score;
             result.IsCreeper = evaluation.IsCreeper;
@@ -38,14 +41,15 @@ namespace MarketScanner.Core.Classification
             }
         }
 
-        private CreeperEvaluation Evaluate(TrendMetrics metrics)
+        private CreeperEvaluation Evaluate(TrendMetrics trend, VolatilityMetrics volatility)
         {
-            if (!PassesHardFilters(metrics))
+            if (!PassesHardFilters(trend, volatility))
                 return CreeperEvaluation.NotCreeper();
 
-            double trendScore = ComputeTrendScore(metrics);
+            double trendScore = ComputeTrendScore(trend);
+            double volatilityScore = ComputeVolatilityScore(volatility);
+            double totalScore = trendScore * 0.6 + volatilityScore * 0.4;
 
-            double totalScore = trendScore;
 
             int finalScore = (int)Math.Round(totalScore);
 
@@ -55,16 +59,37 @@ namespace MarketScanner.Core.Classification
             {
                 IsCreeper = true,
                 Score = finalScore,
-                Type = InferType(metrics)
+                Type = InferType(trend)
             };
         }
 
-        private bool PassesHardFilters(TrendMetrics metrics)
+        private bool PassesHardFilters(TrendMetrics trend, VolatilityMetrics volatility)
         {
-            if (metrics.PctAboveBaseline < _criteria.MinBarsAboveBaselinePct)
+            if (!PassesTrendHardFilters(trend))
                 return false;
-            if (metrics.MaxDeviationPct > _criteria.MaxBaselineDeviationPct)
+            if (_criteria.StrictMode && !PassesVolatilityFilters(volatility))
                 return false;
+            
+            return true;
+        }
+        private bool PassesTrendHardFilters(TrendMetrics trend)
+        {
+            if(trend.PctAboveBaseline < _criteria.MinBarsAboveBaselinePct)
+                return false;
+
+            if (trend.MaxDeviationPct > _criteria.MaxBaselineDeviationPct)
+                return false;
+
+            return true;
+        }
+        private bool PassesVolatilityFilters(VolatilityMetrics metrics)
+        {
+            if (metrics.AtrPctOfPrice > _criteria.MaxAtrPctOfPrice)
+                return false;
+
+            if (metrics.AtrCompressionRatio > _criteria.AtrCompressionRatio)
+                return false;
+
             return true;
         }
         private double ComputeTrendScore(TrendMetrics metrics)
@@ -120,7 +145,98 @@ namespace MarketScanner.Core.Classification
                 maxDeviationPct,
                 slopePct);
         }
-        private double ComputeVolatilityScore(IReadOnlyList<Bar> bars) => 50;
+        private VolatilityMetrics ComputeVolatilityMetrics(
+            IReadOnlyList<Bar> window)
+        {
+            double atrShort =
+                AtrCalculator.Calculate(window, _criteria.AtrPeriod);
+            double atrLong =
+                AtrCalculator.Calculate(window, _criteria.AtrPeriod * 3);
+            double lastClose = window[^1].Close;
+            double atrPct =
+                atrShort / lastClose * 100;
+            double compressionRatio =
+                double.IsNaN(atrLong) || atrLong == 0
+                ? 1.0
+                : atrShort / atrLong;
+            return new VolatilityMetrics(atrPct, compressionRatio);
+        }
+        private double ComputeVolatilityScore(VolatilityMetrics metrics)
+        {
+            double atrScore =
+                Math.Clamp(
+                    1.0 - (metrics.AtrPctOfPrice / _criteria.MaxAtrPctOfPrice),
+                    0,
+                    1);
+
+            double compressionScore =
+                Math.Clamp(
+                    1.0 - (metrics.AtrCompressionRatio/ _criteria.AtrCompressionRatio),
+                    0,
+                    1);
+            return (atrScore * 0.6 + compressionScore * 0.4) * 100.0;
+        }
+        private PullbackMetrics ComputePullbackMetrics(IReadOnlyList<Bar> window)
+        {
+            double peak = window[0].Close;
+            double maxDrawdownPct = 0;
+
+            int consecutiveDown = 0;
+            int maxConsecutiveDown = 0;
+
+            int recoveryBars = 0;
+            int worstRecoveryBars = 0;
+            bool inDrawdown = false;
+
+            for (int i = 1; i < window.Count; i++)
+            {
+                double close = window[i].Close;
+                double prevClose = window[i - 1].Close;
+
+                if (close > peak)
+                {
+                    peak = close;
+
+                    if (inDrawdown)
+                    {
+                        worstRecoveryBars = Math.Max(worstRecoveryBars, recoveryBars);
+                        recoveryBars = 0;
+                        inDrawdown = false;
+                    }
+                }
+                else
+                {
+                    inDrawdown = true;
+                    recoveryBars++;
+
+                    double drawdownPct =
+                        (peak - close) / peak * 100.0;
+
+                    if (drawdownPct > maxDrawdownPct)
+                        maxDrawdownPct = drawdownPct;
+                }
+
+                if (close < prevClose)
+                {
+                    consecutiveDown++;
+                    if (consecutiveDown > maxConsecutiveDown)
+                        maxConsecutiveDown = consecutiveDown;
+                }
+                else
+                {
+                    consecutiveDown = 0;
+                }
+            }
+
+            if (inDrawdown)
+                worstRecoveryBars = Math.Max(worstRecoveryBars, recoveryBars);
+
+            return new PullbackMetrics(
+                maxDrawdownPct,
+                maxConsecutiveDown,
+                worstRecoveryBars);
+        }
+
         private double ComputePullbackScore(IReadOnlyList<Bar> bars) => 50;
         private double ComputeSmoothnessScore(IReadOnlyList<Bar> bars) => 50;
         private CreeperType InferType(TrendMetrics metrics)

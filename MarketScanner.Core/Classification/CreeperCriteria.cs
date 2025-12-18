@@ -16,7 +16,7 @@ namespace MarketScanner.Core.Classification
 
         public int AtrPeriod { get; init; }
         public double MaxAtrPctOfPrice { get; init; }
-        public double AtrCompressionRation { get; init; }
+        public double AtrCompressionRatio { get; init; }
 
         public double MaxPullbackPct {get; init; }
         public int MaxConsecutiveDownBars { get; init; }
