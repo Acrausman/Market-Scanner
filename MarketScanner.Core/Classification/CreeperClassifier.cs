@@ -26,9 +26,35 @@ namespace MarketScanner.Core.Classification
                 .ToArray();
 
             TrendMetrics trendMetrics = ComputeTrendMetrics(window);
+            double trendScore = ComputeTrendScore(trendMetrics);
             VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
+            double volatilityScore = ComputeVolatilityScore(volatilityMetrics);
+            PullbackMetrics pullbackMetrics = ComputePullbackMetrics(window);
+            double pullbackScore = ComputePullbackScore(pullbackMetrics);
 
-            CreeperEvaluation evaluation = Evaluate(trendMetrics, volatilityMetrics);
+            result.CreeperMetrics = new CreeperMetrics
+            {
+                // Trend
+                PctAboveBaseline = trendMetrics.PctAboveBaseline,
+                MaxBaselineDeviationPct = trendMetrics.MaxDeviationPct,
+                BaselineSlopePct = trendMetrics.SlopePct,
+
+                // Volatility
+                AtrPctOfPrice = volatilityMetrics.AtrPctOfPrice,
+                AtrCompressionRatio = volatilityMetrics.AtrCompressionRatio,
+
+                // Pullbacks
+                MaxDropdownPct = pullbackMetrics.MaxDrawdownPct,
+                MaxConsecutiveBars = pullbackMetrics.MaxConsecutiveDownBars,
+                WorstRecoveryBars = pullbackMetrics.WorstRecoveryBars,
+
+                // Scores
+                TrendScore = trendScore,
+                VolatilityScore = volatilityScore,
+                PullbackScore = pullbackScore
+            };
+
+            CreeperEvaluation evaluation = Evaluate(trendMetrics, volatilityMetrics, pullbackMetrics);
 
             result.CreeperScore = evaluation.Score;
             result.IsCreeper = evaluation.IsCreeper;
@@ -41,9 +67,9 @@ namespace MarketScanner.Core.Classification
             }
         }
 
-        private CreeperEvaluation Evaluate(TrendMetrics trend, VolatilityMetrics volatility)
+        private CreeperEvaluation Evaluate(TrendMetrics trend, VolatilityMetrics volatility, PullbackMetrics pullbacks)
         {
-            if (!PassesHardFilters(trend, volatility))
+            if (!PassesHardFilters(trend, volatility, pullbacks))
                 return CreeperEvaluation.NotCreeper();
 
             double trendScore = ComputeTrendScore(trend);
@@ -63,14 +89,11 @@ namespace MarketScanner.Core.Classification
             };
         }
 
-        private bool PassesHardFilters(TrendMetrics trend, VolatilityMetrics volatility)
+        private bool PassesHardFilters(TrendMetrics trend, VolatilityMetrics volatility, PullbackMetrics pullbacks)
         {
-            if (!PassesTrendHardFilters(trend))
-                return false;
-            if (_criteria.StrictMode && !PassesVolatilityFilters(volatility))
-                return false;
-            
-            return true;
+            return PassesTrendHardFilters(trend)
+                && PassesVolatilityHardFilters(volatility)
+                && PassesPullbackHardFilters(pullbacks);
         }
         private bool PassesTrendHardFilters(TrendMetrics trend)
         {
@@ -82,7 +105,7 @@ namespace MarketScanner.Core.Classification
 
             return true;
         }
-        private bool PassesVolatilityFilters(VolatilityMetrics metrics)
+        private bool PassesVolatilityHardFilters(VolatilityMetrics metrics)
         {
             if (metrics.AtrPctOfPrice > _criteria.MaxAtrPctOfPrice)
                 return false;
@@ -90,6 +113,16 @@ namespace MarketScanner.Core.Classification
             if (metrics.AtrCompressionRatio > _criteria.AtrCompressionRatio)
                 return false;
 
+            return true;
+        }
+        private bool PassesPullbackHardFilters(PullbackMetrics pullbacks)
+        {
+            if (pullbacks.MaxDrawdownPct > _criteria.MaxPullbackPct)
+                return false;
+            if(pullbacks.MaxConsecutiveDownBars > _criteria.MaxConsecutiveDownBars)
+                return false;
+            if (pullbacks.WorstRecoveryBars > _criteria.PullbackRecoveryBars)
+                return false;
             return true;
         }
         private double ComputeTrendScore(TrendMetrics metrics)
@@ -237,7 +270,27 @@ namespace MarketScanner.Core.Classification
                 worstRecoveryBars);
         }
 
-        private double ComputePullbackScore(IReadOnlyList<Bar> bars) => 50;
+        private double ComputePullbackScore(PullbackMetrics pullbacks)
+        {
+            double drawdownScore =
+                Math.Clamp(
+                    1.0 - (pullbacks.MaxDrawdownPct / _criteria.MaxPullbackPct),
+                    0,
+                    1);
+            double downBarsScore =
+                Math.Clamp(
+                    1.0 - ((double)pullbacks.MaxConsecutiveDownBars / _criteria.MaxConsecutiveDownBars),
+                    0,
+                    1);
+            double recoveryScore = 
+                Math.Clamp(
+                    1.0 - ((double)pullbacks.WorstRecoveryBars / _criteria.PullbackRecoveryBars),
+                    0,
+                    1);
+            return (drawdownScore * 0.5 +
+                downBarsScore * 0.3 +
+                recoveryScore * 0.2) * 100.0;
+        }
         private double ComputeSmoothnessScore(IReadOnlyList<Bar> bars) => 50;
         private CreeperType InferType(TrendMetrics metrics)
         {
