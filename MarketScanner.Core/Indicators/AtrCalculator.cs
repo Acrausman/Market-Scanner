@@ -14,6 +14,8 @@ namespace MarketScanner.Core.Indicators
             if(bars == null || bars.Count < period + 1)
                 return double.NaN;
 
+            double sum = 0;
+
             var trueRanges = new List<double>();
 
             for(int i = bars.Count - period; i < bars.Count; i++)
@@ -21,17 +23,15 @@ namespace MarketScanner.Core.Indicators
                 var current = bars[i];
                 var previous = bars[i - 1];
 
-                double highLow = current.High - current.Low;
-                double highClose = Math.Abs(current.High - previous.Close);
-                double lowClose = Math.Abs(current.Low - previous.Close);
-
-                double trueRange = Math.Max(
-                    highLow,
-                    Math.Max(highClose, lowClose));
-                trueRanges.Add(trueRange);
+                double tr = Math.Max(
+                    current.High - current.Low,
+                    Math.Max(
+                        Math.Abs(current.High - previous.Close),
+                        Math.Abs(current.Low - previous.Close)));
+                sum += tr;
             }
 
-            return trueRanges.Average();
+            return sum / period;
         }
 
         public static IReadOnlyList<double> CalculateSeries(

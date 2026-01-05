@@ -1,10 +1,11 @@
-using OxyPlot;
+ï»¿using OxyPlot;
 using OxyPlot.Annotations;
 using OxyPlot.Axes;
 using OxyPlot.Series;
 using OxyPlot.Legends;
 using System.Collections.Generic;
 using System.Linq;
+using MarketScanner.Data.Diagnostics;
 
 namespace MarketScanner.UI.Wpf.Services
 {
@@ -40,61 +41,65 @@ namespace MarketScanner.UI.Wpf.Services
             _smaSeries.TrackerFormatString = "Date: {2:MM-dd}\nSMA: {4:F2}";
             _volumeSeries.TrackerFormatString = "Date: {2:MM-dd}\nVolume: {4:N0}";
 
-            PriceView.InvalidatePlot(true);
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                PriceView.InvalidatePlot(true);
+            });
             RsiView.InvalidatePlot(true);
             VolumeView.InvalidatePlot(true);
         }
 
-        public void UpdatePriceData(IReadOnlyList<DataPoint> pricePoints,
-                            IReadOnlyList<DataPoint> smaPoints,
-                            IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
-                            bool isLive = false)
+        public void UpdatePriceData(
+                    IReadOnlyList<DataPoint> pricePoints,
+                    IReadOnlyList<DataPoint> smaPoints,
+                    IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
+                    bool isLive = false)
         {
-            // Always clear existing series — ensures full redraw
-            PriceView.Series.Clear();
+            // --- PRICE ---
+            PriceView.Series.Remove(_priceSeries);
+            _priceSeries.Points.Clear();
+            _priceSeries.Points.AddRange(pricePoints);
+            PriceView.Series.Add(_priceSeries);
+            System.Windows.Application.Current.Dispatcher.Invoke(() => { PriceView.InvalidatePlot(true); });
 
-            // --- Price line ---
-            var priceSeries = new LineSeries
+            // --- SMA ---
+            if (!isLive)
+                _smaSeries.Points.Clear();
+
+            if (smaPoints != null && smaPoints.Count > 0)
+                _smaSeries.Points.AddRange(smaPoints.Where(p => !double.IsNaN(p.Y)));
+
+            // --- BOLLINGER ---
+            if (!isLive)
             {
-                Title = "Price",
-                Color = OxyColors.SteelBlue,
-                StrokeThickness = 2
-            };
-            priceSeries.Points.AddRange(pricePoints);
-            PriceView.Series.Add(priceSeries);
-
-            // --- SMA line ---
-            var smaSeries = new LineSeries
-            {
-                Title = "SMA14",
-                Color = OxyColors.OrangeRed,
-                StrokeThickness = 2
-            };
-            smaSeries.Points.AddRange(smaPoints.Where(p => !double.IsNaN(p.Y)));
-            PriceView.Series.Add(smaSeries);
-
-            // --- Bollinger Bands ---
-            if (bollingerPoints != null && bollingerPoints.Count > 0)
-            {
-                var areaSeries = new AreaSeries
-                {
-                    Title = "Bollinger Bands",
-                    Color = OxyColor.FromAColor(60, OxyColors.LightSkyBlue),
-                    Fill = OxyColor.FromAColor(60, OxyColors.LightSkyBlue)
-                };
-
-                foreach (var (upper, lower) in bollingerPoints)
-                {
-                    areaSeries.Points.Add(upper);
-                    areaSeries.Points2.Add(lower);
-                }
-
-                PriceView.Series.Add(areaSeries);
+                _bollingerSeries.Points.Clear();
+                _bollingerSeries.Points2.Clear();
             }
 
-            PriceView.InvalidatePlot(true);
-            AdjustPriceAxis();
+            if (bollingerPoints != null && bollingerPoints.Count > 0)
+            {
+                foreach (var (upper, lower) in bollingerPoints)
+                {
+                    if (!double.IsNaN(upper.Y) && !double.IsNaN(lower.Y))
+                    {
+                        _bollingerSeries.Points.Add(upper);
+                        _bollingerSeries.Points2.Add(lower);
+                    }
+                }
+            }
+
+            TrimSeries(_priceSeries);
+            TrimSeries(_smaSeries);
+            TrimSeries(_bollingerSeries.Points, _bollingerSeries.Points2);
+
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                PriceView.InvalidatePlot(true);
+            });
+ 
+            AdjustPriceAxis(); 
         }
+
 
 
         public void UpdateRsiData(IReadOnlyList<DataPoint> rsiPoints)
@@ -319,19 +324,27 @@ namespace MarketScanner.UI.Wpf.Services
         private void AdjustPriceAxis()
         {
             if (_priceSeries.Points.Count == 0)
-            {
                 return;
-            }
 
             var linearAxis = PriceView.Axes.OfType<LinearAxis>().FirstOrDefault();
             if (linearAxis == null)
-            {
                 return;
-            }
 
-            var min = _priceSeries.Points.Min(p => p.Y) * 0.95;
-            var max = _priceSeries.Points.Max(p => p.Y) * 1.05;
+            linearAxis.Reset();
+
+            var ys = _priceSeries.Points
+                .Select(p => p.Y)
+                .Where(y => !double.IsNaN(y))
+                .ToList();
+
+            if (ys.Count == 0)
+                return;
+
+            double min = ys.Min() * 0.95;
+            double max = ys.Max() * 1.05;
+
             linearAxis.Zoom(min, max);
         }
+
     }
 }

@@ -9,25 +9,36 @@ namespace MarketScanner.Core.Indicators
     {
         public static double Calculate(IReadOnlyList<double> values, int period)
         {
-            if (values == null || values.Count < period)
-            {
+            if (values == null || period <= 0 || values.Count < period)
                 return double.NaN;
-            }
 
-            return values.Skip(values.Count - period).Average();
+            double sum = 0;
+            for (int i = values.Count - period; i < values.Count; i++)
+                sum += values[i];
+
+            return sum / period;
         }
 
-        public static IReadOnlyList<double> CalculateSeries(IReadOnlyList<double> values, int period)
+
+        public static IReadOnlyList<double> CalculateSeries(
+            IReadOnlyList<double> values,
+            int period)
         {
             var result = new List<double>();
-            if (values == null || values.Count < period)
-            {
-                return result;
-            }
 
-            for (int i = period; i <= values.Count; i++)
+            if (values == null || period <= 0 || values.Count < period)
+                return result;
+
+            for (int i = period - 1; i < values.Count; i++)
             {
-                result.Add(values.Skip(i - period).Take(period).Average());
+                double sum = 0;
+
+                for (int j = i - period + 1; j <= i; j++)
+                {
+                    sum += values[j];
+                }
+
+                result.Add(sum / period);
             }
 
             return result;

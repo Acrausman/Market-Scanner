@@ -1,5 +1,6 @@
 ﻿using MarketScanner.Core.Indicators;
 using MarketScanner.Core.Models;
+using System.Security.Principal;
 
 namespace MarketScanner.Core.Classification
 {
@@ -25,6 +26,12 @@ namespace MarketScanner.Core.Classification
                 Skip(bars.Count - _criteria.LookBackBars)
                 .ToArray();
 
+            if(bars.Count < Math.Max(
+                _criteria.LookBackBars,
+                _criteria.BaselinePeriod))
+            {
+                return;
+            }
             TrendMetrics trendMetrics = ComputeTrendMetrics(window);
             double trendScore = ComputeTrendScore(trendMetrics);
             VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
@@ -143,10 +150,24 @@ namespace MarketScanner.Core.Classification
         }
         private TrendMetrics ComputeTrendMetrics(IReadOnlyList<Bar> window)
         {
+            if(window.Count < _criteria.BaselinePeriod)
+            {
+                return new TrendMetrics(
+                    PctAboveBaseline: 0,
+                    MaxDeviationPct: double.MaxValue,
+                    SlopePct: 0);
+            }
             var closes = window.Select(b => b.Close).ToArray();
 
             var baselineSeries =
                 SmaCalculator.CalculateSeries(closes, _criteria.BaselinePeriod);
+            if(baselineSeries.Count == 0)
+            {
+                return new TrendMetrics(
+                    PctAboveBaseline: 0,
+                    MaxDeviationPct: double.MaxValue,
+                    SlopePct: 0);
+            }
 
             int offset = closes.Length - baselineSeries.Count;
             int aboveCount = 0;
@@ -181,6 +202,16 @@ namespace MarketScanner.Core.Classification
         private VolatilityMetrics ComputeVolatilityMetrics(
             IReadOnlyList<Bar> window)
         {
+            int shortPeriod = _criteria.AtrPeriod;
+            int longPeriod = _criteria.AtrPeriod * 3;
+
+            if(window.Count < Math.Max(shortPeriod, longPeriod) + 1)
+            {
+                return new VolatilityMetrics(
+                    AtrPctOfPrice: double.MaxValue,
+                    AtrCompressionRatio: double.MaxValue);
+            }
+
             double atrShort =
                 AtrCalculator.Calculate(window, _criteria.AtrPeriod);
             double atrLong =
@@ -211,6 +242,13 @@ namespace MarketScanner.Core.Classification
         }
         private PullbackMetrics ComputePullbackMetrics(IReadOnlyList<Bar> window)
         {
+            if(window == null || window.Count < 2)
+            {
+                return new PullbackMetrics(
+                    MaxDrawdownPct: double.MaxValue,
+                    MaxConsecutiveDownBars: int.MaxValue,
+                    WorstRecoveryBars: int.MaxValue);
+            }
             double peak = window[0].Close;
             double maxDrawdownPct = 0;
 

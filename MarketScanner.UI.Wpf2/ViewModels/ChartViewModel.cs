@@ -123,6 +123,11 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 var end = DateTime.UtcNow;
                 var start = end.AddDays(-daysToFetch);
                 var bars = (await _provider.GetHistoricalBarsAsync(symbol, start, end, CancellationToken.None).ConfigureAwait(false)).ToList();
+                if(bars == null || bars.Count < 2)
+                {
+                    Logger.WriteLine($"[Chart] Skipping chart load for {symbol}: insufficient data");
+                    return;
+                }
                 if (bars.Count == 0)
                     return;
 
@@ -155,12 +160,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 {
                     _chartService.UpdatePriceData(pricePoints, smaPoints, bollBands);
                     _chartService.UpdateRsiData(rsiPoints);
+                    Logger.WriteLine($"[Chart] {symbol} bars={bars.Count}, smaPoints={smaPoints.Count}, rsiPoints={rsiPoints.Count}, boll={bollBands.Count}");
                     _chartService.UpdateVolumeData(volumePoints);
                 });
             }
             catch (Exception ex)
             {
-                Logger.Error($"[Chart] Error loading {symbol}: {ex.Message}");
+                Logger.Error($"[Chart] Error loading {symbol}: {ex}");
             }
         }
 
@@ -186,35 +192,52 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         private static List<DataPoint> BuildAlignedSeries(IReadOnlyList<Bar> bars, IReadOnlyList<double> series)
         {
-            var points = new List<DataPoint>(bars.Count);
+            var points = new List<DataPoint>(series.Count);
+            if (bars == null || series == null || bars.Count == 0 || series.Count == 0)
+                return points;
+
             int offset = bars.Count - series.Count;
-            for (int i = 0; i < bars.Count; i++)
+            if (offset < 0) offset = 0;
+
+            for (int s = 0; s < series.Count; s++)
             {
-                int index = i - offset;
-                double value = (index >= 0 && index < series.Count) ? series[index] : double.NaN;
-                points.Add(new DataPoint(DateTimeAxis.ToDouble(bars[i].Timestamp), value));
+                int b = s + offset;
+                if (b < 0 || b >= bars.Count)
+                    continue;
+
+                double value = series[s];
+                if (double.IsNaN(value))
+                    continue;
+
+                points.Add(new DataPoint(DateTimeAxis.ToDouble(bars[b].Timestamp), value));
             }
 
             return points;
         }
 
-        private static List<(DataPoint upper, DataPoint lower)> BuildAlignedBands(IReadOnlyList<Bar> bars, IReadOnlyList<(double Middle, double Upper, double Lower)> series)
+        private static List<(DataPoint upper, DataPoint lower)> BuildAlignedBands(
+            IReadOnlyList<Bar> bars,
+            IReadOnlyList<(double Middle, double Upper, double Lower)> series)
         {
-            var bands = new List<(DataPoint upper, DataPoint lower)>(bars.Count);
+            var bands = new List<(DataPoint upper, DataPoint lower)>(series.Count);
+            if (bars == null || series == null || bars.Count == 0 || series.Count == 0)
+                return bands;
+
             int offset = bars.Count - series.Count;
-            for (int i = 0; i < bars.Count; i++)
+            if (offset < 0) offset = 0;
+
+            for (int s = 0; s < series.Count; s++)
             {
-                int index = i - offset;
-                double timestamp = DateTimeAxis.ToDouble(bars[i].Timestamp);
-                if (index >= 0 && index < series.Count)
-                {
-                    var entry = series[index];
-                    bands.Add((new DataPoint(timestamp, entry.Upper), new DataPoint(timestamp, entry.Lower)));
-                }
-                else
-                {
-                    bands.Add((new DataPoint(timestamp, double.NaN), new DataPoint(timestamp, double.NaN)));
-                }
+                int b = s + offset;
+                if (b < 0 || b >= bars.Count)
+                    continue;
+
+                var entry = series[s];
+                if (double.IsNaN(entry.Upper) || double.IsNaN(entry.Lower))
+                    continue;
+
+                double timestamp = DateTimeAxis.ToDouble(bars[b].Timestamp);
+                bands.Add((new DataPoint(timestamp, entry.Upper), new DataPoint(timestamp, entry.Lower)));
             }
 
             return bands;
@@ -223,6 +246,12 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
         public void Update(EquityScanResult result)
         {
+            var bars = result.MetaData?.Bars;
+            if(bars == null || bars.Count < 2)
+            {
+                Clear();
+                return;
+            }
             if (result == null)
             {
                 return;
