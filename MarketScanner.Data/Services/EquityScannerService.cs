@@ -142,6 +142,7 @@ namespace MarketScanner.Data.Services
             await _alertManager
                 .FlushAsync(cancellationToken)
                 .ConfigureAwait(false);
+
         }
 
 

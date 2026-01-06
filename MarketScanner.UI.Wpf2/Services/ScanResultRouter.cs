@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Windows.Threading;
 using MarketScanner.Core.Models;
+using MarketScanner.Data.Diagnostics;
 using MarketScanner.UI.Wpf.ViewModels;
 
 namespace MarketScanner.UI.Wpf.Services
@@ -22,6 +23,7 @@ namespace MarketScanner.UI.Wpf.Services
             {
                 bool isOverbought = result.IsOverbought || result.Tags.Contains("Overbought");
                 bool isOversold = result.IsOversold || result.Tags.Contains("Oversold");
+                bool isCreeper = result.IsCreeper || result.Tags.Contains("Creeper");
 
                 if (isOverbought)
                 {
@@ -33,8 +35,13 @@ namespace MarketScanner.UI.Wpf.Services
                     if (!_alerts.OversoldSymbols.Contains(result.Symbol))
                         _alerts.OversoldSymbols.Add(result.Symbol);
                 }
+                if(isCreeper)
+                {
+                    if (!_alerts.CreeperSymbols.Contains(result.Symbol))
+                        Logger.WriteLine($"Creeper...aw man");
+                        _alerts.CreeperSymbols.Add(result.Symbol);
+                }
 
-                //Later: creepers and other criteria
             });
         }
     }

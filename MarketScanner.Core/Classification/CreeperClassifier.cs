@@ -1,6 +1,8 @@
-﻿using MarketScanner.Core.Indicators;
+﻿using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Indicators;
 using MarketScanner.Core.Models;
 using System.Security.Principal;
+using System.Threading;
 
 namespace MarketScanner.Core.Classification
 {
@@ -11,6 +13,15 @@ namespace MarketScanner.Core.Classification
         private sealed record VolatilityMetrics(double AtrPctOfPrice, double AtrCompressionRatio);
         private sealed record PullbackMetrics(double MaxDrawdownPct, int MaxConsecutiveDownBars, int WorstRecoveryBars);
 
+        #region Debug
+        private static int _entered;
+        private static int _failTrend;
+        private static int _failVol;
+        private static int _failPullback;
+        private static int _passedHardFilters;
+        private static int _setTrue;
+        #endregion
+
         public CreeperClassifier(CreeperCriteria criteria)
         {
             _criteria = criteria;
@@ -18,6 +29,8 @@ namespace MarketScanner.Core.Classification
 
         public void Classify(EquityScanResult result)
         {
+            Console.WriteLine($"[Creeper] Evaluating {result.Symbol}");
+            result.Tags.Add("Creeper:Entered");
             var bars = result.MetaData?.Bars;
             if (bars == null || bars.Count < _criteria.LookBackBars)
                 return;
@@ -59,6 +72,8 @@ namespace MarketScanner.Core.Classification
                 TrendScore = trendScore,
                 VolatilityScore = volatilityScore,
                 PullbackScore = pullbackScore
+
+
             };
 
             CreeperEvaluation evaluation = Evaluate(trendMetrics, volatilityMetrics, pullbackMetrics);
@@ -71,7 +86,11 @@ namespace MarketScanner.Core.Classification
                 result.CreeperType = evaluation.Type;
                 result.Tags.Add("Creeper");
                 result.Tags.Add($"Creeper:{evaluation.Type}");
+                Console.WriteLine("Creeper...aw man");
             }
+            result.Tags.Add($"CreeperScore={result.CreeperScore:F2}");
+            result.Tags.Add($"CreeperType={result.CreeperType}");
+
         }
 
         private CreeperEvaluation Evaluate(TrendMetrics trend, VolatilityMetrics volatility, PullbackMetrics pullbacks)
@@ -98,6 +117,7 @@ namespace MarketScanner.Core.Classification
 
         private bool PassesHardFilters(TrendMetrics trend, VolatilityMetrics volatility, PullbackMetrics pullbacks)
         {
+
             return PassesTrendHardFilters(trend)
                 && PassesVolatilityHardFilters(volatility)
                 && PassesPullbackHardFilters(pullbacks);
