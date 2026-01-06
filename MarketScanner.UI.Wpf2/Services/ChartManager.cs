@@ -50,31 +50,24 @@ namespace MarketScanner.UI.Wpf.Services
         }
 
         public void UpdatePriceData(
-                    IReadOnlyList<DataPoint> pricePoints,
-                    IReadOnlyList<DataPoint> smaPoints,
-                    IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
-                    bool isLive = false)
+    IReadOnlyList<DataPoint> pricePoints,
+    IReadOnlyList<DataPoint> smaPoints,
+    IReadOnlyList<(DataPoint upper, DataPoint lower)> bollingerPoints,
+    bool isLive = false)
         {
             // --- PRICE ---
-            PriceView.Series.Remove(_priceSeries);
             _priceSeries.Points.Clear();
-            _priceSeries.Points.AddRange(pricePoints);
-            PriceView.Series.Add(_priceSeries);
-            System.Windows.Application.Current.Dispatcher.Invoke(() => { PriceView.InvalidatePlot(true); });
+            if (pricePoints != null && pricePoints.Count > 0)
+                _priceSeries.Points.AddRange(pricePoints);
 
             // --- SMA ---
-            if (!isLive)
-                _smaSeries.Points.Clear();
-
+            _smaSeries.Points.Clear();
             if (smaPoints != null && smaPoints.Count > 0)
                 _smaSeries.Points.AddRange(smaPoints.Where(p => !double.IsNaN(p.Y)));
 
             // --- BOLLINGER ---
-            if (!isLive)
-            {
-                _bollingerSeries.Points.Clear();
-                _bollingerSeries.Points2.Clear();
-            }
+            _bollingerSeries.Points.Clear();
+            _bollingerSeries.Points2.Clear();
 
             if (bollingerPoints != null && bollingerPoints.Count > 0)
             {
@@ -92,13 +85,14 @@ namespace MarketScanner.UI.Wpf.Services
             TrimSeries(_smaSeries);
             TrimSeries(_bollingerSeries.Points, _bollingerSeries.Points2);
 
+            AdjustPriceAxis();
+
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 PriceView.InvalidatePlot(true);
             });
- 
-            AdjustPriceAxis(); 
         }
+
 
 
 
@@ -326,12 +320,19 @@ namespace MarketScanner.UI.Wpf.Services
             if (_priceSeries.Points.Count == 0)
                 return;
 
-            var linearAxis = PriceView.Axes.OfType<LinearAxis>().FirstOrDefault();
-            if (linearAxis == null)
+            var yAxis = PriceView.Axes.OfType<LinearAxis>()
+                .FirstOrDefault(a => a.Position == AxisPosition.Left);
+
+            var xAxis = PriceView.Axes.OfType<DateTimeAxis>()
+                .FirstOrDefault(a => a.Position == AxisPosition.Bottom);
+
+            if (yAxis == null || xAxis == null)
                 return;
+            Logger.WriteLine($"[Chart] X range before: {xAxis.ActualMinimum} → {xAxis.ActualMaximum}");
+            yAxis.Reset();
+            xAxis.Reset();
 
-            linearAxis.Reset();
-
+            // --- Y axis ---
             var ys = _priceSeries.Points
                 .Select(p => p.Y)
                 .Where(y => !double.IsNaN(y))
@@ -340,10 +341,18 @@ namespace MarketScanner.UI.Wpf.Services
             if (ys.Count == 0)
                 return;
 
-            double min = ys.Min() * 0.95;
-            double max = ys.Max() * 1.05;
+            double minY = ys.Min() * 0.95;
+            double maxY = ys.Max() * 1.05;
+            yAxis.Zoom(minY, maxY);
 
-            linearAxis.Zoom(min, max);
+            // --- X axis ---
+            var xs = _priceSeries.Points
+                .Select(p => p.X)
+                .ToList();
+
+            double minX = xs.Min();
+            double maxX = xs.Max();
+            xAxis.Zoom(minX, maxX);
         }
 
     }

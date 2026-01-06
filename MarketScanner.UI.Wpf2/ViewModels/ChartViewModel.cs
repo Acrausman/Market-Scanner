@@ -273,7 +273,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 var rsiPoint = new DataPoint(time, result.RSI);
                 var volumePoint = new DataPoint(time, result.Volume);
 
-                _chartService.UpdatePriceData(new[] { pricePoint }, new[] { smaPoint }, new[] { (upper, lower) }, isLive: true);
+_chartService.UpdatePriceData(new[] { pricePoint }, Array.Empty<DataPoint>(), Array.Empty<(DataPoint upper, DataPoint lower)>(), isLive: true);
                 _chartService.UpdateRsiData(new[] { rsiPoint });
                 _chartService.UpdateVolumeData(new[] { volumePoint });
 
