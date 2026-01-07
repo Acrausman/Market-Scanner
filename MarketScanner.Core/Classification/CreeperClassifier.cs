@@ -29,22 +29,15 @@ namespace MarketScanner.Core.Classification
 
         public void Classify(EquityScanResult result)
         {
-            Console.WriteLine($"[Creeper] Evaluating {result.Symbol}");
+            Interlocked.Increment(ref _entered);
             result.Tags.Add("Creeper:Entered");
             var bars = result.MetaData?.Bars;
-            if (bars == null || bars.Count < _criteria.LookBackBars)
+            if (bars == null)
                 return;
-
             var window = bars.
                 Skip(bars.Count - _criteria.LookBackBars)
                 .ToArray();
 
-            if(bars.Count < Math.Max(
-                _criteria.LookBackBars,
-                _criteria.BaselinePeriod))
-            {
-                return;
-            }
             TrendMetrics trendMetrics = ComputeTrendMetrics(window);
             double trendScore = ComputeTrendScore(trendMetrics);
             VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
@@ -95,22 +88,41 @@ namespace MarketScanner.Core.Classification
 
         private CreeperEvaluation Evaluate(TrendMetrics trend, VolatilityMetrics volatility, PullbackMetrics pullbacks)
         {
-            if (!PassesHardFilters(trend, volatility, pullbacks))
+            if (!PassesTrendHardFilters(trend))
+            {
+                Interlocked.Increment(ref _failTrend);
                 return CreeperEvaluation.NotCreeper();
+            }
+
+            if (!PassesVolatilityHardFilters(volatility))
+            {
+                Interlocked.Increment(ref _failVol);
+                return CreeperEvaluation.NotCreeper();
+            }
+
+            if (!PassesPullbackHardFilters(pullbacks))
+            {
+                Interlocked.Increment(ref _failPullback);
+                return CreeperEvaluation.NotCreeper();
+            }
+
+            Interlocked.Increment(ref _passedHardFilters);
+
 
             double trendScore = ComputeTrendScore(trend);
             double volatilityScore = ComputeVolatilityScore(volatility);
             double totalScore = trendScore * 0.6 + volatilityScore * 0.4;
 
 
-            int finalScore = (int)Math.Round(totalScore);
+            double finalScore = totalScore;
 
             if(finalScore < _criteria.ScoreThreshold)
-                return new CreeperEvaluation {  Score = finalScore };
+                return new CreeperEvaluation {  Score = (int)finalScore };
+            Interlocked.Increment(ref _setTrue);
             return new CreeperEvaluation
             {
                 IsCreeper = true,
-                Score = finalScore,
+                Score = (int)finalScore,
                 Type = InferType(trend)
             };
         }
@@ -124,7 +136,13 @@ namespace MarketScanner.Core.Classification
         }
         private bool PassesTrendHardFilters(TrendMetrics trend)
         {
-            if(trend.PctAboveBaseline < _criteria.MinBarsAboveBaselinePct)
+            /*Console.WriteLine(
+                        $"[CreeperTrend] slope={trend.SlopePct:F4}%, " +
+                        $"pctAboveSMA={trend.PctAboveBaseline:F2}%, " +
+                        $"maxDev={trend.MaxDeviationPct:F2}%");*/
+
+
+            if (trend.PctAboveBaseline < _criteria.MinBarsAboveBaselinePct)
                 return false;
 
             if (trend.MaxDeviationPct > _criteria.MaxBaselineDeviationPct)
@@ -170,7 +188,9 @@ namespace MarketScanner.Core.Classification
         }
         private TrendMetrics ComputeTrendMetrics(IReadOnlyList<Bar> window)
         {
-            if(window.Count < _criteria.BaselinePeriod)
+            Console.WriteLine($"[CreeperTrend] windowSize={window.Count}");
+
+            if (window.Count < _criteria.BaselinePeriod)
             {
                 return new TrendMetrics(
                     PctAboveBaseline: 0,
@@ -369,6 +389,19 @@ namespace MarketScanner.Core.Classification
             public static CreeperEvaluation NotCreeper() =>
                 new() { IsCreeper = false, Score = 0 };
         }
+
+        public static void LogStats(IAppLogger logger)
+        {
+            logger.Log(LogSeverity.Information,
+                $"[CreeperStats] " +
+                $"Entered={_entered}, " +
+                $"FailTrend={_failTrend}, " +
+                $"FailVolatility={_failVol}, " +
+                $"FailPullback={_failPullback}, " +
+                $"PassedHardFilters={_passedHardFilters}, " +
+                $"Creepers={_setTrue}");
+        }
+
 
 
     }

@@ -6,26 +6,25 @@ using System.Threading.Tasks;
 
 namespace MarketScanner.Core.Classification
 {
-    public sealed record CreeperCriteria
-    {
-        public int LookBackBars { get; init; }
+    public record CreeperCriteria(
+        int LookBackBars,
 
-        public int BaselinePeriod { get; init; }
-        public double MinBarsAboveBaselinePct { get; init; }
-        public double MaxBaselineDeviationPct { get; init; }
+        int BaselinePeriod,
+        double MinBarsAboveBaselinePct,
+        double MaxBaselineDeviationPct,
 
-        public int AtrPeriod { get; init; }
-        public double MaxAtrPctOfPrice { get; init; }
-        public double AtrCompressionRatio { get; init; }
+        int AtrPeriod,
+        double MaxAtrPctOfPrice,
+        double AtrCompressionRatio,
 
-        public double MaxPullbackPct {get; init; }
-        public int MaxConsecutiveDownBars { get; init; }
-        public int PullbackRecoveryBars { get; init; }
+        double MaxPullbackPct,
+        int MaxConsecutiveDownBars,
+        int PullbackRecoveryBars,
 
-        public double MaxReturnStdDev { get; init; }
-        public double MaxGapPct { get; init; }
+        double MaxReturnStdDev,
+        double MaxGapPct,
 
-        public int ScoreThreshold { get; init; }
-        public bool StrictMode { get; init; }
-    }
+        double ScoreThreshold,
+        bool StrictMode
+    );
 }

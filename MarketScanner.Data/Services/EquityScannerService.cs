@@ -63,7 +63,22 @@ namespace MarketScanner.Data.Services
             _fundamentalProvider = fundamentalProvider;
             _metadataCache = metadataCache;
             _metadataService = new MetadataService(metadataCache, provider, fundamentalProvider);
-            creeperCriteria = new CreeperCriteria();
+            creeperCriteria = new CreeperCriteria(
+                LookBackBars: 30,
+                BaselinePeriod: 14,
+                MinBarsAboveBaselinePct: 55,
+                MaxBaselineDeviationPct: 8.0,
+                AtrPeriod: 14,
+                MaxAtrPctOfPrice: 2.5,
+                AtrCompressionRatio: 0.9,
+                MaxPullbackPct: 6.0,
+                MaxConsecutiveDownBars: 4,
+                PullbackRecoveryBars: 6,
+                MaxReturnStdDev: 1.2,
+                MaxGapPct: 2.0,
+                ScoreThreshold: 0.4,
+                StrictMode: false
+                );
             _classifiers.Add(new RSIClassifier());
             _classifiers.Add(new CreeperClassifier(creeperCriteria));
             _classificationEngine = new ClassificationEngine(_classifiers);
@@ -75,7 +90,8 @@ namespace MarketScanner.Data.Services
                 _indicatorService,
                 _classificationEngine,
                 _provider,
-                _settings);
+                _settings,
+                creeperCriteria);
             _filterService = new FilterService();
             _alertDispatchService = new AlertDispatchService(alertManager);
             _alertDispatchService.ClassificationArrived += r => ScanResultClassified?.Invoke(r);
@@ -143,6 +159,7 @@ namespace MarketScanner.Data.Services
                 .FlushAsync(cancellationToken)
                 .ConfigureAwait(false);
 
+            CreeperClassifier.LogStats(_logger);
         }
 
 

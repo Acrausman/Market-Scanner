@@ -21,6 +21,7 @@ namespace MarketScanner.Data.Services
         private readonly IIndicatorService _indicatorService;
         private readonly IClassificationEngine _classificationEngine;
         private readonly IMarketDataProvider _provider;
+        private readonly CreeperCriteria _criteria;
         private readonly AppSettings _settings;
 
         //Possibly move these variables to the AppSettings
@@ -34,7 +35,8 @@ namespace MarketScanner.Data.Services
             IIndicatorService indicatorService,
             IClassificationEngine classificationEngine,
             IMarketDataProvider provider,
-            AppSettings settings)
+            AppSettings settings,
+            CreeperCriteria criteria)
         {
             _priceCache = priceCache;
             _metadataService = metadataService;
@@ -42,7 +44,7 @@ namespace MarketScanner.Data.Services
             _classificationEngine = classificationEngine;
             _provider = provider;
             _settings = settings;
-            
+            _criteria = criteria;            
         }
 
         public async Task<EquityScanResult> ScanAsync(
@@ -67,7 +69,25 @@ namespace MarketScanner.Data.Services
             info = await _metadataService
                 .EnsureMetadataAsync(info, cancellationToken)
                 .ConfigureAwait(false);
+            int requiredBars = Math.Max(
+                _criteria.LookBackBars,
+                Math.Max(
+                    _criteria.BaselinePeriod,
+                    _criteria.AtrPeriod * 3));
+            var bars = info.Bars;
 
+            if(bars == null || info.Bars.Count < requiredBars)
+            {
+                DateTime end = DateTime.UtcNow;
+                DateTime start = end.AddDays(-requiredBars * 2);
+
+                bars = await _provider
+                    .GetHistoricalBarsAsync(
+                    info.Symbol,
+                    start,
+                    end,
+                    cancellationToken);
+            }
             var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
             var indicators = _indicatorService.CalculateIndicators(trimmed, IndicatorPeriod, rsiMethod);
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
