@@ -34,10 +34,18 @@ namespace MarketScanner.Core.Classification
             var bars = result.MetaData?.Bars;
             if (bars == null)
                 return;
+            int lookback = _criteria.LookBackBars;
+            int skip = Math.Max(0, bars.Count - lookback);
             var window = bars.
-                Skip(bars.Count - _criteria.LookBackBars)
+                Skip(skip)
+                .Take(lookback)
                 .ToArray();
-
+            if (window.Length == 0)
+            {
+                Console.WriteLine(
+                    $"[Creeper] {result.Symbol} window empty (bars={bars.Count}, lookback={lookback})");
+                return;
+            }
             TrendMetrics trendMetrics = ComputeTrendMetrics(window);
             double trendScore = ComputeTrendScore(trendMetrics);
             VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
@@ -136,12 +144,6 @@ namespace MarketScanner.Core.Classification
         }
         private bool PassesTrendHardFilters(TrendMetrics trend)
         {
-            /*Console.WriteLine(
-                        $"[CreeperTrend] slope={trend.SlopePct:F4}%, " +
-                        $"pctAboveSMA={trend.PctAboveBaseline:F2}%, " +
-                        $"maxDev={trend.MaxDeviationPct:F2}%");*/
-
-
             if (trend.PctAboveBaseline < _criteria.MinBarsAboveBaselinePct)
                 return false;
 
@@ -153,10 +155,16 @@ namespace MarketScanner.Core.Classification
         private bool PassesVolatilityHardFilters(VolatilityMetrics metrics)
         {
             if (metrics.AtrPctOfPrice > _criteria.MaxAtrPctOfPrice)
+            {
+                Console.WriteLine($"[CreeperVol] ATR%={metrics.AtrPctOfPrice:F2} > {_criteria.MaxAtrPctOfPrice}");
                 return false;
+            }
 
             if (metrics.AtrCompressionRatio > _criteria.AtrCompressionRatio)
+            {
+                Console.WriteLine($"[CreeperVol] Compression={metrics.AtrCompressionRatio:F2}");
                 return false;
+            }
 
             return true;
         }
@@ -188,7 +196,7 @@ namespace MarketScanner.Core.Classification
         }
         private TrendMetrics ComputeTrendMetrics(IReadOnlyList<Bar> window)
         {
-            Console.WriteLine($"[CreeperTrend] windowSize={window.Count}");
+            //Console.WriteLine($"[CreeperTrend] windowSize={window.Count}");
 
             if (window.Count < _criteria.BaselinePeriod)
             {

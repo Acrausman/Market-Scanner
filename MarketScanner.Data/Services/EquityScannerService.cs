@@ -66,7 +66,7 @@ namespace MarketScanner.Data.Services
             creeperCriteria = new CreeperCriteria(
                 LookBackBars: 30,
                 BaselinePeriod: 14,
-                MinBarsAboveBaselinePct: 55,
+                MinBarsAboveBaselinePct: 0.5,
                 MaxBaselineDeviationPct: 8.0,
                 AtrPeriod: 14,
                 MaxAtrPctOfPrice: 2.5,

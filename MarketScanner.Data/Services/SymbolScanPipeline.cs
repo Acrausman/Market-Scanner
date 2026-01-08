@@ -78,8 +78,8 @@ namespace MarketScanner.Data.Services
 
             if(bars == null || info.Bars.Count < requiredBars)
             {
-                DateTime end = DateTime.UtcNow;
-                DateTime start = end.AddDays(-requiredBars * 2);
+                DateTime end = DateTime.UtcNow.Date;
+                DateTime start = end.AddDays(-requiredBars * 3);
 
                 bars = await _provider
                     .GetHistoricalBarsAsync(
@@ -87,7 +87,12 @@ namespace MarketScanner.Data.Services
                     start,
                     end,
                     cancellationToken);
+                /*Logger.WriteLine(
+    $"[CreeperFetch] {info.Symbol} fetchedBars={bars?.Count ?? -1}, " +
+    $"start={start:yyyy-MM-dd}, end={end:yyyy-MM-dd}");*/
+
             }
+
             var rsiMethod = _settings?.RsiMethod ?? RsiSmoothingMethod.Simple;
             var indicators = _indicatorService.CalculateIndicators(trimmed, IndicatorPeriod, rsiMethod);
             var (price, volume) = await _provider.GetQuoteAsync(symbol, cancellationToken)
@@ -104,6 +109,9 @@ namespace MarketScanner.Data.Services
                 TimeStamp = DateTime.UtcNow,
                 MetaData = info
             };
+            result.MetaData.Bars = bars;
+            /*Logger.WriteLine(
+    $"[CreeperInput] {result.Symbol} barsBeforeClassify={bars.Count}");*/
 
             _classificationEngine.Classify(result);
             return result;

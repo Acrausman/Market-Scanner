@@ -14,6 +14,6 @@
         public string Exchange { get; set; } = "Unknown";
 
         public double Price { get; set; } = double.NaN;
-        public IReadOnlyList<Bar> Bars { get; init; } = Array.Empty<Bar>();
+        public IReadOnlyList<Bar> Bars { get; set; } = Array.Empty<Bar>();
     }
 }
