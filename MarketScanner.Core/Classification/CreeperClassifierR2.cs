@@ -10,12 +10,22 @@ namespace MarketScanner.Core.Classification
     {
         private readonly CreeperCriteriaR2 _criteria;
 
+        #region Diagnostic
+        private static int _entered;
+        private static int _failRsi;
+        private static int _failSlope;
+        private static int _failBbWidth;
+        private static int _failVol;
+        private static int _passed;
+        #endregion
+
         public CreeperClassifierR2(CreeperCriteriaR2 criteria)
         {
             _criteria = criteria;
         }
         public void Classify(EquityScanResult result)
         {
+            Interlocked.Increment(ref _entered);
 
             var bars = result.MetaData?.Bars;
             if (bars == null || bars.Count == 0)
@@ -25,7 +35,10 @@ namespace MarketScanner.Core.Classification
                 return;
             if (result.RSI < _criteria.MinRsi ||
                 result.RSI > _criteria.MaxRsi)
+            {
+                Interlocked.Increment(ref _failRsi);
                 return;
+            }
             var closes = bars.Select(b => b.Close).ToList();
 
             double slope =
@@ -34,7 +47,10 @@ namespace MarketScanner.Core.Classification
                     _criteria.SmaPeriod,
                     _criteria.SlopeLookback);
             if (double.IsNaN(slope) || slope < _criteria.MinSlopePct)
+            {
+                Interlocked.Increment(ref _failSlope);
                 return;
+            }
 
             double bbWidth =
                 CreeperSignalsR2.ComputeBollingerWidthPct(
@@ -42,17 +58,21 @@ namespace MarketScanner.Core.Classification
                     result.Lower,
                     result.Price);
             if(double.IsNaN(bbWidth) || bbWidth > _criteria.MaxBollingerWidthPct)
+            {
+                Interlocked.Increment(ref _failBbWidth);
                 return;
+            }
 
             double returnStd =
                 CreeperSignalsR2.ComputeReturnStdDev(
                     bars,
                     _criteria.VolatilityLookback);
             if (double.IsNaN(returnStd) || returnStd > _criteria.MaxReturnStdDev)
+            {
+                Interlocked.Increment(ref _failVol);
                 return;
-
+            }
             //Has passed filters
-            Logger.WriteLine($"[R2] {result.Symbol} result hash = {result.GetHashCode()}");
             result.IsCreeper = true;
             result.Tags.Add("Creeper");
             result.Tags.Add("CreeperR2");

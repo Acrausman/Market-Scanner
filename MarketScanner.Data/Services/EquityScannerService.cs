@@ -84,7 +84,7 @@ namespace MarketScanner.Data.Services
                 SmaPeriod: 20,
                 SlopeLookback: 5,
                 MinSlopePct: 0.0003,
-                MaxBollingerWidthPct: 0.04,
+                MaxBollingerWidthPct: 0.03,
                 VolatilityLookback: 14,
                 MaxReturnStdDev: 0.012,
                 MinRsi: 35,

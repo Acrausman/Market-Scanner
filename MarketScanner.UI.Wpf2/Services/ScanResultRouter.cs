@@ -36,14 +36,13 @@ namespace MarketScanner.UI.Wpf.Services
                     if (!_alerts.OversoldSymbols.Contains(result.Symbol))
                         _alerts.OversoldSymbols.Add(result.Symbol);
                 }
-                Logger.WriteLine($"[ROUTER] {result.Symbol} result hash = {result.GetHashCode()}");
+                //Logger.WriteLine($"[ROUTER] {result.Symbol} result hash = {result.GetHashCode()}");
 
                 if (isCreeper)
                 {
-                    Logger.WriteLine($"Creeper Boolean is true for {result.Symbol}");
+                    //Logger.WriteLine($"Creeper Boolean is true for {result.Symbol}");
                     if (!_alerts.CreeperSymbols.Contains(result.Symbol))
                     {
-                        Logger.WriteLine("Creeper detected");
                         _alerts.CreeperSymbols.Add(result.Symbol);
                     }
                 }
