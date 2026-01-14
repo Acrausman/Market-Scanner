@@ -29,6 +29,12 @@ namespace MarketScanner.Data.Services.Analysis
                 ClassificationArrived?.Invoke(result);
                 return;
             }
+            if(result.Tags.Contains("Creeper"))
+            {
+                _alertManager.Enqueue(result.Symbol, "creeper", result.CreeperScore);
+                ClassificationArrived?.Invoke(result);
+                return;
+            }
         }
     }
 }

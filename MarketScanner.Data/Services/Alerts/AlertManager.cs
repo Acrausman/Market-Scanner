@@ -25,6 +25,7 @@ public class AlertManager : IAlertManager
 
     public ObservableCollection<string> OverboughtSymbols { get; }
     public ObservableCollection<string> OversoldSymbols { get; }
+    public ObservableCollection<string> CreeperSymbols { get; }
 
     public int OverboughtCount => OverboughtSymbols.Count;
     public int OversoldCount => OversoldSymbols.Count;

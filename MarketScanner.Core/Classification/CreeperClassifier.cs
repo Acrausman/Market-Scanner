@@ -34,23 +34,34 @@ namespace MarketScanner.Core.Classification
             var bars = result.MetaData?.Bars;
             if (bars == null)
                 return;
-            int lookback = _criteria.LookBackBars;
-            int skip = Math.Max(0, bars.Count - lookback);
-            var window = bars.
-                Skip(skip)
-                .Take(lookback)
+            int requiredBars = Math.Max(
+                _criteria.LookBackBars,
+                Math.Max(
+                    _criteria.BaselinePeriod,
+                    _criteria.AtrPeriod * 3 + 1));
+
+            int skip = Math.Max(0, bars.Count - requiredBars);
+
+            var window = bars
+                .Skip(skip)
+                .Take(requiredBars)
                 .ToArray();
-            if (window.Length == 0)
+            var trendWindow = window
+                .Skip(Math.Max(0, window.Length - _criteria.LookBackBars))
+                .ToArray();
+
+
+            if (trendWindow.Length == 0)
             {
                 Console.WriteLine(
-                    $"[Creeper] {result.Symbol} window empty (bars={bars.Count}, lookback={lookback})");
+                    $"[Creeper] {result.Symbol} window empty (bars={bars.Count}, lookback={requiredBars})");
                 return;
             }
-            TrendMetrics trendMetrics = ComputeTrendMetrics(window);
+            TrendMetrics trendMetrics = ComputeTrendMetrics(trendWindow);
             double trendScore = ComputeTrendScore(trendMetrics);
-            VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window);
+            VolatilityMetrics volatilityMetrics = ComputeVolatilityMetrics(window, result);
             double volatilityScore = ComputeVolatilityScore(volatilityMetrics);
-            PullbackMetrics pullbackMetrics = ComputePullbackMetrics(window);
+            PullbackMetrics pullbackMetrics = ComputePullbackMetrics(trendWindow);
             double pullbackScore = ComputePullbackScore(pullbackMetrics);
 
             result.CreeperMetrics = new CreeperMetrics
@@ -152,22 +163,14 @@ namespace MarketScanner.Core.Classification
 
             return true;
         }
-        private bool PassesVolatilityHardFilters(VolatilityMetrics metrics)
+        private bool PassesVolatilityHardFilters(VolatilityMetrics vol)
         {
-            if (metrics.AtrPctOfPrice > _criteria.MaxAtrPctOfPrice)
-            {
-                Console.WriteLine($"[CreeperVol] ATR%={metrics.AtrPctOfPrice:F2} > {_criteria.MaxAtrPctOfPrice}");
+            if (vol.AtrPctOfPrice > _criteria.MaxAtrPctOfPrice)
                 return false;
-            }
-
-            if (metrics.AtrCompressionRatio > _criteria.AtrCompressionRatio)
-            {
-                Console.WriteLine($"[CreeperVol] Compression={metrics.AtrCompressionRatio:F2}");
-                return false;
-            }
 
             return true;
         }
+
         private bool PassesPullbackHardFilters(PullbackMetrics pullbacks)
         {
             if (pullbacks.MaxDrawdownPct > _criteria.MaxPullbackPct)
@@ -248,7 +251,7 @@ namespace MarketScanner.Core.Classification
                 slopePct);
         }
         private VolatilityMetrics ComputeVolatilityMetrics(
-            IReadOnlyList<Bar> window)
+            IReadOnlyList<Bar> window, EquityScanResult result)
         {
             int shortPeriod = _criteria.AtrPeriod;
             int longPeriod = _criteria.AtrPeriod * 3;
@@ -264,13 +267,24 @@ namespace MarketScanner.Core.Classification
                 AtrCalculator.Calculate(window, _criteria.AtrPeriod);
             double atrLong =
                 AtrCalculator.Calculate(window, _criteria.AtrPeriod * 3);
-            double lastClose = window[^1].Close;
+            Console.WriteLine(
+    $"[ATR Sanity] {result.Symbol} " +
+    $"ATR={atrShort:F2}, " +
+    $"BarClose={window[^1].Close:F2}, " +
+    $"ResultPrice={result.Price:F2}");
+
+            double lastClose = result.Price;
+            if(lastClose <= 0 || double.IsNaN(lastClose))
+            {
+                return new VolatilityMetrics(double.MaxValue, double.MaxValue);
+            }
             double atrPct =
                 atrShort / lastClose * 100;
             double compressionRatio =
                 double.IsNaN(atrLong) || atrLong == 0
                 ? 1.0
                 : atrShort / atrLong;
+
             return new VolatilityMetrics(atrPct, compressionRatio);
         }
         private double ComputeVolatilityScore(VolatilityMetrics metrics)
