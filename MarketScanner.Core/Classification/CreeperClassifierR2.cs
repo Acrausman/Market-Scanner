@@ -73,10 +73,24 @@ namespace MarketScanner.Core.Classification
                 return;
             }
             //Has passed filters
+            Interlocked.Increment(ref _passed);
             result.IsCreeper = true;
             result.Tags.Add("Creeper");
             result.Tags.Add("CreeperR2");
         }
-        
+
+        public void LogStats()
+        {
+            Logger.WriteLine(
+                $"[CreeperR2Stats] Entered={_entered}, " +
+                $"FailRSI={_failRsi}, " +
+                $"FailSlope={_failSlope}, " +
+                $"FailBB={_failBbWidth}, " +
+                $"FailVol={_failVol}, " +
+                $"Passed={_passed}");
+
+        }
+
+
     }
 }

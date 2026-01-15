@@ -36,6 +36,7 @@ namespace MarketScanner.Data.Services
         private readonly TickerMetadataCache _metadataCache;
         private readonly CreeperCriteria creeperCriteria;
         private readonly CreeperCriteriaR2 creeperCriteriaR2;
+        private readonly CreeperClassifierR2 creeperClassifierR2;
         private readonly ConcurrentDictionary<string, EquityScanResult> _scanCache = new();
         public IReadOnlyDictionary<string, EquityScanResult> ScanCache => _scanCache;
         private readonly List<IEquityClassifier> _classifiers = new();
@@ -83,15 +84,16 @@ namespace MarketScanner.Data.Services
             creeperCriteriaR2 = new CreeperCriteriaR2(
                 SmaPeriod: 20,
                 SlopeLookback: 5,
-                MinSlopePct: 0.0003,
-                MaxBollingerWidthPct: 0.03,
+                MinSlopePct: 0.0006,
+                MaxBollingerWidthPct: 0.022,
                 VolatilityLookback: 14,
-                MaxReturnStdDev: 0.012,
-                MinRsi: 35,
+                MaxReturnStdDev: 0.007,
+                MinRsi: 50,
                 MaxRsi: 65);
             _classifiers.Add(new RSIClassifier());
             //_classifiers.Add(new CreeperClassifier(creeperCriteria));
             //_classifiers.Add(new CreeperDiagnosticsClassifier());
+            creeperClassifierR2 = new CreeperClassifierR2(creeperCriteriaR2);
             _classifiers.Add(new CreeperClassifierR2(creeperCriteriaR2));
             _classificationEngine = new ClassificationEngine(_classifiers);
             _progressService = new ProgressService();
@@ -171,7 +173,7 @@ namespace MarketScanner.Data.Services
                 .FlushAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            CreeperClassifier.LogStats(_logger);
+            //creeperClassifierR2.LogStats();
         }
 
 

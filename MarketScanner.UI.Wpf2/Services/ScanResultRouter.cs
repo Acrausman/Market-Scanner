@@ -40,9 +40,9 @@ namespace MarketScanner.UI.Wpf.Services
 
                 if (isCreeper)
                 {
-                    //Logger.WriteLine($"Creeper Boolean is true for {result.Symbol}");
                     if (!_alerts.CreeperSymbols.Contains(result.Symbol))
                     {
+                        //Logger.WriteLine($"Total number of creepers of {_alerts.CreeperSymbols.Count + 1}");
                         _alerts.CreeperSymbols.Add(result.Symbol);
                     }
                 }
