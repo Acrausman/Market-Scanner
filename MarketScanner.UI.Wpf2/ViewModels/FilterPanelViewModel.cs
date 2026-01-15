@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MarketScanner.Core.Classification;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -17,6 +18,10 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public ObservableCollection<string> SelectedSectors { get; } = new();
         public ObservableCollection<string> AvailableCountries { get; } = new();
         public ObservableCollection<string> SelectedCountries { get; } = new();
+        
+        public ObservableCollection<CreeperTrendDirection> AvailableTrendDirections;
+        [ObservableProperty]
+        public CreeperTrendDirection selectedTrendDirection;
         public string SectorHeaderText =>
             SelectedSectors.Count == 0
                 ? "Sectors"

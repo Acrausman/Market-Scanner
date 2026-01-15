@@ -1,3 +1,4 @@
+using MarketScanner.Core.Classification;
 using MarketScanner.Core.Configuration;
 using MarketScanner.Core.Enums;
 using MarketScanner.Core.Filtering;
@@ -77,6 +78,9 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public IEnumerable<RsiSmoothingMethod> RsiMethods { get; }
             = new ObservableCollection<RsiSmoothingMethod>(
                 Enum.GetValues(typeof(RsiSmoothingMethod)).Cast<RsiSmoothingMethod>());
+        public IEnumerable<CreeperTrendDirection> CreeperDirection { get; }
+            = new ObservableCollection<CreeperTrendDirection>(
+                Enum.GetValues(typeof(CreeperTrendDirection)).Cast<CreeperTrendDirection>());
         public int SelectedInterval
         {
             get => _selectedInterval;

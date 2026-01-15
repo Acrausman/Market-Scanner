@@ -17,5 +17,14 @@ namespace MarketScanner.Core.Classification
         double MaxReturnStdDev,
         
         double MinRsi,
-        double MaxRsi);
+        double MaxRsi,
+        
+        CreeperTrendDirection Direction);
+
+    public enum CreeperTrendDirection
+    {
+        Up,
+        Down,
+        Both
+    }
 }

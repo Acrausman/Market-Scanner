@@ -46,6 +46,20 @@ namespace MarketScanner.Core.Classification
                     closes,
                     _criteria.SmaPeriod,
                     _criteria.SlopeLookback);
+
+            switch (_criteria.Direction)
+            {
+                case CreeperTrendDirection.Up:
+                    if (slope <= 0)
+                        return;
+                    break;
+                case CreeperTrendDirection.Down:
+                    if (slope >= 0)
+                        return;
+                    break;
+                case CreeperTrendDirection.Both:
+                    break;
+            }
             if (double.IsNaN(slope) || slope < _criteria.MinSlopePct)
             {
                 Interlocked.Increment(ref _failSlope);

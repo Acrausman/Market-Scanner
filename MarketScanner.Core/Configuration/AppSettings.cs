@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using MarketScanner.Core.Abstractions;
+using MarketScanner.Core.Classification;
 using MarketScanner.Core.Enums;
 using Newtonsoft.Json;
 
@@ -17,6 +18,7 @@ public class AppSettings
     public int IndicatorPeriod { get; set; } = 14;
 
     public RsiSmoothingMethod RsiMethod { get; set; } = RsiSmoothingMethod.Simple;
+    public CreeperTrendDirection CreeperDirection { get; set; }
 
     public string SelectedTimespan { get; set; } = "3M";
 

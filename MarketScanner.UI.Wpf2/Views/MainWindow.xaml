@@ -125,6 +125,14 @@
                             <TextBlock Text="Creeper"
                                        Foreground="#CCCCCC"
                                        FontWeight="Bold" FontSize="20"/>
+                            <ComboBox ItemsSource="{Binding CreeperDirection}"
+                                      SelectedItem="{Binding FilterPanel.selectedTrendDirection, Mode=TwoWay}"
+                                      Background="#2D2D30"
+                                      BorderBrush="#444"
+                                      FontSize="13"
+                                      Width="120"
+                                      Height="28"
+                                      HorizontalAlignment="Left"/>
                         </StackPanel>
                     </Border>
                 </TabItem>

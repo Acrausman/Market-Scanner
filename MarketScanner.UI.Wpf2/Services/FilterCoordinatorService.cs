@@ -37,6 +37,7 @@ namespace MarketScanner.UI.Wpf.Services
 
             _settings.FilterMinPrice = vm.MinPrice;
             _settings.FilterMaxPrice = vm.MaxPrice;
+            _settings.CreeperDirection = vm.SelectedTrendDirection;
             _settings.FilterSectors = vm.SelectedSectors.ToList();
             _settings.FilterCountries = vm.SelectedCountries.ToList();
             _settings.Save();
@@ -70,6 +71,7 @@ namespace MarketScanner.UI.Wpf.Services
             vm.SelectedCountries.Clear();
             foreach (var c in _settings.FilterCountries)
                 vm.SelectedCountries.Add(c);
+            vm.SelectedTrendDirection = _settings.CreeperDirection;
         }
     }
 }

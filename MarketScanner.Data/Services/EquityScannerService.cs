@@ -89,7 +89,8 @@ namespace MarketScanner.Data.Services
                 VolatilityLookback: 14,
                 MaxReturnStdDev: 0.007,
                 MinRsi: 50,
-                MaxRsi: 65);
+                MaxRsi: 65,
+                _settings.CreeperDirection);
             _classifiers.Add(new RSIClassifier());
             //_classifiers.Add(new CreeperClassifier(creeperCriteria));
             //_classifiers.Add(new CreeperDiagnosticsClassifier());
