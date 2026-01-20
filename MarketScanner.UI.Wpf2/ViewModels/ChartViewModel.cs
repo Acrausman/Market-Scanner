@@ -147,7 +147,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
 
                 var rsiSeries = RsiCalculator.CalculateSeries(closes, 14);
                 var rsiPoints = BuildAlignedSeries(bars, rsiSeries);
-                Logger.Debug($"RSI values for {symbol}: {string.Join(", ", rsiPoints.TakeLast(Math.Min(5, rsiPoints.Count)))}");
+                //Logger.Debug($"RSI values for {symbol}: {string.Join(", ", rsiPoints.TakeLast(Math.Min(5, rsiPoints.Count)))}");
 
 
                 // Volume
@@ -160,7 +160,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
                 {
                     _chartService.UpdatePriceData(pricePoints, smaPoints, bollBands);
                     _chartService.UpdateRsiData(rsiPoints);
-                    Logger.WriteLine($"[Chart] {symbol} bars={bars.Count}, smaPoints={smaPoints.Count}, rsiPoints={rsiPoints.Count}, boll={bollBands.Count}");
+                    //Logger.WriteLine($"[Chart] {symbol} bars={bars.Count}, smaPoints={smaPoints.Count}, rsiPoints={rsiPoints.Count}, boll={bollBands.Count}");
                     _chartService.UpdateVolumeData(volumePoints);
                 });
             }

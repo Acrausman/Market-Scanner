@@ -9,6 +9,7 @@ using MarketScanner.Data.Diagnostics;
 using MarketScanner.Data.Providers;
 using MarketScanner.Data.Services.Analysis;
 using MarketScanner.Data.Services.Data;
+using Polygon.Enums;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 
@@ -81,22 +82,7 @@ namespace MarketScanner.Data.Services
                 ScoreThreshold: 0.4,
                 StrictMode: false
                 );
-            creeperCriteriaR2 = new CreeperCriteriaR2(
-                SmaPeriod: 20,
-                SlopeLookback: 5,
-                MinSlopePct: 0.0006,
-                MaxBollingerWidthPct: 0.022,
-                VolatilityLookback: 14,
-                MaxReturnStdDev: 0.007,
-                MinRsi: 50,
-                MaxRsi: 65,
-                _settings.CreeperDirection);
-            _classifiers.Add(new RSIClassifier());
-            //_classifiers.Add(new CreeperClassifier(creeperCriteria));
-            //_classifiers.Add(new CreeperDiagnosticsClassifier());
-            creeperClassifierR2 = new CreeperClassifierR2(creeperCriteriaR2);
-            _classifiers.Add(new CreeperClassifierR2(creeperCriteriaR2));
-            _classificationEngine = new ClassificationEngine(_classifiers);
+            _classificationEngine = BuildClassificationEngine();
             _progressService = new ProgressService();
             _concurrencyService = new ConcurrencyService();
             _symbolScanPipeline = new SymbolScanPipeline(
@@ -174,7 +160,7 @@ namespace MarketScanner.Data.Services
                 .FlushAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            //creeperClassifierR2.LogStats();
+            creeperClassifierR2.LogStats();
         }
 
 
@@ -266,6 +252,46 @@ namespace MarketScanner.Data.Services
             var manager = new Alerts.AlertManager(logger, SynchronizationContext.Current);
             manager.SetSink(alertSink);
             return manager;
+        }
+        private CreeperCriteriaR2 BuildCreeperCriteria(AppSettings settings)
+        {
+            double minRsi, maxRsi;
+
+            switch(settings.CreeperDirection)
+            {
+                case CreeperTrendDirection.Up:
+                    minRsi = 50;
+                    maxRsi = 65;
+                    break;
+                case CreeperTrendDirection.Down:
+                    minRsi = 35;
+                    maxRsi = 50;
+                    break;
+                case CreeperTrendDirection.Both:
+                default:
+                    minRsi = 35;
+                    maxRsi = 65;
+                    break;
+            }
+            return new CreeperCriteriaR2(
+                SmaPeriod: 20,
+                SlopeLookback: 5,
+                MinSlopePct: 0.0006,
+                MaxBollingerWidthPct: 0.022,
+                VolatilityLookback: 14,
+                MaxReturnStdDev: 0.007,
+                MinRsi: minRsi,
+                MaxRsi: maxRsi,
+                Direction: settings.CreeperDirection);
+        }
+        private IClassificationEngine BuildClassificationEngine()
+        {
+            var classifiers = new List<IEquityClassifier>
+            {
+                new RSIClassifier(),
+                new CreeperClassifierR2(BuildCreeperCriteria(_settings), _settings)
+            };
+            return new ClassificationEngine(classifiers);
         }
     }
 }

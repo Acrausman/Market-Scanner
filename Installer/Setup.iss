@@ -1,7 +1,11 @@
-#define MyAppVersion "{#Param:AppVersion|0.0.0}"
+#define AppVersion "{#Param:AppVersion|0.0.0}"
+#define FileVersion "{#Param:FileVersion|0.0.0.0}"
 [Setup]
 AppName=CentSense
-AppVersion={{#MyAppVersion}}
+AppVersion={{#AppVersion}}
+VersionInfoVersion={#FileVersion}
+VersionInfoProductVersion={#AppVersion}
+VersionInfoTextVersion={#AppVersion}
 DefaultDirName={commonpf}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma

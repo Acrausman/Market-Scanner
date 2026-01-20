@@ -328,7 +328,7 @@ namespace MarketScanner.UI.Wpf.Services
 
             if (yAxis == null || xAxis == null)
                 return;
-            Logger.WriteLine($"[Chart] X range before: {xAxis.ActualMinimum} → {xAxis.ActualMaximum}");
+            //Logger.WriteLine($"[Chart] X range before: {xAxis.ActualMinimum} → {xAxis.ActualMaximum}");
             yAxis.Reset();
             xAxis.Reset();
 

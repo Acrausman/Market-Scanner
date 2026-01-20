@@ -1,4 +1,5 @@
-﻿using MarketScanner.Core.Indicators;
+﻿using MarketScanner.Core.Configuration;
+using MarketScanner.Core.Indicators;
 using MarketScanner.Core.Models;
 using MarketScanner.Data.Diagnostics;
 using MathNet.Numerics.Statistics;
@@ -9,6 +10,7 @@ namespace MarketScanner.Core.Classification
     public class CreeperClassifierR2 : IEquityClassifier
     {
         private readonly CreeperCriteriaR2 _criteria;
+        private readonly AppSettings _settings;
 
         #region Diagnostic
         private static int _entered;
@@ -19,9 +21,10 @@ namespace MarketScanner.Core.Classification
         private static int _passed;
         #endregion
 
-        public CreeperClassifierR2(CreeperCriteriaR2 criteria)
+        public CreeperClassifierR2(CreeperCriteriaR2 criteria, AppSettings settings)
         {
             _criteria = criteria;
+            _settings = settings;
         }
         public void Classify(EquityScanResult result)
         {
@@ -33,8 +36,15 @@ namespace MarketScanner.Core.Classification
 
             if (double.IsNaN(result.RSI))
                 return;
-            if (result.RSI < _criteria.MinRsi ||
-                result.RSI > _criteria.MaxRsi)
+            (double minRsi, double maxRsi) = _settings.CreeperDirection switch
+            {
+                CreeperTrendDirection.Up => (50, 65),
+                CreeperTrendDirection.Down => (35, 50),
+                CreeperTrendDirection.Both => (35, 65),
+                _ => throw new ArgumentOutOfRangeException()
+            };
+            if (result.RSI < minRsi ||
+                result.RSI > maxRsi)
             {
                 Interlocked.Increment(ref _failRsi);
                 return;
@@ -46,25 +56,31 @@ namespace MarketScanner.Core.Classification
                     closes,
                     _criteria.SmaPeriod,
                     _criteria.SlopeLookback);
+            if (_settings.CreeperDirection == CreeperTrendDirection.Down)
+            {
+                Logger.WriteLine(
+                    $"[DOWN TEST] {result.Symbol} slope={slope:F5} rsi={result.RSI:F1}");
+            }
 
-            switch (_criteria.Direction)
+            switch (_settings.CreeperDirection)
             {
                 case CreeperTrendDirection.Up:
-                    if (slope <= 0)
+                    if (slope < _criteria.MinSlopePct)
                         return;
                     break;
                 case CreeperTrendDirection.Down:
-                    if (slope >= 0)
+                    if (slope > -_criteria.MinSlopePct)
                         return;
                     break;
                 case CreeperTrendDirection.Both:
+                    if (Math.Abs(slope) < _criteria.MinSlopePct)
+                    {
+                        Interlocked.Increment(ref _failSlope);
+                        return;
+                    }
                     break;
             }
-            if (double.IsNaN(slope) || slope < _criteria.MinSlopePct)
-            {
-                Interlocked.Increment(ref _failSlope);
-                return;
-            }
+
 
             double bbWidth =
                 CreeperSignalsR2.ComputeBollingerWidthPct(
@@ -92,6 +108,7 @@ namespace MarketScanner.Core.Classification
             result.Tags.Add("Creeper");
             result.Tags.Add("CreeperR2");
         }
+
 
         public void LogStats()
         {
