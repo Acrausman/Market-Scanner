@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows.Documents;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -27,6 +28,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
         public SettingsPanelViewModel(EmailService emailService)
         {
             _emailService = emailService;
+            PropertyChanged += OnPropertyChangedInternal;
         }
 
         [RelayCommand]
@@ -47,6 +49,17 @@ namespace MarketScanner.UI.Wpf.ViewModels
             if(!string.IsNullOrWhiteSpace(EmailAddress))
             {
                 _emailService.SendEmail(EmailAddress, "Market Scanner Test", "This is a test email from the market scanner.");
+            }
+        }
+
+        private void OnPropertyChangedInternal(object? sender, PropertyChangedEventArgs e)
+        {
+            if(e.PropertyName is nameof(SmoothingMethod)
+                or nameof(SelectedTimespan)
+                or nameof(IndicatorPeriod)
+                or nameof(AlertIntervalMinutes))
+            {
+                SettingsApplied?.Invoke();
             }
         }
     }

@@ -193,6 +193,7 @@ namespace MarketScanner.UI.Wpf.ViewModels
             // Commands for options panel
             SendDigestNow = new RelayCommand(_ => _alertManager.SendPendingDigest(_settingsPanelViewModel.EmailAddress));
             _filterPanelViewModel.FiltersApplied += OnFiltersApplied;
+            _filterPanelViewModel.FiltersAutoApplied += OnFiltersAutoApplied;
             _filterPanelViewModel.FiltersCleared += OnFiltersCleared;
             _settingsPanelViewModel.SettingsApplied += OnSettingsApplied;
             _settingsPanelViewModel.SettingsReset += OnSettingsReset;
@@ -230,6 +231,13 @@ namespace MarketScanner.UI.Wpf.ViewModels
         private async void OnFiltersApplied()
         {
             await UiNotifier.ShowSnackbarAsync("Filters applied!");
+            if (_scanStatusViewModel.IsScanning)
+                await RestartScanAsync();
+        }
+        private async void OnFiltersAutoApplied()
+        {
+            _filterCoordinator.ApplyFilters(_filterPanelViewModel);
+
             if (_scanStatusViewModel.IsScanning)
                 await RestartScanAsync();
         }
