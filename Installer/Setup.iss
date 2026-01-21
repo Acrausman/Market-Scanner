@@ -1,4 +1,3 @@
-#emit "PREPROCESSOR IS RUNNING"
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
