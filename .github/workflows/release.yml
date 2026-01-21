@@ -42,6 +42,8 @@ jobs:
       - name: Build installer
         shell: powershell
         run: |
+          Write-Host "AppVersion = '$appVersion'"
+          Write-Host "FileVersion = '$fileVersion'"
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           $version = "${{ steps.version.ouputs.version}}"
           & $iscc "Installer\Setup.iss" `
