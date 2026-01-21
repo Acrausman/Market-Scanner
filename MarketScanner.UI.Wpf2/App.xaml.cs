@@ -10,6 +10,7 @@ using MarketScanner.UI.Views;
 using MarketScanner.UI.Wpf.Services;
 using MarketScanner.UI.Wpf.ViewModels;
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -40,8 +41,9 @@ namespace MarketScanner.UI
             var fundamentalProvider = new FinnhubFundamentalProvider(finnApiKey);
             var metadataPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CentSense",
+                "MarketScanner",
                 "ticker_metadata.json");
+            System.Diagnostics.Debug.WriteLine($"[DEBUG] Metadata path: {metadataPath}");
 
             var metadataCache = new TickerMetadataCache(metadataPath);
 

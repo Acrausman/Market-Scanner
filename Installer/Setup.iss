@@ -14,17 +14,18 @@ VersionInfoVersion={#FileVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoTextVersion={#AppVersion}
 
-DefaultDirName={commonpf}\CentSense
+DefaultDirName={localappdata}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma
 SolidCompression=yes
-AppId={{A6A1A1C3-8A04-4D7A-9E7B-F5A65CE1BD2F}}
+AppId={{A6A1A1C3-8A04-4D7A-9E7B-F5A65CE1BD2F}}_user
 AllowNoIcons=yes
 SetupIconFile=C3logo.ico
 UninstallFilesDir={app}
 CloseApplications=yes
 CloseApplicationsFilter=CentSense.exe
 RestartApplications=no
+PrivilegesRequired=lowest
 [InstallDelete]
 Type: filesandordirs; Name: "{app}\*"
 [Files]
@@ -34,10 +35,9 @@ Name: "desktopicon"; Description:"Create a &desktop shortcut"; GroupDescription:
 Name: "runapp"; Description: "Run MarketScanner after installation"; Flags: unchecked
 [Icons]
 Name: "{group}\CentSense"; Filename: "{app}\CentSense.exe"; IconFilename: "{app}\CentSense.exe"
-Name: "{commondesktop}\CentSense"; Filename: "{app}\CentSense"; Tasks: desktopicon
+Name: "{userdesktop}\CentSense"; Filename: "{app}\CentSense"; Tasks: desktopicon
 [Run]
-Filename: "{app}\CentSense.exe"; Description: "Launch CentSense"; Tasks: runapp; Flags: nowait postinstall skipifsilent
-[Code]
+Filename: "{app}\CentSense.exe"; Description: "Launch CentSense"; Tasks: runapp; Flags: nowait postinstall skipifsilent runasoriginaluser
 [Code]
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

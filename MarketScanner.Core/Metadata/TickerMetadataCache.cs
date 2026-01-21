@@ -18,16 +18,12 @@ namespace MarketScanner.Core.Metadata
 
         public TickerMetadataCache(string fileName = "ticker_metadata.json")
         {
-            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var dir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "CentSense",
-                "ticker_metadata.json");
+            _cacheFilePath = fileName;
+            var dir = Path.GetDirectoryName(_cacheFilePath);
 
-            if (!Directory.Exists(dir))
+            if (!string.IsNullOrWhiteSpace(dir))
                 Directory.CreateDirectory(dir);
 
-            _cacheFilePath = Path.Combine(dir, fileName);
             Load();
         }
 
@@ -120,7 +116,6 @@ namespace MarketScanner.Core.Metadata
 
         private void Save()
         {
-            lock (_fileLock)
                 lock (_fileLock)
                 {
                     try
