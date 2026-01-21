@@ -1,3 +1,4 @@
+#emit "PREPROCESSOR IS RUNNING"
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
@@ -9,9 +10,11 @@
 [Setup]
 AppName=CentSense
 AppVersion={#AppVersion}
+
 VersionInfoVersion={#FileVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoTextVersion={#AppVersion}
+
 DefaultDirName={commonpf}\CentSense
 OutputBaseFilename=CentSenseSetup
 Compression=lzma
