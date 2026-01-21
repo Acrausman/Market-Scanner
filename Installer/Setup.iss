@@ -1,8 +1,14 @@
-#define AppVersion "{#Param:AppVersion|0.0.0}"
-#define FileVersion "{#Param:FileVersion|0.0.0.0}"
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
+
+#ifndef FileVersion
+  #define FileVersion "0.0.0.0"
+#endif
+
 [Setup]
 AppName=CentSense
-AppVersion={{#AppVersion}}
+AppVersion={#AppVersion}
 VersionInfoVersion={#FileVersion}
 VersionInfoProductVersion={#AppVersion}
 VersionInfoTextVersion={#AppVersion}
@@ -12,7 +18,7 @@ Compression=lzma
 SolidCompression=yes
 AppId={{A6A1A1C3-8A04-4D7A-9E7B-F5A65CE1BD2F}}
 AllowNoIcons=yes
-SetupIconFile=C3 logo.ico
+SetupIconFile=C3logo.ico
 UninstallFilesDir={app}
 CloseApplications=yes
 CloseApplicationsFilter=CentSense.exe
