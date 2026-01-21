@@ -28,9 +28,9 @@ jobs:
             --self-contained true `
             -o Publish
 
-      - name: Install Inno Setup
+      - name: Install Inno Setup (widh ISPP)
         run: |
-          choco install innosetup --no-progress --yes
+          choco install innosetup --yes --install-arguments="'/COMPONENTS=compiler,preprocessor'"
       - name: Extract version from tag
         id: version
         shell: powershell
