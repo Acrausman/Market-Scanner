@@ -35,17 +35,30 @@ jobs:
         id: version
         shell: powershell
         run: |
-          $tag = "${{GitHub.MarketScanner}}"
-          $version = $tag.TrimStart("v")
-          echo "version=$version" >> $env:GITHUB_OUTPUT
+          $tag = "${{ github.ref_name }}"
+          $appVersion = $tag.TrimStart("v")
+
+          $parts = $appVersion.Split('.')
+          if ($parts.Count -eq 3) {
+            $fileVersion = "$appVersion.0"
+          } else {
+            $fileVersion = $appVersion
+          }
+
+          "appVersion=$appVersion" >> $env:GITHUB_OUTPUT
+          "fileVersion=$fileVersion" >> $env:GITHUB_OUTPUT
 
       - name: Build installer
         shell: powershell
         run: |
+          $appVersion  = "${{ steps.version.outputs.appVersion }}"
+          $fileVersion = "${{ steps.version.outputs.fileVersion }}"
+
           Write-Host "AppVersion = '$appVersion'"
           Write-Host "FileVersion = '$fileVersion'"
+
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-          $version = "${{ steps.version.ouputs.version}}"
+
           & $iscc "Installer\Setup.iss" `
             "/DAppVersion=$appVersion" `
             "/DFileVersion=$fileVersion"
