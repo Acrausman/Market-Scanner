@@ -279,18 +279,19 @@
 
                     <Separator Margin="0,10,0,10"/>
                     <TabControl>
-                        <TabItem Header="RSI" Background="#252526"
+                        <TabItem Header="RSI" 
+                                 Background="#2D2D30" 
                                  Padding="15"
                                  BorderBrush="#333"
                                  BorderThickness="0,0,1,0">
                             <StackPanel>
                                 <TextBlock Text="Overbought (RSI &gt; 70)"
-                                Foreground="#FFAAAA" FontWeight="Bold" Margin="0,4,0,4"/>
+                                Foreground="Black" FontWeight="Bold" Margin="0,4,0,4"/>
 
                                 <ListBox ItemsSource="{Binding AlertPanel.OverboughtSymbols}"
                                     SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                                     SelectionMode="Single"
-                                    Background="#2D2D30" Foreground="White"
+                                    Background="#2D2D30" 
                                     Height="150" BorderThickness="0" FontSize="13">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
@@ -305,7 +306,7 @@
                                     </ListBox.ItemContainerStyle>
                                 </ListBox>
                                 <TextBlock Text="Oversold (RSI &lt; 30)"
-                                    Foreground="#A0FFA0" FontWeight="Bold" Margin="10,10,0,4"/>
+                                    Foreground="Black" FontWeight="Bold" Margin="0,10,0,4"/>
                                 <ListBox ItemsSource="{Binding AlertPanel.OversoldSymbols}"
                                         SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                                         SelectionMode="Single"
