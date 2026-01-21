@@ -38,10 +38,13 @@ namespace MarketScanner.UI
             const string finnApiKey = "d44drfhr01qt371uia8gd44drfhr01qt371uia90";
             var provider = new PolygonMarketDataProvider(apiKey);
             var fundamentalProvider = new FinnhubFundamentalProvider(finnApiKey);
-            var metadataCache = new TickerMetadataCache(
-                System.IO.Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    "ticker_metadata.json"));
+            var metadataPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CentSense",
+                "ticker_metadata.json");
+
+            var metadataCache = new TickerMetadataCache(metadataPath);
+
 
             IChartService chartService = new ChartManager();
 

@@ -19,7 +19,10 @@ namespace MarketScanner.Core.Metadata
         public TickerMetadataCache(string fileName = "ticker_metadata.json")
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var dir = Path.Combine(appData, "MarketScanner");
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "CentSense",
+                "ticker_metadata.json");
 
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);

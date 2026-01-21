@@ -26,7 +26,7 @@ public class AppSettings
 
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "MarketScanner",
+        "CentSense",
         "settings.json");
 
     public static AppSettings Load()
