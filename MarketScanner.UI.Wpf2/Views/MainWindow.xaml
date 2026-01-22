@@ -283,7 +283,7 @@
                                  Background="#2D2D30" 
                                  Padding="15"
                                  BorderBrush="#333"
-                                 BorderThickness="0,0,1,0">
+                                 BorderThickness="0">
                             <StackPanel>
                                 <TextBlock Text="Overbought (RSI &gt; 70)"
                                 Foreground="Black" FontWeight="Bold" Margin="0,4,0,4"/>
@@ -291,7 +291,8 @@
                                 <ListBox ItemsSource="{Binding AlertPanel.OverboughtSymbols}"
                                     SelectedItem="{Binding SelectedSymbol, Mode=TwoWay}"
                                     SelectionMode="Single"
-                                    Background="#2D2D30" 
+                                    Background="#2D2D30"
+                                    BorderBrush="#333"
                                     Height="150" BorderThickness="0" FontSize="13">
                                     <ListBox.ItemContainerStyle>
                                         <Style TargetType="ListBoxItem">
